@@ -63,6 +63,65 @@
 - API 请求错误统一封装处理，使用axios拦截器或fetch封装，捕获异常并友好提示。
 - 组件内部异常建议使用try/catch包裹关键逻辑，必要时上报错误。
 - 前端全局错误可通过window.onerror、Vue.config.errorHandler捕获，结合Sentry等工具进行监控和告警。
-- 用户操作错误应及时反馈，采用弹窗、Toast等方式提示。
+- 用户操作错误及时反馈，采用弹窗、Toast等方式提示。
 - 日志分级记录（error/warn/info），开发环境详细输出，生产环境仅保留必要信息。
 - 关键路径增加断言和日志，便于定位问题。
+
+## 7. 进阶最佳实践
+
+### 代码风格与结构
+- 编写简洁、技术性强的TypeScript代码，附带准确示例。
+- 使用Composition API和声明式编程模式，避免Options API。
+- 优先迭代和模块化，杜绝代码重复。
+- 变量命名采用辅助动词（如isLoading、hasError），表达状态。
+- 文件结构建议：导出组件、composables、helpers、静态内容、types分离。
+
+### 命名规范
+- 目录名用小写加中划线（如components/auth-wizard）。
+- 组件名用PascalCase（如AuthWizard.vue）。
+- composable用camelCase（如useAuthState.ts）。
+
+### TypeScript用法
+- 所有代码均使用TypeScript，优先type而非interface。
+- 避免enum，推荐const对象。
+- Vue 3结合TypeScript，充分利用defineComponent和PropType。
+
+### 语法与格式化
+- 方法和computed属性使用箭头函数。
+- 条件语句避免不必要的大括号，简单语句用简洁写法。
+- 模板渲染采用声明式语法。
+
+### UI与样式
+- 组件和样式优先用Shadcn Vue、Radix Vue、Tailwind。
+- Tailwind CSS实现响应式设计，移动端优先。
+
+### 性能优化
+- 利用Nuxt内置性能优化。
+- 异步组件用Suspense。
+- 路由和组件实现懒加载。
+- 图片优化：WebP格式、包含尺寸信息、懒加载。
+
+### 关键约定
+- 常用composable和工具函数用VueUse。
+- 状态管理用Pinia。
+- 优化Web Vitals（LCP、CLS、FID）。
+- 利用Nuxt自动导入组件和composable。
+
+### Nuxt专属规范
+- 遵循Nuxt 3目录结构（如pages/、components/、composables/）。
+- 充分利用Nuxt内置特性：
+  - 组件和composable自动导入
+  - pages/目录文件路由
+  - server/目录服务端路由
+  - 插件机制实现全局功能
+  - 数据获取用useFetch、useAsyncData
+  - SEO优化用useHead、useSeoMeta
+
+### Vue 3与Composition API最佳实践
+- 组件定义用<script setup>语法，简洁高效。
+- 状态管理用ref、reactive、computed。
+- 依赖注入场景用provide/inject。
+- 复用逻辑抽象为自定义composable。
+
+### 官方文档推荐
+- 数据获取、渲染、路由等请参考Nuxt.js和Vue.js官方文档，保持最佳实践与时俱进。
