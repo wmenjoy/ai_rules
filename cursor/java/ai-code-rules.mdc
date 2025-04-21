@@ -1,0 +1,102 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+@title AI Model and Code Generation Guidelines
+@subtitle AI模型与辅助生成规范
+
+@section File Structure Guidelines (文件规范)
+- Model Configurations (模型配置): `.config.{json,yaml,yml}` in `configs/`
+- Model Prompts (模型提示词): `.prompt.{txt,md}` in `prompts/`
+- Model Weights (模型权重): in `models/v{version}/`
+- Training Data (训练数据): in `data/training/`
+- Embeddings (嵌入向量): contains `.embedding.` identifier
+
+@section Complete File Annotation (完整文件标注)
+@code
+/**
+ * [AI-ASSISTED]
+ * 生成工具: {工具名称} {版本}
+ * 生成日期: {YYYY-MM-DD}
+ * 贡献程度: {完全生成|部分生成|辅助编写|重构优化}
+ * 人工修改: {无|轻微|中度|大量}
+ * 责任人: {开发者姓名}
+ */
+@end
+
+@section Code Block Annotations (代码块标注)
+@rule JavaScript/TypeScript
+@code javascript
+// [AI-BLOCK-START] - 生成工具: {工具名称} {版本}
+const generatedCode = "AI generated code";
+// [AI-BLOCK-END]
+@end
+
+@rule Python
+@code python
+# [AI-BLOCK-START] - 生成工具: {工具名称} {版本}
+generated_code = "AI generated code"
+# [AI-BLOCK-END]
+@end
+
+@rule Java
+@code java
+/* [AI-BLOCK-START] -  生成工具: {工具名称} {版本} */
+String generatedCode = "AI generated code";
+/* [AI-BLOCK-END] */
+@end
+
+@rule Golang
+@code go
+/* [AI-BLOCK-START] -  生成工具: {工具名称} {版本} */
+generatedCode := "AI generated code"
+/* [AI-BLOCK-END] */
+@end
+
+@section Single Line Annotation (单行标注)
+@code
+result := complexCalculation() // [AI-LINE:  {工具名称} {版本}]
+@end
+
+@section Git Guidelines (Git规范)
+- Branch naming: `feature/ai-{feature_name}`
+- Commit message: `[AI-ASSISTED] {commit_message}`
+- PR title: `[AI] {pr_title}`
+
+@section Cursor-Specific Guidelines (Cursor特定规范)
+@rule Function Generation Template
+@code
+/**
+ * [AI-GENERATED]
+ * 生成工具: {工具名称} {版本}
+ * 生成日期: {YYYY-MM-DD}
+ * 生成目的: {brief_description}
+ */
+@end
+
+@rule Response Structure Template
+@code
+/**
+ * [AI-GENERATED]
+ * 生成工具: {工具名称} {版本}
+ * 生成日期: {YYYY-MM-DD}
+ * Type: Response Structure
+ */
+@end
+
+@section Use Cases (应用场景)
+- API Handler Generation (API处理函数生成)
+- Frontend Component Generation (前端组件生成)
+- Data Model Transformation (数据模型转换)
+- Test Case Generation (测试用例生成)
+- Code Documentation (代码文档生成)
+- Code Refactoring (代码重构)
+
+@section Cursor Integration Notes
+- Use `.cursor/rules/` directory for custom rules
+- Maintain bilingual annotations for international teams
+- Follow consistent block marking for AI-generated code
+- Include generator version and date for traceability
+- Add clear ownership and modification records

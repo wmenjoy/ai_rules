@@ -1,0 +1,36 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+## 项目maven 描述
+1. 父pom的artifactId是demo
+2. pom文件的groupId 是cn.org.bjca.footstone
+
+## 项目结构
+```text
+project-root/
+├── api/            # 对外 API 模块（定义接口、DTO）
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/cn/org/bjca/footstone/api/  # API 层代码
+│   │   │   └── resources/                    # 模块资源
+│   │   └── test/                             # 模块测试
+│   └── pom.xml                               # API 模块 POM
+├── service/        # 业务逻辑模块（Service 实现）
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/cn/org/bjca/footstone/service/    # Service 接口与实现
+│   │   │   └── resources/                          # 模块资源
+│   │   └── test/                                   # 模块测试
+│   └── pom.xml                                     # Service 模块 POM
+├── web/            # Web 入口模块（Controller、视图）
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/cn/org/bjca/footstone/web/       # 控制层代码
+│   │   │   └── resources/                          # 静态资源、模板
+│   │   └── test/                                   # 模块测试
+│   └── pom.xml                                     # Web 模块 POM
+├── pom.xml         # 父 POM，聚合 api、service、web 三个子模块
+└── README.md       # 项目说明文档
+```

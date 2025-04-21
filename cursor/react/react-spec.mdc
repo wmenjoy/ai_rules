@@ -1,0 +1,186 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+## 1. 总体规范
+- 使用 pnpm 管理依赖，命令示例：
+  ```bash
+  pnpm install
+  pnpm run dev
+  ```
+- 样式采用 Tailwind CSS，优先使用 Utility-first 方法。
+- 组件技术栈：React (TSX)。
+
+- **AI 生成代码块注释规范**：
+  - 多行标注 (TSX/JSX 等)：
+    ```tsx
+    /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+    // AI 生成组件示例...
+    /* [AI-BLOCK-END] */
+    ```
+  - 单行标注：
+    ```tsx
+    const result = compute(); // [AI-LINE: Cursor AI 0.1]
+    ```
+
+## 2. React 组件规范
+- 文件后缀：`.tsx`，组件名称使用 PascalCase。
+- 使用函数式组件 (Functional Component)：
+  ```tsx
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import React, { useState, useEffect } from 'react';
+
+  interface MyComponentProps {
+    title: string;
+  }
+
+  const MyComponent: React.FC<MyComponentProps> = ({ title }) => {
+    const [count, setCount] = useState(0);
+
+    useEffect(() => {
+      // side effect // [AI-LINE: Cursor AI 0.1]
+      console.log(title);
+    }, [title]);
+
+    return (
+      <div className="p-4 bg-green-100 rounded">
+        <h1>{title}</h1>
+        <button onClick={() => setCount(count + 1)}>{count}</button>
+      </div>
+    );
+  };
+
+  export default React.memo(MyComponent);
+  /* [AI-BLOCK-END] */
+  ```
+
+- 支持 `forwardRef` 和高阶组件：
+  ```tsx
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import React, { forwardRef } from 'react';
+
+  interface InputProps {
+    value: string;
+    onChange: (val: string) => void;
+  }
+
+  const TextInput = forwardRef<HTMLInputElement, InputProps>((props, ref) => (
+    <input ref={ref} {...props} className="border p-2" />
+  ));
+
+  export default TextInput;
+  /* [AI-BLOCK-END] */
+  ```
+
+## 3. Tailwind CSS 使用规范
+- 在 JSX 中使用 `className`：
+  ```tsx
+  <div className="flex items-center justify-center">Hello</div>
+  ```
+- 推荐使用工具库合并类名（例如 `clsx` / `classnames`）：
+  ```tsx
+  import clsx from 'clsx';
+  <div className={clsx('p-4', active && 'bg-blue-500')}>...</div>
+  ```
+- 在全局或模块化样式文件中使用 `@apply` 复用常用样式。
+
+## 4. pnpm 脚本规范
+- 根目录 `package.json` 示例：
+  ```json
+  {
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
+      "preview": "vite preview"
+    }
+  }
+  ```
+- 推荐使用 pnpm workspace 管理多包。
+
+## 5. 项目目录结构
+- 根目录示例：
+  ```text
+  src/
+  ├── assets/        # 静态资源 (images, fonts)
+  ├── components/    # 共享组件
+  ├── hooks/         # 自定义 Hooks
+  ├── pages/         # 页面级组件
+  ├── router/        # 路由配置
+  ├── store/         # 状态管理 (Redux / Zustand)
+  ├── styles/        # 全局样式 (Tailwind entry)
+  └── utils/         # 工具函数
+  ```
+
+## 6. 命名规范
+- 目录 & 文件：kebab-case
+- 组件文件：PascalCase.tsx
+- Hooks：`useXxx.ts`
+- 工具函数：camelCase.ts
+- 常量：UPPER_SNAKE_CASE
+- 事件回调：`onXxx` // [AI-LINE: Cursor AI 0.1]
+
+## 7. 代码引入方式
+- 路径别名 `@` 指向 `src`：
+  ```ts
+  import Header from '@/components/Header';
+  ```
+- 动态导入：
+  ```tsx
+  const LazyComp = React.lazy(() => import('@/components/Heavy'));
+  ```
+- 静态资源：
+  ```ts
+  import logo from '@/assets/logo.png';
+  ```
+
+## 8. 错误处理
+- API 调用封装：
+  ```ts
+  try {
+    const res = await api.fetchData();
+  } catch (err) {
+    console.error(err);
+    toast.error('请求失败');
+  }
+  ```
+- React 错误边界：
+  ```tsx
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+  ```
+- 全局异常捕获（可选）：
+  ```ts
+  window.onerror = (msg) => {
+    console.error(msg);
+    // [AI-LINE: Cursor AI 0.1]
+  };
+  ```
+
+## 9. 组件定义细则
+- Props 接口放在文件顶部。
+- 使用 React.FC 或自定义函数签名。
+- 为组件添加 `displayName` 以便调试。
+- 必要时使用 React Hooks 组织逻辑。
+
+## 10. 样式定义细则
+- 优先使用 Tailwind Utility Classes。
+- 在样式文件中使用 `@apply` 复用。
+- 禁止使用内联样式（inline style）。
+- 可选使用 CSS Modules：
+  ```css
+  .btn {
+    @apply bg-blue-500 text-white;
+  }
+  ```
+
+## 11. 设计原则 & 最佳实践
+- **单一职责 (SRP)**：每个组件只解决一个问题。 // [AI-LINE: Cursor AI 0.1]
+- **DRY**：避免重复逻辑和样式。 // [AI-LINE: Cursor AI 0.1]
+- **KISS**：保持代码简单可读。 // [AI-LINE: Cursor AI 0.1]
+- **TypeScript 强类型**：完整类型注解。 // [AI-LINE: Cursor AI 0.1]
+- **测试覆盖**：Jest + Testing Library，Cypress E2E。 // [AI-LINE: Cursor AI 0.1]
+- **性能优化**：Tree Shaking, 代码分割。 // [AI-LINE: Cursor AI 0.1]
+- **可访问性 (a11y)**：符合 WCAG 标准。 // [AI-LINE: Cursor AI 0.1]
+- **国际化**：react-intl / i18next 管理。 // [AI-LINE: Cursor AI 0.1]

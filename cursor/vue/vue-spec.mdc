@@ -1,0 +1,212 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# AI 辅助前端代码生成规范 (Vue 3, React, Tailwind CSS & pnpm)
+生成工具: Cursor AI 0.1  
+生成日期: 2024-06-15  
+
+## 1. 总体规范
+- 使用 pnpm 管理依赖，命令示例：
+  ```bash
+  pnpm install
+  pnpm run dev
+  ```
+- 样式采用 Tailwind CSS，优先使用 Utility-first 方法。
+- 组件技术栈：Vue 3 (Script Setup + TS) 与 React (TSX)。
+
+- **AI 生成代码块注释规范**：
+  - 多行标注 (JS/TS/TSX/Vue 等)：
+    ```javascript
+    /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+    // AI 生成代码...
+    /* [AI-BLOCK-END] */
+    ```
+  - 单行标注：
+    ```javascript
+    result = compute() // [AI-LINE: Cursor AI 0.1]
+    ```
+
+## 2. Vue 3 组件规范
+- 文件后缀：`.vue`，组件名称使用 PascalCase。
+- 代码结构：
+  ```vue
+  <template>
+    <!-- [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 -->
+    <div class="p-4 bg-gray-100 rounded">
+      <!-- 组件内容 -->
+    </div>
+    <!-- [AI-BLOCK-END] -->
+  </template>
+
+  <script setup lang="ts">
+  // Props & composition
+  defineProps<{ msg: string }>();
+  </script>
+
+  <style scoped>
+  /* Tailwind 样式可用 @apply */
+  .my-class {
+    @apply text-lg text-center;
+  }
+  </style>
+  ```
+
+## 3. React 组件规范
+- 文件后缀：`.tsx`，组件名称使用 PascalCase。
+- 使用函数式组件 (Functional Component)：
+  ```tsx
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import React from 'react';
+
+  interface MyComponentProps {
+    label: string;
+  }
+
+  const MyComponent: React.FC<MyComponentProps> = ({ label }) => {
+    return <div className="p-4 bg-blue-100 rounded">{label}</div>;
+  };
+
+  export default MyComponent;
+  /* [AI-BLOCK-END] */
+  ```
+
+## 4. Tailwind CSS 使用规范
+- 在 Vue 中可直接在 `class` 或使用 `:class`：
+  ```vue
+  <div :class="['p-4', 'text-red-500']">...</div>
+  ```
+- 在 React 中使用 `className`：
+  ```tsx
+  <div className="flex items-center justify-center">...</div>
+  ```
+- 在样式文件中（例如 `.css`/`.scss`/`.vue` 的 `<style>`）使用 `@apply` 快速复用常用样式。
+
+## 5. pnpm 脚本规范
+- 在根目录 `package.json` 中配置常用脚本：
+  ```json
+  {
+    "scripts": {
+      "dev": "vite",
+      "build": "vite build",
+      "preview": "vite preview"
+    }
+  }
+  ```
+- 推荐结合 `pnpm` 工作区 (workspace) 管理多个子包。 
+
+## 6. 项目目录结构
+- 根目录结构示例：
+  ```text
+  src/
+  ├── assets/           # 静态资源 (images, fonts)
+  ├── components/       # 业务通用组件
+  ├── composables/      # Vue 组合式函数 (可重用逻辑)
+  ├── hooks/            # React Hooks
+  ├── pages/            # 页面级组件
+  ├── router/           # 路由配置
+  ├── store/            # 状态管理 (Pinia / Redux)
+  ├── styles/           # 全局样式 (Tailwind entry)
+  └── utils/            # 工具函数
+  ```
+
+## 7. 命名规范
+- 目录 & 文件：kebab-case
+- Vue 组件文件：PascalCase.vue
+- React 组件文件：PascalCase.tsx
+- 组合函数：`useXxx.ts`
+- Hooks：`useXxx.ts`
+- 工具函数：camelCase.ts
+- 常量：UPPER_SNAKE_CASE
+- 事件/Emit：`onXxx` (React) / `emitXxx` (Vue)
+
+## 8. 代码引入方式
+- 使用路径别名 `@` 指向 `src`：
+  ```ts
+  import MyComponent from '@/components/MyComponent';
+  ```
+- Vue 动态导入：
+  ```ts
+  const AsyncComp = defineAsyncComponent(() => import('@/pages/Home.vue'));
+  ```
+- React 懒加载：
+  ```tsx
+  const LazyComp = React.lazy(() => import('@/components/MyComponent'));
+  ```
+- CSS/图片等静态资源：
+  ```ts
+  import logo from '@/assets/images/logo.png';
+  ```
+
+## 9. 错误处理
+- API 调用统一封装，使用 `async/await + try/catch`：
+  ```ts
+  try {
+    const data = await api.fetchData();
+  } catch (error) {
+    console.error(error); // 记录日志
+    notifyError('请求失败，请重试');
+  }
+  ```
+- React 使用错误边界捕获组件渲染错误：
+  ```tsx
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+  ```
+- 全局捕获 Vue 错误：
+  ```ts
+  app.config.errorHandler = (err) => {
+    console.error(err);
+    notifyError('应用错误，请联系管理员');
+  };
+  ```
+
+## 10. 组件定义细则
+- Vue：
+  ```vue
+  <script setup lang="ts">
+  const props = defineProps<{ title: string }>();
+  const emit = defineEmits<{ (e: 'update', value: string): void }>();
+  </script>
+  ```
+- React：
+  ```tsx
+  interface MyCompProps { title: string; }
+  const MyComp: React.FC<MyCompProps> = ({ title }) => { /* ... */ };
+  ```
+
+## 11. 样式定义细则
+- 优先使用 Tailwind CSS Utility Classes，必要时使用 `@apply`：
+  ```css
+  .btn-primary {
+    @apply bg-blue-500 text-white px-4 py-2 rounded;
+  }
+  ```
+- 禁止使用内联样式 (inline style)
+- 全局样式入口：`src/styles/tailwind.css` 
+## 12. 设计原则 & 最佳实践
+
+- ### 设计原则
+  - **单一职责 (SRP)**：每个组件/模块只负责一件事。
+  - **开放-封闭 (OCP)**：对扩展开放，对修改封闭。
+  - **依赖倒置 (DIP)**：高层模块不依赖低层模块，而是通过抽象相互依赖。
+  - **不重复自己 (DRY)**：避免复制粘贴，通用逻辑/样式抽取复用。
+  - **保持简单 (KISS)**：追求简单可读的实现，降低认知负担。
+  - **持续重构**：定期审查和重构，清除技术债务。
+  - **可访问性 (a11y)**：确保组件符合无障碍标准，支持键盘导航与屏幕阅读器等。
+  - **响应式优先**：自顶向下设计移动端优先，保证多终端适配。
+
+- ### 最佳实践
+  - **TypeScript 强类型**：尽量为接口、props、state 等添加类型注解，降低运行时错误。
+  - **逻辑复用**：Vue 使用 Composition API，React 使用 Hooks，实现功能逻辑集中管理与复用。
+  - **单元测试**：使用 Jest + Testing Library 对核心逻辑和组件进行单元测试，覆盖率保持在高水平。
+  - **端到端测试**：使用 Cypress/Playwright 对关键用户流程进行 E2E 测试，保障功能可靠性。
+  - **性能优化**：开启 Tree Shaking，采用代码分割（React.lazy / defineAsyncComponent），减少首屏加载体积。
+  - **组件文档**：使用 Storybook 维护交互文档，并结合自动化文档插件（addon-docs）。
+  - **错误监控**：集成 Sentry 或 LogRocket，捕获前端运行时异常，触发告警和上报。
+  - **国际化支持**：统一使用 vue-i18n / react-intl 管理多语言，避免硬编码文字。
+  - **CI/CD 流水线**：在 GitHub Actions / GitLab CI 上配置自动化测试、Lint、构建与部署，确保高质量交付。
+  - **Git 工作流**：采用 Git Flow 或 trunk-based flow，分支命名与提交信息遵循团队规范。
