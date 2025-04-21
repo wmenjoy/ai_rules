@@ -1,0 +1,684 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Python 编程规范
+生成工具: Cursor AI 0.2  
+生成日期: 2024-07-10
+
+## 1. 代码组织与文件结构
+- 文件命名使用小写字母和下划线: `file_name.py`
+- 推荐项目结构:
+  ```
+  project/
+  ├── project/           # 主包
+  │   ├── __init__.py    # 包初始化文件
+  │   ├── module1.py     # 模块
+  │   ├── module2.py     # 模块
+  │   └── subpackage/    # 子包
+  │       ├── __init__.py
+  │       └── module3.py
+  ├── tests/             # 测试代码
+  ├── docs/              # 文档
+  ├── examples/          # 示例代码
+  ├── requirements.txt   # 依赖文件
+  ├── setup.py           # 安装脚本
+  └── README.md          # 项目说明
+  ```
+
+## 2. 代码风格
+- 遵循 [PEP 8](mdc:https:/www.python.org/dev/peps/pep-0008) 规范
+- 缩进使用 4 个空格（不使用 Tab）
+- 每行代码长度不超过 79 个字符（文档字符串或注释不超过 72 个字符）
+- 使用空行分隔函数和类
+- 使用 UTF-8 编码
+- 每个导入应占一行:
+  ```python
+  # 正确
+  import os
+  import sys
+  from collections import defaultdict, namedtuple
+  
+  # 错误
+  import os, sys
+  ```
+  
+- 导入顺序:
+  ```python
+  # 标准库
+  import os
+  import sys
+  
+  # 第三方库
+  import numpy as np
+  import pandas as pd
+  
+  # 本地应用/库
+  from myproject.module import func
+  ```
+
+## 3. 命名规范
+- **模块和包名**: 小写字母，可使用下划线提高可读性
+  ```python
+  import data_processing
+  from user_auth import login
+  ```
+  
+- **类名**: 使用 CamelCase (大驼峰)
+  ```python
+  class UserAccount:
+      pass
+      
+  class HTTPRequest:
+      pass
+  ```
+  
+- **函数和变量名**: 使用小写字母和下划线 (snake_case)
+  ```python
+  def calculate_average(values):
+      total_sum = sum(values)
+      return total_sum / len(values)
+  ```
+  
+- **常量**: 全大写字母和下划线
+  ```python
+  MAX_CONNECTIONS = 100
+  DEFAULT_TIMEOUT = 30
+  ```
+  
+- **保护的成员**: 单下划线前缀
+  ```python
+  class User:
+      def __init__(self):
+          self._password = None  # 表示不应从外部访问
+  ```
+  
+- **私有成员**: 双下划线前缀
+  ```python
+  class User:
+      def __init__(self):
+          self.__id = 42  # 实际上会被重命名为 _User__id
+  ```
+
+## 4. 函数设计
+- 函数应当简短，只做一件事
+- 使用文档字符串描述函数功能:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  def calculate_statistics(data, exclude_outliers=False):
+      """计算数据集的基本统计信息。
+      
+      计算给定数据集的均值、中位数和标准差。可选择是否排除异常值。
+      
+      Args:
+          data (list): 数值数据列表
+          exclude_outliers (bool, optional): 是否排除异常值。默认为 False
+          
+      Returns:
+          dict: 包含 'mean', 'median', 'std_dev' 的字典
+          
+      Raises:
+          ValueError: 如果数据为空或不包含数字
+      """
+      if not data:
+          raise ValueError("数据不能为空")
+          
+      # 函数实现...
+      
+      return {
+          'mean': mean_value,
+          'median': median_value,
+          'std_dev': std_dev_value
+      }
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用类型注解提高代码可读性:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  from typing import List, Dict, Optional, Union, Any
+  
+  def process_items(items: List[Dict[str, Any]],
+                   max_count: Optional[int] = None) -> List[str]:
+      """处理项目列表，返回处理后的ID列表。"""
+      result = []
+      for item in items[:max_count]:
+          if 'id' in item:
+              result.append(str(item['id']))
+      return result
+  /* [AI-BLOCK-END] */
+  ```
+
+## 5. 类设计
+- 遵循单一职责原则
+- 使用 `property` 代替直接访问属性:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  class Person:
+      def __init__(self, first_name, last_name):
+          self._first_name = first_name
+          self._last_name = last_name
+          
+      @property
+      def full_name(self):
+          """获取完整姓名。"""
+          return f"{self._first_name} {self._last_name}"
+          
+      @property
+      def first_name(self):
+          """获取名。"""
+          return self._first_name
+          
+      @first_name.setter
+      def first_name(self, value):
+          """设置名。"""
+          if not isinstance(value, str):
+              raise TypeError("名必须为字符串")
+          self._first_name = value
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用数据类简化代码:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  from dataclasses import dataclass, field
+  from typing import List, Optional
+  
+  @dataclass
+  class Product:
+      name: str
+      price: float
+      description: Optional[str] = None
+      tags: List[str] = field(default_factory=list)
+      
+      def is_on_sale(self) -> bool:
+          return self.price < 100
+  /* [AI-BLOCK-END] */
+  ```
+
+## 6. 错误处理
+- 使用异常处理结构化错误:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  def read_config(filename):
+      """读取配置文件。"""
+      try:
+          with open(filename, 'r') as file:
+              return json.load(file)
+      except FileNotFoundError:
+          logging.error(f"配置文件不存在: {filename}")
+          raise ConfigError(f"找不到配置文件: {filename}")
+      except json.JSONDecodeError as e:
+          logging.error(f"配置文件格式错误: {e}")
+          raise ConfigError(f"配置文件不是有效的 JSON: {e}")
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用 context manager 管理资源:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  # 使用内置 context manager
+  with open('data.txt', 'r') as file:
+      content = file.read()
+      
+  # 自定义 context manager
+  class DatabaseConnection:
+      def __init__(self, connection_string):
+          self.connection_string = connection_string
+          self.connection = None
+          
+      def __enter__(self):
+          self.connection = connect_to_db(self.connection_string)
+          return self.connection
+          
+      def __exit__(self, exc_type, exc_val, exc_tb):
+          if self.connection:
+              self.connection.close()
+  
+  # 使用自定义 context manager            
+  with DatabaseConnection("postgresql://user:pass@localhost/mydb") as conn:
+      results = conn.execute("SELECT * FROM users")
+  /* [AI-BLOCK-END] */
+  ```
+
+## 7. 代码注释和文档
+- 使用 docstring 记录模块、类和函数:
+  ```python
+  """
+  模块描述，介绍模块功能。
+  
+  可以包含多行信息，详细描述模块的用途、核心功能等。
+  
+  典型用法:
+      >>> from module import func
+      >>> func('hello')
+      'hello world'
+  """
+  ```
+  
+- 使用"动词 + 名词"的格式描述函数作用:
+  ```python
+  def validate_user(user_id):
+      """验证用户ID是否有效。"""
+      pass
+  ```
+  
+- 复杂逻辑需要添加行内注释
+
+## 8. 现代 Python 特性
+- 使用列表、字典、集合推导:
+  ```python
+  # 列表推导
+  squares = [x**2 for x in range(10)]
+  
+  # 字典推导
+  user_ids = {user.name: user.id for user in users}
+  
+  # 集合推导
+  unique_tags = {tag for item in items for tag in item.tags}
+  ```
+  
+- 使用解包操作:
+  ```python
+  # 序列解包
+  a, b, c = [1, 2, 3]
+  
+  # 字典解包
+  defaults = {'port': 8080, 'host': 'localhost'}
+  config = {**defaults, **user_config}  # 合并字典
+  ```
+  
+- 使用f-strings格式化字符串:
+  ```python
+  name = "Alice"
+  age = 30
+  message = f"{name} is {age} years old"
+  ```
+  
+- 使用生成器提高内存效率:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  def process_large_file(filename):
+      """按行处理大文件，返回处理后的结果。"""
+      with open(filename, 'r') as file:
+          for line in file:  # 文件迭代器，一次只加载一行
+              processed_line = line.strip().upper()
+              yield processed_line
+              
+  # 使用生成器
+  for line in process_large_file("large_data.txt"):
+      print(line)
+  /* [AI-BLOCK-END] */
+  ```
+
+## 9. 包管理与依赖
+- 使用 `requirements.txt` 管理依赖:
+  ```
+  numpy==1.21.0
+  pandas>=1.3.0,<2.0.0
+  requests~=2.25.1
+  ```
+  
+- 使用 `setup.py` 创建可安装包:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  from setuptools import setup, find_packages
+  
+  setup(
+      name="myproject",
+      version="0.1.0",
+      packages=find_packages(),
+      install_requires=[
+          "numpy>=1.21.0",
+          "pandas>=1.3.0",
+          "requests>=2.25.1",
+      ],
+      author="Your Name",
+      author_email="your.email@example.com",
+      description="A short description",
+      long_description=open("README.md").read(),
+      long_description_content_type="text/markdown",
+      url="https://github.com/username/myproject",
+      classifiers=[
+          "Programming Language :: Python :: 3",
+          "License :: OSI Approved :: MIT License",
+          "Operating System :: OS Independent",
+      ],
+      python_requires=">=3.7",
+  )
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 考虑使用虚拟环境隔离项目依赖:
+  ```bash
+  python -m venv venv
+  source venv/bin/activate  # Linux/Mac
+  venv\Scripts\activate  # Windows
+  ```
+
+## 10. 测试
+- 使用 pytest 或 unittest 编写单元测试:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  # test_calculator.py
+  import pytest
+  from myproject.calculator import add, divide
+  
+  def test_add():
+      assert add(2, 3) == 5
+      assert add(-1, 1) == 0
+      assert add(0, 0) == 0
+  
+  def test_divide():
+      assert divide(6, 3) == 2
+      assert divide(5, 2) == 2.5
+      
+  def test_divide_by_zero():
+      with pytest.raises(ValueError) as excinfo:
+          divide(1, 0)
+      assert "Cannot divide by zero" in str(excinfo.value)
+  
+  # 参数化测试
+  @pytest.mark.parametrize("a,b,expected", [
+      (2, 3, 5),
+      (0, 0, 0),
+      (-1, 1, 0),
+      (10, -5, 5),
+  ])
+  def test_add_parametrized(a, b, expected):
+      assert add(a, b) == expected
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用 mock 对象隔离测试:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  from unittest.mock import patch, MagicMock
+  
+  def test_user_service():
+      # 模拟外部API响应
+      mock_response = MagicMock()
+      mock_response.status_code = 200
+      mock_response.json.return_value = {"id": 1, "name": "Test User"}
+      
+      with patch('requests.get', return_value=mock_response):
+          from myproject.user_service import get_user
+          user = get_user(1)
+          assert user.name == "Test User"
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用测试覆盖率工具:
+  ```bash
+  # 安装
+  pip install pytest-cov
+  
+  # 运行带覆盖率的测试
+  pytest --cov=myproject tests/
+  ```
+
+## 11. 性能优化
+- 使用性能分析工具找出瓶颈:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import cProfile
+  import pstats
+  
+  # 对函数进行分析
+  def profile_func(func, *args, **kwargs):
+      profiler = cProfile.Profile()
+      profiler.enable()
+      
+      result = func(*args, **kwargs)
+      
+      profiler.disable()
+      stats = pstats.Stats(profiler).sort_stats('cumtime')
+      stats.print_stats(20)  # 打印前20行结果
+      
+      return result
+  
+  # 使用示例
+  profile_func(process_large_dataset, dataset)
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用适当的数据结构:
+  ```python
+  # 查找操作频繁，使用集合
+  unique_ids = set(user_ids)
+  if user_id in unique_ids:  # O(1) 复杂度
+      process_user(user_id)
+  
+  # 有序数据，使用字典
+  user_data = {user.id: user for user in users}
+  ```
+  
+- 考虑使用缓存减少计算:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  from functools import lru_cache
+  
+  @lru_cache(maxsize=128)
+  def fibonacci(n):
+      """计算斐波那契数列的第n个数。"""
+      if n <= 1:
+          return n
+      return fibonacci(n-1) + fibonacci(n-2)
+  
+  # 结果会被缓存，重复调用相同参数时直接返回缓存结果
+  print(fibonacci(100))  # 第一次计算
+  print(fibonacci(100))  # 使用缓存结果
+  /* [AI-BLOCK-END] */
+  ```
+
+## 12. 并发与异步编程
+- 使用 `threading` 或 `multiprocessing` 进行并发:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import concurrent.futures
+  import requests
+  
+  def fetch_url(url):
+      """获取URL内容。"""
+      response = requests.get(url)
+      return response.text
+  
+  # 使用线程池并发请求多个URL
+  urls = [
+      "https://example.com",
+      "https://example.org",
+      "https://example.net",
+  ]
+  
+  with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+      # 并发提交所有请求
+      future_to_url = {executor.submit(fetch_url, url): url for url in urls}
+      
+      # 获取结果
+      for future in concurrent.futures.as_completed(future_to_url):
+          url = future_to_url[future]
+          try:
+              data = future.result()
+              print(f"{url}: {len(data)} bytes")
+          except Exception as exc:
+              print(f"{url} generated an exception: {exc}")
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用 `asyncio` 处理 I/O 密集型任务:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import asyncio
+  import aiohttp
+  
+  async def fetch_url(session, url):
+      """异步获取URL内容。"""
+      async with session.get(url) as response:
+          return await response.text()
+  
+  async def main():
+      """主异步函数。"""
+      urls = [
+          "https://example.com",
+          "https://example.org",
+          "https://example.net",
+      ]
+      
+      async with aiohttp.ClientSession() as session:
+          # 创建所有请求任务
+          tasks = [fetch_url(session, url) for url in urls]
+          
+          # 并发执行所有任务
+          results = await asyncio.gather(*tasks)
+          
+          # 处理结果
+          for url, data in zip(urls, results):
+              print(f"{url}: {len(data)} bytes")
+  
+  # 运行异步主函数
+  asyncio.run(main())
+  /* [AI-BLOCK-END] */
+  ```
+
+## 13. 代码安全
+- 避免使用 `eval()` 和 `exec()`，特别是处理用户输入时
+- 防止SQL注入:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  # 不安全:
+  query = f"SELECT * FROM users WHERE username = '{username}'"
+  
+  # 安全 (使用参数化查询):
+  query = "SELECT * FROM users WHERE username = %s"
+  cursor.execute(query, (username,))
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 安全处理密码:
+  ```python
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import hashlib
+  import os
+  from base64 import b64encode
+  
+  def hash_password(password, salt=None):
+      """使用SHA-256和随机盐值哈希密码。"""
+      if salt is None:
+          salt = os.urandom(32)  # 生成随机盐值
+      
+      # 组合密码和盐值并哈希
+      password_hash = hashlib.pbkdf2_hmac(
+          'sha256',
+          password.encode('utf-8'),
+          salt,
+          100000  # 迭代次数
+      )
+      
+      # 将盐和哈希合并储存
+      return {
+          'salt': b64encode(salt).decode('utf-8'),
+          'hash': b64encode(password_hash).decode('utf-8')
+      }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 14. 代码质量工具
+- 使用 linter 检查代码风格和潜在问题:
+  ```bash
+  # Flake8
+  pip install flake8
+  flake8 myproject/
+  
+  # Pylint
+  pip install pylint
+  pylint myproject/
+  ```
+  
+- 使用类型检查器:
+  ```bash
+  # mypy
+  pip install mypy
+  mypy myproject/
+  ```
+  
+- 使用代码格式化工具:
+  ```bash
+  # Black
+  pip install black
+  black myproject/
+  
+  # isort（导入排序）
+  pip install isort
+  isort myproject/
+  ```
+
+## 15. 编码与文档最佳实践
+- 使用 `.gitignore` 排除不需要版本控制的文件:
+  ```
+  # Python缓存文件
+  __pycache__/
+  *.py[cod]
+  *$py.class
+  
+  # 分发/打包文件
+  dist/
+  build/
+  *.egg-info/
+  
+  # 虚拟环境
+  venv/
+  env/
+  .env/
+  
+  # 测试覆盖率
+  .coverage
+  htmlcov/
+  
+  # IDE文件
+  .idea/
+  .vscode/
+  *.swp
+  ```
+  
+- 包含详细的 README.md:
+  ```markdown
+  # 项目名称
+  
+  简短项目描述
+  
+  ## 功能
+  
+  * 功能1
+  * 功能2
+  
+  ## 安装
+  
+  ```bash
+  pip install myproject
+  ```
+  
+  ## 使用示例
+  
+  ```python
+  from myproject import function
+  result = function(param)
+  ```
+  
+  ## 开发设置
+  
+  ```bash
+  # 克隆仓库
+  git clone https://github.com/username/myproject.git
+  
+  # 安装依赖
+  pip install -e ".[dev]"
+  
+  # 运行测试
+  pytest
+  ```
+  
+  ## 许可证
+  
+  MIT
+  ```

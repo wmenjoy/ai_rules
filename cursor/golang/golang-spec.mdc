@@ -1,0 +1,744 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# AI 辅助 Golang 代码生成规范
+生成工具: Cursor AI 0.1  
+生成日期: 2024-06-20  
+
+## 1. 总体规范
+- 遵循 Go 官方代码风格和最佳实践
+- 使用 Go Modules 管理依赖：
+  ```bash
+  go mod init github.com/username/projectname
+  go mod tidy
+  ```
+- 使用 Go 1.20+ 版本
+- 遵循命令行工具标准输出和错误处理方式
+
+- **AI 生成代码块注释规范**：
+  - 多行标注：
+    ```go
+    /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+    // AI 生成代码...
+    /* [AI-BLOCK-END] */
+    ```
+  - 单行标注：
+    ```go
+    result := compute() // [AI-LINE: Cursor AI 0.1]
+    ```
+
+## 2. 项目目录结构
+- 推荐的项目结构：
+  ```text
+  ├── cmd/                  # 应用程序入口点，每个子目录对应一个可执行文件
+  │   └── server/           # 服务器入口
+  │       └── main.go       # 主函数
+  ├── pkg/                  # 项目内可重用的代码包
+  │   ├── models/           # 数据模型定义
+  │   ├── database/         # 数据库配置和初始化
+  │   ├── handlers/         # HTTP 处理器
+  │   ├── middleware/       # HTTP 中间件
+  │   └── utils/            # 通用工具函数
+  ├── internal/             # 仅在项目内部使用的代码
+  │   ├── config/           # 配置管理
+  │   └── service/          # 核心业务逻辑
+  ├── api/                  # API 定义（如 Protocol Buffers, OpenAPI）
+  ├── web/                  # Web 资源（模板，静态文件等）
+  ├── scripts/              # 构建和部署脚本
+  ├── docs/                 # 文档
+  ├── go.mod                # Go 模块定义
+  ├── go.sum                # Go 模块依赖锁文件
+  ├── .gitignore            # Git 忽略文件
+  └── README.md             # 项目说明
+  ```
+
+## 3. 命名规范
+- **包名**：使用小写单个单词，不使用下划线或混合大小写
+- **文件名**：小写，使用下划线分隔单词，如 `user_repository.go`
+- **变量/函数**：
+  - 公开接口使用 `CamelCase`（如 `UserService`）
+  - 非导出函数/变量使用 `camelCase`（如 `userData`）
+  - 避免缩写，除非众所周知（如 `HTTP`, `URL`）
+- **接口名**：通常以 `-er` 结尾，如 `Reader`, `Writer`
+- **常量**：使用 `CamelCase`，如 `MaxConnections`
+- **错误变量**：以 `Err` 或 `Error` 开头，如 `ErrNotFound`
+
+## 4. GORM 规范
+
+### 4.1 模型定义
+- 模型结构体应放在 `models` 包中
+- 使用 GORM 标签定义字段属性：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  type User struct {
+    ID        uint           `gorm:"primaryKey"`
+    Name      string         `gorm:"size:100;not null"`
+    Email     string         `gorm:"size:100;uniqueIndex;not null"`
+    Password  string         `gorm:"size:100;not null"`
+    CreatedAt time.Time      `gorm:"autoCreateTime"`
+    UpdatedAt time.Time      `gorm:"autoUpdateTime"`
+    DeletedAt gorm.DeletedAt `gorm:"index"`
+  }
+  /* [AI-BLOCK-END] */
+  ```
+- 使用软删除，启用 `gorm.Model` 或手动添加 `DeletedAt` 字段
+- 为复杂的数据类型实现 `Scanner` 和 `Valuer` 接口
+
+### 4.2 数据库交互
+- 使用仓储模式封装数据库操作：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  type UserRepository struct {
+    db *gorm.DB
+  }
+  
+  func NewUserRepository(db *gorm.DB) *UserRepository {
+    return &UserRepository{db: db}
+  }
+  
+  func (r *UserRepository) FindByID(id uint) (*User, error) {
+    var user User
+    if err := r.db.First(&user, id).Error; err != nil {
+      return nil, err
+    }
+    return &user, nil
+  }
+  /* [AI-BLOCK-END] */
+  ```
+- 自定义错误而不是直接返回 GORM 错误：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  var (
+    ErrUserNotFound = errors.New("user not found")
+  )
+  
+  func (r *UserRepository) FindByID(id uint) (*User, error) {
+    var user User
+    if err := r.db.First(&user, id).Error; err != nil {
+      if errors.Is(err, gorm.ErrRecordNotFound) {
+        return nil, ErrUserNotFound
+      }
+      return nil, err
+    }
+    return &user, nil
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 4.3 事务处理
+- 使用显式事务确保数据一致性：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  func (r *UserRepository) Transfer(fromID, toID uint, amount float64) error {
+    return r.db.Transaction(func(tx *gorm.DB) error {
+      // 操作 1
+      if err := tx.Model(&Account{}).Where("id = ?", fromID).
+        Update("balance", gorm.Expr("balance - ?", amount)).Error; err != nil {
+        return err
+      }
+      
+      // 操作 2
+      if err := tx.Model(&Account{}).Where("id = ?", toID).
+        Update("balance", gorm.Expr("balance + ?", amount)).Error; err != nil {
+        return err
+      }
+      
+      return nil
+    })
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 4.4 数据库迁移
+- 使用 GORM 自动迁移或明确的迁移文件：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  func SetupDatabase() (*gorm.DB, error) {
+    dsn := "user:password@tcp(localhost:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
+    db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+    if err != nil {
+      return nil, err
+    }
+    
+    // 自动迁移
+    if err := db.AutoMigrate(&User{}, &Product{}, &Order{}); err != nil {
+      return nil, err
+    }
+    
+    return db, nil
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 5. Cobra 规范
+
+### 5.1 命令行应用结构
+- 在 `cmd` 目录中为每个命令创建单独文件或包：
+  ```text
+  cmd/
+  ├── root.go       # 根命令
+  ├── serve.go      # 服务器命令
+  ├── migrate.go    # 数据库迁移命令
+  └── user/         # 用户相关命令
+      ├── user.go   # 用户命令基础
+      ├── create.go # 创建用户命令
+      └── list.go   # 列出用户命令
+  ```
+
+### 5.2 根命令定义
+- 在 `root.go` 中定义应用的根命令：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  package cmd
+  
+  import (
+    "fmt"
+    "os"
+  
+    "github.com/spf13/cobra"
+    "github.com/spf13/viper"
+  )
+  
+  var cfgFile string
+  
+  var rootCmd = &cobra.Command{
+    Use:   "myapp",
+    Short: "A brief description of your application",
+    Long: `A longer description that spans multiple lines and likely contains
+  examples and usage of using your application.`,
+  }
+  
+  func Execute() {
+    if err := rootCmd.Execute(); err != nil {
+      fmt.Fprintln(os.Stderr, err)
+      os.Exit(1)
+    }
+  }
+  
+  func init() {
+    cobra.OnInitialize(initConfig)
+    rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.myapp.yaml)")
+  }
+  
+  func initConfig() {
+    if cfgFile != "" {
+      viper.SetConfigFile(cfgFile)
+    } else {
+      home, err := os.UserHomeDir()
+      cobra.CheckErr(err)
+  
+      viper.AddConfigPath(home)
+      viper.SetConfigType("yaml")
+      viper.SetConfigName(".myapp")
+    }
+  
+    viper.AutomaticEnv()
+  
+    if err := viper.ReadInConfig(); err == nil {
+      fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 5.3 子命令定义
+- 为每个主要功能创建子命令：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  package cmd
+  
+  import (
+    "fmt"
+  
+    "github.com/spf13/cobra"
+  )
+  
+  var serveCmd = &cobra.Command{
+    Use:   "serve",
+    Short: "Start the HTTP server",
+    Long:  `Start the HTTP server with the configured options.`,
+    Run: func(cmd *cobra.Command, args []string) {
+      port, _ := cmd.Flags().GetInt("port")
+      fmt.Printf("Starting server on port %d\n", port)
+      // 启动服务器的逻辑
+    },
+  }
+  
+  func init() {
+    rootCmd.AddCommand(serveCmd)
+    serveCmd.Flags().IntP("port", "p", 8080, "Port to run the server on")
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 5.4 命令行参数和标志
+- 使用 Cobra 的 flag 功能定义和验证命令行参数：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  // 持久性标志（在所有子命令中可用）
+  rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path")
+  
+  // 本地标志（仅在此命令中可用）
+  serveCmd.Flags().IntP("port", "p", 8080, "Port to run the server on")
+  serveCmd.Flags().StringP("host", "H", "localhost", "Host to bind the server to")
+  
+  // 必需标志
+  serveCmd.MarkFlagRequired("database")
+  /* [AI-BLOCK-END] */
+  ```
+
+### 5.5 命令执行函数
+- 保持命令执行函数简洁，将实际逻辑委托给其他包：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  var migrateCmd = &cobra.Command{
+    Use:   "migrate",
+    Short: "Run database migrations",
+    RunE: func(cmd *cobra.Command, args []string) error {
+      // 获取配置
+      dsn := viper.GetString("database.dsn")
+      
+      // 调用业务逻辑
+      migrationService := service.NewMigrationService(dsn)
+      return migrationService.RunMigrations()
+    },
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 6. 错误处理规范
+- 使用自定义错误类型和错误包装：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import (
+    "errors"
+    "fmt"
+  )
+  
+  // 定义错误类型
+  var (
+    ErrNotFound = errors.New("resource not found")
+    ErrInvalidInput = errors.New("invalid input")
+  )
+  
+  // 包装错误
+  func GetUser(id string) (*User, error) {
+    if id == "" {
+      return nil, fmt.Errorf("get user: %w", ErrInvalidInput)
+    }
+    
+    user, err := repository.FindUserByID(id)
+    if err != nil {
+      if errors.Is(err, repository.ErrUserNotFound) {
+        return nil, fmt.Errorf("get user: %w", ErrNotFound)
+      }
+      return nil, fmt.Errorf("get user: %w", err)
+    }
+    
+    return user, nil
+  }
+  
+  // 错误检查
+  err := GetUser(userID)
+  if errors.Is(err, ErrNotFound) {
+    // 处理资源不存在错误
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 7. 日志规范
+- 使用结构化日志库如 Zap 或 Logrus：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import (
+    "go.uber.org/zap"
+  )
+  
+  func InitLogger() *zap.Logger {
+    logger, _ := zap.NewProduction()
+    return logger
+  }
+  
+  // 使用
+  logger := InitLogger()
+  defer logger.Sync()
+  
+  logger.Info("server starting",
+    zap.String("env", "production"),
+    zap.Int("port", 8080),
+  )
+  
+  logger.Error("failed to connect to database",
+    zap.String("dsn", dsn),
+    zap.Error(err),
+  )
+  /* [AI-BLOCK-END] */
+  ```
+
+## 8. 配置管理规范
+- 使用 Viper 管理配置：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import (
+    "github.com/spf13/viper"
+  )
+  
+  func LoadConfig(path string) error {
+    viper.SetConfigFile(path)
+    viper.AutomaticEnv()
+    
+    // 设置默认值
+    viper.SetDefault("server.port", 8080)
+    viper.SetDefault("database.max_connections", 10)
+    
+    return viper.ReadInConfig()
+  }
+  
+  // 使用配置
+  port := viper.GetInt("server.port")
+  dsn := viper.GetString("database.dsn")
+  /* [AI-BLOCK-END] */
+  ```
+
+## 9. API 设计规范
+
+### 9.1 RESTful API
+- 遵循 RESTful 原则：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  // 用户资源
+  // GET /api/v1/users - 获取用户列表
+  // GET /api/v1/users/:id - 获取特定用户
+  // POST /api/v1/users - 创建用户
+  // PUT /api/v1/users/:id - 更新用户
+  // DELETE /api/v1/users/:id - 删除用户
+  
+  func RegisterUserRoutes(r *gin.Engine) {
+    api := r.Group("/api/v1")
+    {
+      users := api.Group("/users")
+      {
+        users.GET("", listUsers)
+        users.POST("", createUser)
+        users.GET("/:id", getUser)
+        users.PUT("/:id", updateUser)
+        users.DELETE("/:id", deleteUser)
+      }
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 9.2 API 响应格式
+- 使用一致的响应格式：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  type Response struct {
+    Success bool        `json:"success"`
+    Data    interface{} `json:"data,omitempty"`
+    Error   string      `json:"error,omitempty"`
+    Meta    interface{} `json:"meta,omitempty"`
+  }
+  
+  func SuccessResponse(c *gin.Context, data interface{}, meta ...interface{}) {
+    resp := Response{
+      Success: true,
+      Data:    data,
+    }
+    
+    if len(meta) > 0 {
+      resp.Meta = meta[0]
+    }
+    
+    c.JSON(http.StatusOK, resp)
+  }
+  
+  func ErrorResponse(c *gin.Context, statusCode int, err error) {
+    c.JSON(statusCode, Response{
+      Success: false,
+      Error:   err.Error(),
+    })
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 10. 测试规范
+
+### 10.1 单元测试
+- 为每个包和函数编写单元测试：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  package user_test
+  
+  import (
+    "testing"
+    
+    "github.com/stretchr/testify/assert"
+    "github.com/username/project/pkg/user"
+  )
+  
+  func TestCreateUser(t *testing.T) {
+    // 准备
+    service := user.NewService(mockRepo)
+    input := user.CreateUserInput{
+      Name:  "John Doe",
+      Email: "john@example.com",
+    }
+    
+    // 执行
+    result, err := service.CreateUser(input)
+    
+    // 断言
+    assert.NoError(t, err)
+    assert.NotNil(t, result)
+    assert.Equal(t, input.Name, result.Name)
+    assert.Equal(t, input.Email, result.Email)
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 10.2 表格驱动测试
+- 使用表格驱动测试减少重复代码：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  func TestValidateEmail(t *testing.T) {
+    tests := []struct {
+      name  string
+      email string
+      want  bool
+    }{
+      {"valid email", "user@example.com", true},
+      {"invalid email - no @", "userexample.com", false},
+      {"invalid email - no domain", "user@", false},
+    }
+    
+    for _, tt := range tests {
+      t.Run(tt.name, func(t *testing.T) {
+        got := ValidateEmail(tt.email)
+        assert.Equal(t, tt.want, got)
+      })
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 10.3 模拟和存根
+- 使用接口和依赖注入便于测试：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  type UserRepository interface {
+    FindByID(id string) (*User, error)
+    Create(user *User) error
+  }
+  
+  type mockUserRepository struct {
+    users map[string]*User
+  }
+  
+  func (m *mockUserRepository) FindByID(id string) (*User, error) {
+    user, ok := m.users[id]
+    if !ok {
+      return nil, ErrUserNotFound
+    }
+    return user, nil
+  }
+  
+  func (m *mockUserRepository) Create(user *User) error {
+    m.users[user.ID] = user
+    return nil
+  }
+  
+  // 在测试中使用
+  mockRepo := &mockUserRepository{users: make(map[string]*User)}
+  service := NewUserService(mockRepo)
+  /* [AI-BLOCK-END] */
+  ```
+
+## 11. 性能优化
+
+### 11.1 数据库查询优化
+- 优化 GORM 查询，避免 N+1 问题：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  // 不好的做法 - N+1 问题
+  var users []User
+  db.Find(&users)
+  for _, user := range users {
+    var orders []Order
+    db.Where("user_id = ?", user.ID).Find(&orders)
+    // 处理订单...
+  }
+  
+  // 好的做法 - 使用预加载
+  var users []User
+  db.Preload("Orders").Find(&users)
+  for _, user := range users {
+    for _, order := range user.Orders {
+      // 处理订单...
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 11.2 并发处理
+- 使用 goroutines 和 channels 处理并发任务：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  func ProcessItems(items []Item) error {
+    numWorkers := 5
+    jobs := make(chan Item, len(items))
+    results := make(chan error, len(items))
+    
+    // 启动工作池
+    for w := 1; w <= numWorkers; w++ {
+      go worker(w, jobs, results)
+    }
+    
+    // 发送工作
+    for _, item := range items {
+      jobs <- item
+    }
+    close(jobs)
+    
+    // 收集结果
+    for a := 1; a <= len(items); a++ {
+      err := <-results
+      if err != nil {
+        return err
+      }
+    }
+    
+    return nil
+  }
+  
+  func worker(id int, jobs <-chan Item, results chan<- error) {
+    for j := range jobs {
+      results <- processItem(j)
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 12. 安全规范
+
+### 12.1 数据验证
+- 输入验证：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  type CreateUserRequest struct {
+    Name     string `json:"name" binding:"required,max=100"`
+    Email    string `json:"email" binding:"required,email"`
+    Password string `json:"password" binding:"required,min=8,max=100"`
+  }
+  
+  func createUser(c *gin.Context) {
+    var req CreateUserRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+      c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+      return
+    }
+    
+    // 处理请求...
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 12.2 密码安全
+- 使用安全的密码处理：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  import "golang.org/x/crypto/bcrypt"
+  
+  func HashPassword(password string) (string, error) {
+    bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    return string(bytes), err
+  }
+  
+  func CheckPasswordHash(password, hash string) bool {
+    err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+    return err == nil
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+### 12.3 敏感数据处理
+- 保护敏感数据：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  type User struct {
+    ID        uint   `json:"id" gorm:"primaryKey"`
+    Name      string `json:"name"`
+    Email     string `json:"email"`
+    Password  string `json:"-" gorm:"not null"` // 不在 JSON 中暴露
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 13. 文档规范
+- 每个包和导出函数/类型/变量添加 godoc 文档：
+  ```go
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  // Package user provides functionality for user management.
+  package user
+  
+  // User represents a registered user in the system.
+  type User struct {
+    ID   string
+    Name string
+    // ...
+  }
+  
+  // Service handles user-related business logic.
+  type Service struct {
+    // ...
+  }
+  
+  // NewService creates a new user service with the given repository.
+  func NewService(repo Repository) *Service {
+    // ...
+  }
+  
+  // CreateUser creates a new user with the provided information.
+  // Returns ErrInvalidInput if the input is invalid.
+  func (s *Service) CreateUser(input CreateUserInput) (*User, error) {
+    // ...
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 14. 设计原则 & 最佳实践
+
+### 14.1 设计原则
+- **单一职责原则**：每个包、结构体和函数应只负责一个功能。
+- **接口隔离原则**：客户端不应依赖它不使用的方法，接口应保持小巧。
+- **依赖倒置原则**：高级模块不应依赖低级模块，而是依赖于抽象。
+- **显式传递依赖**：避免使用全局变量，通过参数或字段传递依赖。
+- **最小化可见性**：除非必要，否则不要导出类型、函数、变量或常量。
+
+### 14.2 Golang 最佳实践
+- **错误处理**：
+  - 始终检查错误并适当处理。
+  - 使用有意义的错误信息和错误包装。
+  - 避免使用 `panic` 处理正常错误流程。
+- **接口的使用**：
+  - 定义小接口，通常 1-3 个方法最佳。
+  - 接口应由使用者定义，而不是实现者。
+- **代码组织**：
+  - 按功能而非类型组织代码。
+  - 避免不必要的抽象和过度设计。
+- **性能相关**：
+  - 避免过早优化。
+  - 使用 Go 的性能分析工具识别瓶颈。
+  - 了解值传递和指针传递之间的区别及影响。
+- **测试实践**：
+  - 编写单元测试与集成测试。
+  - 使用表格驱动的测试风格。
+  - 使用模拟和存根隔离单元测试的依赖。

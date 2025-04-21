@@ -1,0 +1,491 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# C++ 语言编程规范
+生成工具: Cursor AI 0.2  
+生成日期: 2024-07-10
+
+## 1. 代码组织与文件结构
+- 源文件使用 `.cpp` 扩展名，头文件使用 `.hpp` 或 `.h`
+- 文件命名采用小写字母加下划线或小驼峰: `vector_utils.cpp` 或 `vectorUtils.hpp`
+- 推荐项目结构:
+  ```
+  project/
+  ├── include/            # 公共头文件
+  │   └── project/        # 项目命名空间头文件
+  ├── src/                # 源文件
+  ├── test/               # 测试代码
+  ├── docs/               # 文档
+  ├── examples/           # 示例代码
+  ├── third_party/        # 第三方库
+  └── build/              # 构建产物
+  ```
+
+## 2. 命名空间
+- 使用命名空间避免名称冲突:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  namespace project {
+  namespace module {
+      
+  // 命名空间内的代码
+  class MyClass {
+      // ...
+  };
+  
+  } // namespace module
+  } // namespace project
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 避免在头文件中使用 `using namespace` 指令
+- 在 `.cpp` 文件中，可以在函数内部使用 `using namespace`
+
+## 3. 类设计
+- 每个类应遵循单一职责原则
+- 使用 public/protected/private 清晰分隔接口与实现
+- 遵循 RAII (资源获取即初始化) 原则:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  class FileHandler {
+  public:
+      // 构造函数获取资源
+      FileHandler(const std::string& filename) 
+          : file_(std::fopen(filename.c_str(), "r")) {
+          if (!file_) {
+              throw std::runtime_error("无法打开文件");
+          }
+      }
+      
+      // 禁止拷贝
+      FileHandler(const FileHandler&) = delete;
+      FileHandler& operator=(const FileHandler&) = delete;
+      
+      // 移动构造函数
+      FileHandler(FileHandler&& other) noexcept 
+          : file_(other.file_) {
+          other.file_ = nullptr;
+      }
+      
+      // 移动赋值运算符
+      FileHandler& operator=(FileHandler&& other) noexcept {
+          if (this != &other) {
+              if (file_) {
+                  std::fclose(file_);
+              }
+              file_ = other.file_;
+              other.file_ = nullptr;
+          }
+          return *this;
+      }
+      
+      // 析构函数释放资源
+      ~FileHandler() {
+          if (file_) {
+              std::fclose(file_);
+          }
+      }
+      
+      // 其他成员函数...
+      
+  private:
+      FILE* file_;
+  };
+  /* [AI-BLOCK-END] */
+  ```
+
+## 4. 命名规范
+- **类和结构体**: 使用 PascalCase
+  ```cpp
+  class NetworkManager {};
+  struct ConfigOptions {};
+  ```
+  
+- **函数和方法**: 使用 camelCase
+  ```cpp
+  void sendRequest();
+  int calculateTotal();
+  ```
+  
+- **变量**: 使用 camelCase，成员变量可以添加后缀 `_`
+  ```cpp
+  int itemCount = 0;
+  std::string userName;
+  
+  class User {
+  private:
+      std::string name_;
+      int age_;
+  };
+  ```
+  
+- **常量**: 使用 kPascalCase 或全大写
+  ```cpp
+  const int kMaxConnections = 100;
+  constexpr double PI = 3.14159265359;
+  ```
+  
+- **宏**: 使用全大写字母加下划线（但优先使用 constexpr 和内联函数）
+  ```cpp
+  #define UNSAFE_MACRO(x) ((x) * 2)  // 不推荐使用宏
+  ```
+
+## 5. 现代 C++ 特性
+- 优先使用 C++11/14/17/20 特性
+- 使用 `auto` 简化类型声明，但不要过度使用
+- 使用列表初始化:
+  ```cpp
+  std::vector<int> numbers = {1, 2, 3, 4};
+  std::map<std::string, int> ages = {{"Alice", 25}, {"Bob", 30}};
+  ```
+  
+- 使用智能指针管理资源:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 单一所有权
+  std::unique_ptr<Resource> resource = std::make_unique<Resource>();
+  
+  // 共享所有权
+  std::shared_ptr<Resource> sharedResource = std::make_shared<Resource>();
+  
+  // 弱引用
+  std::weak_ptr<Resource> weakResource = sharedResource;
+  
+  // 使用自定义删除器
+  auto customDeleter = [](File* file) {
+      file->close();
+      delete file;
+  };
+  std::unique_ptr<File, decltype(customDeleter)> file(new File("data.txt"), customDeleter);
+  /* [AI-BLOCK-END] */
+  ```
+
+- 使用移动语义优化性能:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  std::vector<int> createLargeVector() {
+      std::vector<int> result(1000000);
+      // 填充数据...
+      return result;  // 自动使用移动语义
+  }
+  
+  void processVector(std::vector<int>&& vec) {
+      // 使用移动的vector
+      std::vector<int> localVec = std::move(vec);
+      // 此时 vec 已被移动，不应再使用
+  }
+  
+  // 调用
+  auto largeVec = createLargeVector();
+  processVector(std::move(largeVec));  // 显式移动
+  // largeVec 已被移动，此处不应再使用
+  /* [AI-BLOCK-END] */
+  ```
+
+## 6. 注释规范
+- 使用 Doxygen 风格的注释:
+  ```cpp
+  /**
+   * @brief 函数的简短描述
+   * 
+   * 函数的详细描述，可以多行
+   * 
+   * @param param1 第一个参数的描述
+   * @param param2 第二个参数的描述
+   * @return 返回值的描述
+   * @throws 可能抛出的异常
+   * @note 额外说明
+   */
+  ```
+  
+- 为复杂的算法或不明显的实现添加注释
+
+## 7. 异常处理
+- 使用异常处理错误情况:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  class DatabaseConnection {
+  public:
+      void connect(const std::string& connectionString) {
+          try {
+              // 尝试连接
+              if (!isValidConnectionString(connectionString)) {
+                  throw std::invalid_argument("无效的连接字符串");
+              }
+              
+              // 其他可能抛出异常的操作...
+              
+          } catch (const std::invalid_argument& e) {
+              // 处理特定异常
+              log_.error("连接参数错误: {}", e.what());
+              throw; // 重新抛出
+          } catch (const std::exception& e) {
+              // 处理通用异常
+              log_.error("连接失败: {}", e.what());
+              throw ConnectionException("数据库连接失败: " + std::string(e.what()));
+          }
+      }
+      
+  private:
+      Logger log_;
+      bool isValidConnectionString(const std::string& str);
+  };
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 在析构函数中不要抛出异常
+- 考虑使用 `noexcept` 标记不会抛出异常的函数
+
+## 8. 模板与泛型编程
+- 模板定义通常放在头文件中
+- 使用 `typename` 表示依赖类型:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  template <typename T>
+  class Container {
+  public:
+      using value_type = T;
+      using pointer = T*;
+      using reference = T&;
+      
+      template <typename U>
+      void transform(U&& func) {
+          for (auto& item : items_) {
+              func(item);
+          }
+      }
+      
+  private:
+      std::vector<T> items_;
+  };
+  
+  // 概念约束 (C++20)
+  template <typename T>
+  requires std::is_arithmetic_v<T>
+  T add(T a, T b) {
+      return a + b;
+  }
+  
+  // 或使用简化语法
+  auto multiply(std::integral auto a, std::integral auto b) {
+      return a * b;
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 9. 标准库的使用
+- 充分利用标准库容器与算法
+- 使用 `<algorithm>` 中的函数而非手写循环:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 而不是手写循环查找
+  auto it = std::find_if(vec.begin(), vec.end(), [](int x) { return x > 10; });
+  
+  // 使用算法转换数据
+  std::vector<int> input = {1, 2, 3, 4, 5};
+  std::vector<int> output;
+  std::transform(input.begin(), input.end(), std::back_inserter(output),
+                 [](int x) { return x * x; });
+  
+  // 数据处理
+  std::vector<int> numbers = {5, 2, 8, 1, 9};
+  std::sort(numbers.begin(), numbers.end());
+  auto sum = std::accumulate(numbers.begin(), numbers.end(), 0);
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 优先使用范围库 (C++20) 简化代码:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  #include <ranges>
+  #include <vector>
+  #include <algorithm>
+  
+  std::vector<int> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  
+  // 过滤和转换
+  auto result = data | std::views::filter([](int n) { return n % 2 == 0; })
+                     | std::views::transform([](int n) { return n * n; });
+  
+  // 输出: 4, 16, 36, 64, 100
+  for (int n : result) {
+      std::cout << n << " ";
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 10. 多线程与并发
+- 使用 `std::thread`, `std::mutex`, `std::condition_variable` 进行多线程开发
+- 使用高级抽象如 `std::async`, `std::future`, `std::promise`:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  #include <future>
+  #include <vector>
+  #include <numeric>
+  
+  // 使用 async 进行并行计算
+  std::vector<int> data(10000000);
+  // 填充数据...
+  
+  // 分段计算总和
+  auto sumRange = [&data](mdc:size_t start, size_t end) {
+      return std::accumulate(data.begin() + start, data.begin() + end, 0);
+  };
+  
+  // 启动并行任务
+  size_t midpoint = data.size() / 2;
+  std::future<int> future1 = std::async(std::launch::async, sumRange, 0, midpoint);
+  std::future<int> future2 = std::async(std::launch::async, sumRange, midpoint, data.size());
+  
+  // 获取结果并组合
+  int total = future1.get() + future2.get();
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 使用 `std::atomic` 避免竞态条件
+- 避免死锁:
+  - 使用 `std::lock` 同时锁定多个互斥量
+  - 使用 `std::lock_guard` 和 `std::unique_lock` 确保锁的自动释放
+  - 避免嵌套锁
+
+## 11. 代码性能优化
+- 避免不必要的拷贝，使用引用和移动语义
+- 使用 `constexpr` 在编译时评估表达式
+- 考虑数据局部性和缓存友好性
+- 内联小函数:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 1. 隐式内联（类内定义）
+  class Vector {
+  public:
+      double length() const { return std::sqrt(x_*x_ + y_*y_); }  // 自动内联
+      
+  private:
+      double x_, y_;
+  };
+  
+  // 2. 显式内联
+  inline double calculateDistance(double x1, double y1, double x2, double y2) {
+      double dx = x2 - x1;
+      double dy = y2 - y1;
+      return std::sqrt(dx*dx + dy*dy);
+  }
+  
+  // 3. constexpr 函数（通常也是内联的）
+  constexpr int factorial(int n) {
+      return (n <= 1) ? 1 : (n * factorial(n - 1));
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 12. 代码格式
+- 使用一致的缩进（4个空格或2个空格）
+- 大括号位置遵循特定风格（如Google或Mozilla风格）
+- 行宽一般限制在80-120个字符
+- 使用空行分隔不同的逻辑块
+- 利用代码格式化工具保持一致性（如clang-format）
+
+## 13. 构建与依赖管理
+- 使用 CMake 管理项目构建
+- 考虑使用包管理器 (如 Conan, vcpkg)
+- CMake 示例:
+  ```cmake
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  cmake_minimum_required(VERSION 3.15)
+  project(MyProject VERSION 1.0.0 LANGUAGES CXX)
+  
+  # 设置 C++ 标准
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  
+  # 找到依赖
+  find_package(Boost REQUIRED COMPONENTS system filesystem)
+  
+  # 添加可执行文件
+  add_executable(${PROJECT_NAME} 
+      src/main.cpp
+      src/utils.cpp
+  )
+  
+  # 包含目录
+  target_include_directories(${PROJECT_NAME} 
+      PUBLIC 
+          ${CMAKE_CURRENT_SOURCE_DIR}/include
+      PRIVATE
+          ${Boost_INCLUDE_DIRS}
+  )
+  
+  # 链接库
+  target_link_libraries(${PROJECT_NAME}
+      PRIVATE
+          ${Boost_LIBRARIES}
+  )
+  
+  # 安装规则
+  install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+  
+  # 测试
+  enable_testing()
+  add_subdirectory(tests)
+  /* [AI-BLOCK-END] */
+  ```
+
+## 14. 测试
+- 使用 Google Test, Catch2 或 Boost.Test 编写单元测试
+- 测试应覆盖边界条件和异常路径
+- 使用模拟对象(mocks)隔离复杂的依赖
+- 示例 Google Test:
+  ```cpp
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  #include <gtest/gtest.h>
+  #include "calculator.hpp"
+  
+  TEST(CalculatorTest, AddReturnsCorrectResult) {
+      Calculator calc;
+      EXPECT_EQ(5, calc.add(2, 3));
+      EXPECT_EQ(0, calc.add(-5, 5));
+      EXPECT_EQ(-10, calc.add(-7, -3));
+  }
+  
+  TEST(CalculatorTest, DivideThrowsOnZeroDivisor) {
+      Calculator calc;
+      EXPECT_THROW(calc.divide(10, 0), std::invalid_argument);
+  }
+  
+  // 参数化测试
+  class CalculatorParamTest : public ::testing::TestWithParam<std::tuple<int, int, int>> {};
+  
+  TEST_P(CalculatorParamTest, MultiplyReturnsCorrectResult) {
+      auto params = GetParam();
+      int a = std::get<0>(params);
+      int b = std::get<1>(params);
+      int expected = std::get<2>(params);
+      
+      Calculator calc;
+      EXPECT_EQ(expected, calc.multiply(a, b));
+  }
+  
+  INSTANTIATE_TEST_CASE_P(
+      MultiplyTests,
+      CalculatorParamTest,
+      ::testing::Values(
+          std::make_tuple(2, 3, 6),
+          std::make_tuple(0, 5, 0),
+          std::make_tuple(-2, 4, -8)
+      )
+  );
+  /* [AI-BLOCK-END] */
+  ```
+
+## 15. 代码安全与健壮性
+- 使用静态分析工具如 clang-tidy、cppcheck
+- 注意避免以下问题:
+  - 缓冲区溢出
+  - 整数溢出
+  - 空指针解引用
+  - 内存泄漏
+  - 竞态条件
+- 使用编译器警告和 `-Wall -Wextra -Werror` 标志
+- 使用 AddressSanitizer, UndefinedBehaviorSanitizer 等工具进行动态分析

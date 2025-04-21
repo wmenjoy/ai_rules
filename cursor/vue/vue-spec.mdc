@@ -3,7 +3,6 @@ description:
 globs: 
 alwaysApply: true
 ---
-
 # AI 辅助前端代码生成规范 (Vue 3, React, Tailwind CSS & pnpm)
 生成工具: Cursor AI 0.1  
 生成日期: 2024-06-15  
@@ -143,70 +142,1417 @@ alwaysApply: true
 ## 9. 错误处理
 - API 调用统一封装，使用 `async/await + try/catch`：
   ```ts
-  try {
-    const data = await api.fetchData();
-  } catch (error) {
-    console.error(error); // 记录日志
-    notifyError('请求失败，请重试');
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import { ref } from 'vue';
+  
+  export function useFetch<T>(url: string) {
+    const data = ref<T | null>(null);
+    const error = ref<Error | null>(null);
+    const loading = ref(false);
+    
+    async function fetchData() {
+      loading.value = true;
+      error.value = null;
+      
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`网络错误: ${response.status}`);
+        }
+        data.value = await response.json();
+      } catch (e) {
+        console.error(e);
+        error.value = e instanceof Error ? e : new Error(String(e));
+      } finally {
+        loading.value = false;
+      }
+    }
+    
+    return { data, error, loading, fetchData };
   }
+  /* [AI-BLOCK-END] */
   ```
-- React 使用错误边界捕获组件渲染错误：
-  ```tsx
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
-  ```
-- 全局捕获 Vue 错误：
+
+- 全局错误处理：
   ```ts
-  app.config.errorHandler = (err) => {
-    console.error(err);
-    notifyError('应用错误，请联系管理员');
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // main.ts
+  import { createApp } from 'vue';
+  import App from './App.vue';
+  import { initErrorTracking } from './utils/error-tracking';
+  
+  const app = createApp(App);
+  
+  // 全局错误处理器
+  app.config.errorHandler = (err, instance, info) => {
+    console.error('Vue 错误:', err);
+    console.error('错误信息:', info);
+    
+    // 上报到错误追踪服务
+    captureException(err, { 
+      extra: { 
+        componentName: instance?.$.type.name,
+        info 
+      } 
+    });
+    
+    // 显示用户友好的错误信息
+    showErrorNotification('应用发生错误，请刷新重试或联系支持团队');
   };
+  
+  // 全局警告处理
+  app.config.warnHandler = (msg, instance, trace) => {
+    console.warn('Vue 警告:', msg);
+    console.warn('警告来源:', trace);
+    
+    // 仅在开发环境中记录警告
+    if (import.meta.env.DEV) {
+      captureWarning(msg, { extra: { trace } });
+    }
+  };
+  
+  // 未捕获 Promise 错误
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('未处理的 Promise 拒绝:', event.reason);
+    captureException(event.reason);
+    event.preventDefault();
+  });
+  
+  initErrorTracking();
+  app.mount('#app');
+  /* [AI-BLOCK-END] */
+  ```
+
+- 组件级错误处理：
+  ```vue
+  <template>
+    <ErrorBoundary>
+      <template #default>
+        <UserProfile />
+      </template>
+      <template #fallback="{ error }">
+        <div class="error-container">
+          <h3>出错了</h3>
+          <p>{{ error.message }}</p>
+          <button @click="resetError">重试</button>
+        </div>
+      </template>
+    </ErrorBoundary>
+  </template>
+  
+  <script setup>
+  import { ref } from 'vue';
+  import ErrorBoundary from '@/components/ErrorBoundary.vue';
+  
+  function resetError() {
+    // 重置错误状态
+  }
+  </script>
   ```
 
 ## 10. 组件定义细则
-- Vue：
-  ```vue
-  <script setup lang="ts">
-  const props = defineProps<{ title: string }>();
-  const emit = defineEmits<{ (e: 'update', value: string): void }>();
-  </script>
+- Props 定义：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 基础方式 (类型推断)
+  defineProps<{
+    title: string;
+    count: number;
+    isActive?: boolean;
+    items?: string[];
+  }>();
+  
+  // 带默认值
+  withDefaults(defineProps<{
+    title: string;
+    size?: 'small' | 'medium' | 'large';
+    tags?: string[];
+  }>(), {
+    size: 'medium',
+    tags: () => ['default']
+  });
+  
+  // 运行时声明
+  defineProps({
+    title: {
+      type: String,
+      required: true,
+      validator: (value: string) => value.length > 3
+    },
+    count: {
+      type: Number,
+      default: 0
+    }
+  });
+  /* [AI-BLOCK-END] */
   ```
-- React：
-  ```tsx
-  interface MyCompProps { title: string; }
-  const MyComp: React.FC<MyCompProps> = ({ title }) => { /* ... */ };
+
+- Emits 定义：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 类型声明方式
+  const emit = defineEmits<{
+    (e: 'update', value: string): void;
+    (e: 'submit', data: { id: number; text: string }): void;
+    (e: 'delete'): void;
+  }>();
+  
+  // 运行时声明
+  const emit = defineEmits({
+    update: (value) => {
+      return typeof value === 'string';
+    },
+    submit: (data) => {
+      return data && typeof data.id === 'number';
+    }
+  });
+  
+  // 使用
+  function handleInput(event) {
+    emit('update', event.target.value);
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+- 插槽使用：
+  ```vue
+  <template>
+    <!-- [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 -->
+    <div class="card">
+      <!-- 默认插槽 -->
+      <div class="card-body">
+        <slot></slot>
+      </div>
+      
+      <!-- 具名插槽 -->
+      <div class="card-header">
+        <slot name="header">
+          <!-- 默认内容 -->
+          <h3>默认标题</h3>
+        </slot>
+      </div>
+      
+      <!-- 作用域插槽 -->
+      <div class="card-footer">
+        <slot 
+          name="footer" 
+          :confirm="confirmAction"
+          :cancel="cancelAction"
+        >
+        </slot>
+      </div>
+    </div>
+    <!-- [AI-BLOCK-END] -->
+  </template>
+  
+  <!-- 在父组件中使用 -->
+  <template>
+    <Card>
+      <!-- 默认插槽内容 -->
+      <p>卡片内容</p>
+      
+      <!-- 具名插槽 -->
+      <template #header>
+        <h2>自定义标题</h2>
+      </template>
+      
+      <!-- 作用域插槽 -->
+      <template #footer="{ confirm, cancel }">
+        <button @click="cancel">取消</button>
+        <button @click="confirm">确认</button>
+      </template>
+    </Card>
+  </template>
+  ```
+
+- 暴露组件 API：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 在子组件中
+  const visible = ref(false);
+  
+  function show() {
+    visible.value = true;
+  }
+  
+  function hide() {
+    visible.value = false;
+  }
+  
+  // 暴露方法给父组件
+  defineExpose({
+    show,
+    hide,
+    isVisible: () => visible.value
+  });
+  
+  // 在父组件中
+  const modalRef = ref(null);
+  
+  function openModal() {
+    modalRef.value?.show();
+  }
+  /* [AI-BLOCK-END] */
   ```
 
 ## 11. 样式定义细则
-- 优先使用 Tailwind CSS Utility Classes，必要时使用 `@apply`：
-  ```css
-  .btn-primary {
-    @apply bg-blue-500 text-white px-4 py-2 rounded;
-  }
+- 优先使用 Tailwind CSS Utility Classes：
+  ```vue
+  <template>
+    <div class="flex items-center space-x-4 p-6 bg-white rounded-lg shadow-md">
+      <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+        <UserIcon class="w-6 h-6 text-white" />
+      </div>
+      <div>
+        <h3 class="text-lg font-medium text-gray-900">{{ title }}</h3>
+        <p class="text-sm text-gray-500">{{ description }}</p>
+      </div>
+    </div>
+  </template>
   ```
-- 禁止使用内联样式 (inline style)
-- 全局样式入口：`src/styles/tailwind.css` 
-## 12. 设计原则 & 最佳实践
 
-- ### 设计原则
-  - **单一职责 (SRP)**：每个组件/模块只负责一件事。
-  - **开放-封闭 (OCP)**：对扩展开放，对修改封闭。
-  - **依赖倒置 (DIP)**：高层模块不依赖低层模块，而是通过抽象相互依赖。
-  - **不重复自己 (DRY)**：避免复制粘贴，通用逻辑/样式抽取复用。
-  - **保持简单 (KISS)**：追求简单可读的实现，降低认知负担。
-  - **持续重构**：定期审查和重构，清除技术债务。
-  - **可访问性 (a11y)**：确保组件符合无障碍标准，支持键盘导航与屏幕阅读器等。
-  - **响应式优先**：自顶向下设计移动端优先，保证多终端适配。
+- 在样式文件中使用 `@apply` 复用公共样式：
+  ```css
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  /* components/Button.vue */
+  <style>
+  .btn {
+    @apply px-4 py-2 rounded font-medium transition-colors;
+  }
+  .btn-primary {
+    @apply bg-blue-500 text-white hover:bg-blue-600;
+  }
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+  }
+  </style>
+  /* [AI-BLOCK-END] */
+  ```
 
-- ### 最佳实践
-  - **TypeScript 强类型**：尽量为接口、props、state 等添加类型注解，降低运行时错误。
-  - **逻辑复用**：Vue 使用 Composition API，React 使用 Hooks，实现功能逻辑集中管理与复用。
-  - **单元测试**：使用 Jest + Testing Library 对核心逻辑和组件进行单元测试，覆盖率保持在高水平。
-  - **端到端测试**：使用 Cypress/Playwright 对关键用户流程进行 E2E 测试，保障功能可靠性。
-  - **性能优化**：开启 Tree Shaking，采用代码分割（React.lazy / defineAsyncComponent），减少首屏加载体积。
-  - **组件文档**：使用 Storybook 维护交互文档，并结合自动化文档插件（addon-docs）。
-  - **错误监控**：集成 Sentry 或 LogRocket，捕获前端运行时异常，触发告警和上报。
-  - **国际化支持**：统一使用 vue-i18n / react-intl 管理多语言，避免硬编码文字。
-  - **CI/CD 流水线**：在 GitHub Actions / GitLab CI 上配置自动化测试、Lint、构建与部署，确保高质量交付。
-  - **Git 工作流**：采用 Git Flow 或 trunk-based flow，分支命名与提交信息遵循团队规范。
+- CSS 变量与主题：
+  ```css
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  /* styles/variables.css */
+  :root {
+    /* 颜色 */
+    --color-primary: theme('colors.blue.500');
+    --color-secondary: theme('colors.gray.700');
+    --color-success: theme('colors.green.500');
+    --color-danger: theme('colors.red.500');
+    --color-warning: theme('colors.yellow.500');
+    
+    /* 尺寸 */
+    --spacing-xs: theme('spacing.2');
+    --spacing-sm: theme('spacing.4');
+    --spacing-md: theme('spacing.6');
+    --spacing-lg: theme('spacing.8');
+    
+    /* 圆角 */
+    --radius-sm: theme('borderRadius.sm');
+    --radius-md: theme('borderRadius.md');
+    --radius-lg: theme('borderRadius.lg');
+  }
+
+  /* 暗黑模式 */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-primary: theme('colors.blue.400');
+      --color-secondary: theme('colors.gray.300');
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+- CSS Module 使用：
+  ```vue
+  <template>
+    <div :class="$style.container">
+      <h2 :class="$style.title">{{ title }}</h2>
+    </div>
+  </template>
+  
+  <style module>
+  .container {
+    @apply p-4 bg-gray-50 rounded;
+  }
+  .title {
+    @apply text-xl font-bold text-gray-800;
+  }
+  </style>
+  ```
+
+- 动态样式：
+  ```vue
+  <template>
+    <!-- 条件类名 -->
+    <div :class="['card', { 'card-active': isActive }]">
+      <!-- 动态样式 -->
+      <div :style="{ 
+        color: textColor,
+        fontSize: `${fontSize}px`
+      }">
+        {{ text }}
+      </div>
+    </div>
+  </template>
+  ```
+
+- 样式隔离：
+  ```vue
+  <!-- 默认启用 scoped -->
+  <style scoped>
+  .button {
+    /* 仅影响当前组件的 .button 元素 */
+  }
+  </style>
+  
+  <!-- 全局样式 -->
+  <style>
+  /* 影响全局的样式 */
+  </style>
+  
+  <!-- CSS Module (推荐用于复杂组件) -->
+  <style module>
+  /* 通过唯一哈希类名实现隔离 */
+  </style>
+  ```
+
+- 禁止使用内联样式 (inline style)，除非是动态计算属性
+
+## 12. 状态管理细则
+- 使用 Pinia 进行状态管理：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // stores/counter.ts
+  import { defineStore } from 'pinia';
+  
+  export const useCounterStore = defineStore('counter', {
+    // state
+    state: () => ({
+      count: 0,
+      history: [] as number[],
+    }),
+    
+    // getters
+    getters: {
+      doubleCount: (state) => state.count * 2,
+      lastChange: (state) => state.history[state.history.length - 1] || 0,
+    },
+    
+    // actions
+    actions: {
+      increment() {
+        this.count++;
+        this.history.push(this.count);
+      },
+      
+      async fetchInitialCount() {
+        try {
+          const response = await fetch('/api/counter');
+          const data = await response.json();
+          this.count = data.count;
+        } catch (error) {
+          console.error('Failed to fetch count:', error);
+        }
+      },
+    },
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 组合式 API 形式的 Pinia Store (推荐)：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // stores/user.ts
+  import { defineStore } from 'pinia';
+  import { ref, computed } from 'vue';
+  import type { User } from '@/types';
+  
+  export const useUserStore = defineStore('user', () => {
+    // state
+    const user = ref<User | null>(null);
+    const loading = ref(false);
+    const error = ref<Error | null>(null);
+    
+    // getters
+    const isLoggedIn = computed(() => !!user.value);
+    const userName = computed(() => user.value?.name || 'Guest');
+    
+    // actions
+    async function login(email: string, password: string) {
+      loading.value = true;
+      error.value = null;
+      
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('登录失败');
+        }
+        
+        user.value = await response.json();
+      } catch (e) {
+        error.value = e instanceof Error ? e : new Error(String(e));
+        throw error.value;
+      } finally {
+        loading.value = false;
+      }
+    }
+    
+    function logout() {
+      user.value = null;
+    }
+    
+    return {
+      // 暴露 state
+      user,
+      loading,
+      error,
+      
+      // 暴露 getters
+      isLoggedIn,
+      userName,
+      
+      // 暴露 actions
+      login,
+      logout,
+    };
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 状态持久化：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // pinia-persist-plugin.ts
+  import { PiniaPluginContext } from 'pinia';
+  
+  export function piniaPersistedState({ store }: PiniaPluginContext) {
+    // 从本地存储中恢复状态
+    const savedState = localStorage.getItem(`pinia-${store.$id}`);
+    
+    if (savedState) {
+      store.$patch(JSON.parse(savedState));
+    }
+    
+    // 监听状态变化并保存到本地
+    store.$subscribe((_, state) => {
+      localStorage.setItem(`pinia-${store.$id}`, JSON.stringify(state));
+    });
+  }
+  
+  // main.ts 中配置
+  // ...
+  import { createPinia } from 'pinia';
+  import { piniaPersistedState } from './plugins/pinia-persist-plugin';
+  
+  const pinia = createPinia();
+  pinia.use(piniaPersistedState);
+  
+  app.use(pinia);
+  // ...
+  /* [AI-BLOCK-END] */
+  ```
+
+- 使用 `provide/inject` 进行组件间数据传递：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 在父组件中提供 (provide)
+  import { provide, reactive } from 'vue';
+  
+  // 使用Symbol作为注入Key以避免命名冲突
+  export const ThemeSymbol = Symbol('theme');
+  
+  export default {
+    setup() {
+      const theme = reactive({
+        dark: false,
+        toggle() {
+          this.dark = !this.dark;
+        }
+      });
+      
+      provide(ThemeSymbol, theme);
+    }
+  };
+  
+  // 在子组件中注入 (inject)
+  import { inject } from 'vue';
+  import { ThemeSymbol } from './parent-component';
+  
+  export default {
+    setup() {
+      const theme = inject(ThemeSymbol);
+      
+      return {
+        theme
+      };
+    }
+  };
+  /* [AI-BLOCK-END] */
+  ```
+
+## 13. 性能优化细则
+- 组件懒加载：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // router.ts
+  import { createRouter, createWebHistory } from 'vue-router';
+  
+  const routes = [
+    {
+      path: '/',
+      component: () => import('./views/Home.vue')
+    },
+    {
+      path: '/about',
+      component: () => import('./views/About.vue')
+    },
+    {
+      path: '/dashboard',
+      // 带有预加载的懒加载路由
+      component: () => import(/* webpackChunkName: "dashboard" */ './views/Dashboard.vue'),
+      // 预加载子路由
+      children: [
+        {
+          path: 'analytics',
+          component: () => import(/* webpackChunkName: "dashboard" */ './views/Analytics.vue')
+        }
+      ]
+    }
+  ];
+  
+  const router = createRouter({
+    history: createWebHistory(),
+    routes
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 动态组件使用 `keep-alive` 缓存：
+  ```vue
+  <template>
+    <keep-alive :include="['UserList', 'UserProfile']" :max="10">
+      <component :is="currentComponent" />
+    </keep-alive>
+  </template>
+  
+  <script setup>
+  import { ref, shallowRef, markRaw } from 'vue';
+  import UserList from './UserList.vue';
+  import UserProfile from './UserProfile.vue';
+  
+  // 使用 shallowRef 防止不必要的深层响应式
+  const componentMap = {
+    list: markRaw(UserList),
+    profile: markRaw(UserProfile)
+  };
+  
+  const currentView = ref('list');
+  const currentComponent = computed(() => componentMap[currentView.value]);
+  </script>
+  ```
+
+- `v-once` 和 `v-memo` 用于静态内容：
+  ```vue
+  <template>
+    <!-- 只渲染一次的内容 -->
+    <div v-once>
+      <h1>{{ title }}</h1>
+      <p>这段内容初始渲染后永不更新</p>
+    </div>
+    
+    <!-- 依赖特定值的内容 -->
+    <div v-memo="[item.id]">
+      <!-- 只有当 item.id 变化时才会重新渲染 -->
+      <ComplexItem :item="item" />
+    </div>
+  </template>
+  ```
+
+- 合理使用计算属性与监听器：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import { ref, computed, watch, watchEffect } from 'vue';
+  
+  const items = ref([]);
+  
+  // ✓ 正确：使用计算属性进行数据转换
+  const filteredItems = computed(() => {
+    return items.value.filter(item => item.active);
+  });
+  
+  // ✓ 正确：使用 watchEffect 自动收集依赖
+  watchEffect(() => {
+    console.log(`当前有 ${filteredItems.value.length} 个激活项`);
+  });
+  
+  // ✓ 正确：使用 watch 监听特定属性的变化
+  watch(filteredItems, (newItems, oldItems) => {
+    if (newItems.length !== oldItems.length) {
+      console.log('激活项数量变化');
+    }
+  });
+  
+  // ✗ 错误：不要在计算属性中有副作用
+  const badComputed = computed(() => {
+    sendAnalytics('computed'); // 错误：副作用应该在 watch 或 watchEffect 中
+    return items.value.length;
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 使用虚拟滚动和分页加载大型列表：
+  ```vue
+  <template>
+    <!-- 使用 vue-virtual-scroller 处理长列表 -->
+    <RecycleScroller
+      class="scroller"
+      :items="items"
+      :item-size="50"
+      key-field="id"
+      v-slot="{ item, index }"
+    >
+      <div class="item">
+        {{ index }} - {{ item.name }}
+      </div>
+    </RecycleScroller>
+  </template>
+  
+  <script setup>
+  import { RecycleScroller } from 'vue-virtual-scroller';
+  import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
+  
+  // 大量数据
+  const items = ref(Array.from({ length: 10000 }, (_, i) => ({
+    id: i,
+    name: `Item ${i}`
+  })));
+  </script>
+  ```
+
+- 组件渲染性能优化：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 1. 避免不必要的组件重新渲染
+  import { defineComponent, h } from 'vue';
+  
+  // 使用函数式组件渲染纯展示内容
+  const PureDisplayComponent = (props) => {
+    return h('div', { class: 'item' }, props.text);
+  };
+  
+  // 2. 使用 shallowRef 和 shallowReactive 减少深层响应式
+  import { shallowRef, shallowReactive } from 'vue';
+  
+  // 大型对象使用 shallowRef 避免深层响应式
+  const largeData = shallowRef({ 
+    // ... 大量数据
+  });
+  
+  // 仅顶层属性为响应式
+  const formState = shallowReactive({
+    user: { name: '', age: 0 },
+    settings: { theme: 'light' }
+  });
+  
+  // 3. 使用 markRaw 标记不需要响应式的对象
+  import { markRaw } from 'vue';
+  
+  // 导入静态资源或大型对象，不需要响应式
+  const staticResource = markRaw({
+    // 大型静态数据，无需响应式
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 图片和资源优化：
+  ```vue
+  <template>
+    <!-- 懒加载图片 -->
+    <img 
+      v-lazy="imageUrl" 
+      alt="Description"
+      :width="640"
+      :height="480"
+    />
+    
+    <!-- 或使用 v-if 结合 Intersection Observer -->
+    <img 
+      v-if="isVisible" 
+      :src="imageUrl" 
+      alt="Description" 
+    />
+  </template>
+  
+  <script setup>
+  import { ref, onMounted } from 'vue';
+  import { useIntersectionObserver } from '@vueuse/core';
+  
+  const imageRef = ref(null);
+  const isVisible = ref(false);
+  
+  // 使用 vueuse 实现懒加载
+  onMounted(() => {
+    useIntersectionObserver(
+      imageRef,
+      ([{ isIntersecting }]) => {
+        if (isIntersecting) {
+          isVisible.value = true;
+        }
+      }
+    );
+  });
+  </script>
+  ```
+
+- 使用 Web Worker 处理复杂计算：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // worker.js
+  self.addEventListener('message', (e) => {
+    const { data, operation } = e.data;
+    
+    let result;
+    switch (operation) {
+      case 'filter':
+        result = data.filter(item => item.value > 1000);
+        break;
+      case 'sort':
+        result = data.sort((a, b) => a.value - b.value);
+        break;
+      case 'process':
+        // 复杂处理逻辑
+        result = processData(data);
+        break;
+    }
+    
+    self.postMessage(result);
+  });
+  
+  function processData(data) {
+    // 耗时的数据处理...
+    return data;
+  }
+  
+  // 在组件中使用
+  import { ref } from 'vue';
+  
+  export default {
+    setup() {
+      const result = ref([]);
+      const loading = ref(false);
+      
+      const worker = new Worker('/worker.js');
+      
+      worker.addEventListener('message', (e) => {
+        result.value = e.data;
+        loading.value = false;
+      });
+      
+      function processInBackground(data, operation) {
+        loading.value = true;
+        worker.postMessage({ data, operation });
+      }
+      
+      return {
+        result,
+        loading,
+        processInBackground
+      };
+    }
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 14. 测试规范
+- 使用 Vitest 进行单元测试：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // utils/math.spec.ts
+  import { describe, it, expect } from 'vitest';
+  import { sum, multiply } from './math';
+  
+  describe('Math 工具函数', () => {
+    it('sum 函数应正确计算两数之和', () => {
+      expect(sum(1, 2)).toBe(3);
+      expect(sum(-1, 1)).toBe(0);
+      expect(sum(0, 0)).toBe(0);
+    });
+    
+    it('multiply 函数应正确计算两数之积', () => {
+      expect(multiply(2, 3)).toBe(6);
+      expect(multiply(-2, 3)).toBe(-6);
+      expect(multiply(0, 5)).toBe(0);
+    });
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 使用 Vue Test Utils 进行组件测试：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // components/Button.spec.ts
+  import { describe, it, expect, vi } from 'vitest';
+  import { mount } from '@vue/test-utils';
+  import Button from './Button.vue';
+  
+  describe('Button 组件', () => {
+    it('应正确渲染按钮文本', () => {
+      const wrapper = mount(Button, {
+        props: {
+          label: '点击我'
+        }
+      });
+      
+      expect(wrapper.text()).toContain('点击我');
+    });
+    
+    it('点击按钮时应触发 click 事件', async () => {
+      const wrapper = mount(Button);
+      const spy = vi.spyOn(wrapper.vm, 'handleClick');
+      
+      await wrapper.trigger('click');
+      
+      expect(spy).toHaveBeenCalled();
+    });
+    
+    it('禁用状态下按钮应有正确的类名', () => {
+      const wrapper = mount(Button, {
+        props: {
+          disabled: true
+        }
+      });
+      
+      expect(wrapper.classes()).toContain('disabled');
+    });
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+- 使用 Cypress 进行端到端测试：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // cypress/e2e/login.cy.ts
+  describe('登录功能', () => {
+    beforeEach(() => {
+      cy.visit('/login');
+    });
+    
+    it('应正确显示登录表单', () => {
+      cy.get('form').should('be.visible');
+      cy.get('input[type="email"]').should('be.visible');
+      cy.get('input[type="password"]').should('be.visible');
+      cy.get('button[type="submit"]').should('be.visible');
+    });
+    
+    it('输入无效邮箱时应显示错误信息', () => {
+      cy.get('input[type="email"]').type('invalid-email');
+      cy.get('input[type="password"]').type('password123');
+      cy.get('button[type="submit"]').click();
+      
+      cy.get('.error-message').should('be.visible');
+      cy.get('.error-message').should('contain', '请输入有效的邮箱地址');
+    });
+    
+    it('成功登录后应重定向到仪表盘', () => {
+      // 模拟 API 响应
+      cy.intercept('POST', '/api/login', {
+        statusCode: 200,
+        body: { user: { id: 1, name: 'Test User' } }
+      });
+      
+      cy.get('input[type="email"]').type('user@example.com');
+      cy.get('input[type="password"]').type('password123');
+      cy.get('button[type="submit"]').click();
+      
+      // 验证重定向
+      cy.url().should('include', '/dashboard');
+      cy.get('.welcome-message').should('contain', 'Test User');
+    });
+  });
+  /* [AI-BLOCK-END] */
+  ```
+
+## 15. 无障碍设计规范
+- 为所有的非文本内容提供等效文本替代：
+  ```vue
+  <template>
+    <!-- ✓ 正确：为图片提供 alt 文本 -->
+    <img src="/logo.png" alt="公司徽标" />
+    
+    <!-- ✓ 正确：装饰性图片使用空 alt -->
+    <img src="/decorative.jpg" alt="" role="presentation" />
+    
+    <!-- ✓ 正确：为 SVG 提供 aria 标签 -->
+    <svg aria-label="关闭" role="img">
+      <!-- SVG 内容 -->
+    </svg>
+  </template>
+  ```
+
+- 确保键盘操作可用性：
+  ```vue
+  <template>
+    <!-- ✓ 正确：确保可聚焦元素的正确 Tab 顺序 -->
+    <div>
+      <button>First</button>
+      <button tabindex="0">Second</button>
+      <button>Third</button>
+      
+      <!-- 使元素不可聚焦 -->
+      <button tabindex="-1">不可通过Tab聚焦</button>
+    </div>
+    
+    <!-- ✓ 正确：自定义组件确保键盘支持 -->
+    <CustomButton
+      @click="handleClick"
+      @keydown.enter="handleClick"
+      @keydown.space="handleClick"
+    >
+      可通过键盘操作
+    </CustomButton>
+  </template>
+  
+  <script setup>
+  // 通过指令提供键盘支持
+  const vKeyboardFocus = {
+    mounted: (el) => {
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          el.click();
+        }
+      });
+    }
+  };
+  </script>
+  ```
+
+- 使用适当的 ARIA 角色和属性：
+  ```vue
+  <template>
+    <!-- 通知区域 -->
+    <div role="alert" aria-live="assertive">
+      {{ notificationMessage }}
+    </div>
+    
+    <!-- 模态对话框 -->
+    <div 
+      role="dialog"
+      aria-labelledby="dialog-title"
+      aria-describedby="dialog-desc"
+      aria-modal="true"
+    >
+      <h2 id="dialog-title">对话框标题</h2>
+      <p id="dialog-desc">对话框详细描述</p>
+      <button @click="closeDialog">关闭</button>
+    </div>
+    
+    <!-- 标签和控件关联 -->
+    <div>
+      <label for="username">用户名：</label>
+      <input id="username" type="text" v-model="username" />
+    </div>
+  </template>
+  ```
+
+- 实现屏幕阅读器友好的组件：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 无障碍下拉菜单组件
+  export default {
+    template: `
+      <div class="dropdown">
+        <button
+          :id="buttonId"
+          class="dropdown-toggle"
+          aria-haspopup="true"
+          :aria-expanded="isOpen"
+          @click="toggle"
+        >
+          {{ label }}
+        </button>
+        
+        <ul
+          v-if="isOpen"
+          :id="menuId"
+          class="dropdown-menu"
+          role="menu"
+          :aria-labelledby="buttonId"
+        >
+          <li 
+            v-for="(item, index) in items"
+            :key="index"
+            role="menuitem"
+            tabindex="-1"
+            @click="select(item)"
+            @keydown.enter="select(item)"
+            @keydown.space="select(item)"
+          >
+            {{ item.label }}
+          </li>
+        </ul>
+      </div>
+    `,
+    
+    props: {
+      items: Array,
+      label: String,
+      id: {
+        type: String,
+        default: () => `dropdown-${Date.now()}`
+      }
+    },
+    
+    data() {
+      return {
+        isOpen: false
+      };
+    },
+    
+    computed: {
+      buttonId() {
+        return `${this.id}-button`;
+      },
+      menuId() {
+        return `${this.id}-menu`;
+      }
+    },
+    
+    methods: {
+      toggle() {
+        this.isOpen = !this.isOpen;
+      },
+      select(item) {
+        this.$emit('select', item);
+        this.isOpen = false;
+      }
+    },
+    
+    mounted() {
+      // 处理点击外部关闭
+      document.addEventListener('click', this.handleOutsideClick);
+      
+      // 处理键盘导航
+      this.$el.addEventListener('keydown', this.handleKeyDown);
+    },
+    
+    beforeUnmount() {
+      document.removeEventListener('click', this.handleOutsideClick);
+      this.$el.removeEventListener('keydown', this.handleKeyDown);
+    },
+    
+    methods: {
+      // ... 其他方法
+      
+      handleOutsideClick(e) {
+        if (this.isOpen && !this.$el.contains(e.target)) {
+          this.isOpen = false;
+        }
+      },
+      
+      handleKeyDown(e) {
+        if (e.key === 'Escape' && this.isOpen) {
+          this.isOpen = false;
+          this.$el.querySelector('button').focus();
+        }
+      }
+    }
+  };
+  /* [AI-BLOCK-END] */
+  ```
+
+## 16. 国际化规范
+- 使用 Vue I18n 进行文本国际化：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // main.ts
+  import { createApp } from 'vue';
+  import { createI18n } from 'vue-i18n';
+  import App from './App.vue';
+  
+  // 语言包
+  const messages = {
+    zh: {
+      message: {
+        hello: '你好，世界！',
+        welcome: '欢迎来到 {name}',
+        items: '没有项目 | 1 个项目 | {count} 个项目'
+      },
+      buttons: {
+        save: '保存',
+        cancel: '取消'
+      }
+    },
+    en: {
+      message: {
+        hello: 'Hello world!',
+        welcome: 'Welcome to {name}',
+        items: 'no items | 1 item | {count} items'
+      },
+      buttons: {
+        save: 'Save',
+        cancel: 'Cancel'
+      }
+    }
+  };
+  
+  const i18n = createI18n({
+    locale: 'zh', // 默认语言
+    fallbackLocale: 'en', // 回退语言
+    messages,
+    legacy: false, // 启用组合式 API 模式
+  });
+  
+  const app = createApp(App);
+  app.use(i18n);
+  app.mount('#app');
+  /* [AI-BLOCK-END] */
+  ```
+
+- 在组件中使用 i18n：
+  ```vue
+  <template>
+    <div>
+      <!-- 基本翻译 -->
+      <h1>{{ $t('message.hello') }}</h1>
+      
+      <!-- 带参数的翻译 -->
+      <p>{{ $t('message.welcome', { name: appName }) }}</p>
+      
+      <!-- 复数翻译 -->
+      <p>{{ $tc('message.items', itemCount) }}</p>
+      
+      <!-- 日期本地化 -->
+      <p>{{ $d(date, 'long') }}</p>
+      
+      <!-- 货币本地化 -->
+      <p>{{ $n(price, 'currency') }}</p>
+    </div>
+  </template>
+  
+  <script setup>
+  import { ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  
+  const { t, d, n, locale } = useI18n();
+  
+  const appName = ref('Vue App');
+  const itemCount = ref(5);
+  const date = ref(new Date());
+  const price = ref(99.99);
+  
+  // 切换语言
+  function changeLanguage(lang) {
+    locale.value = lang;
+  }
+  </script>
+  ```
+
+- 动态加载语言包：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // i18n.ts
+  import { createI18n } from 'vue-i18n';
+  
+  // 创建带有基本语言的 i18n 实例
+  const i18n = createI18n({
+    locale: 'zh',
+    fallbackLocale: 'en',
+    messages: {
+      zh: {}, // 初始为空，动态加载
+      en: {}  // 初始为空，动态加载
+    },
+    legacy: false
+  });
+  
+  // 动态加载语言
+  export async function loadLanguageAsync(lang) {
+    // 如果语言已加载
+    if (i18n.global.availableLocales.includes(lang)) {
+      i18n.global.locale.value = lang;
+      return;
+    }
+    
+    // 动态导入语言包
+    try {
+      const messages = await import(`./locales/${lang}.json`);
+      i18n.global.setLocaleMessage(lang, messages.default);
+      i18n.global.locale.value = lang;
+      
+      // 保存用户语言偏好
+      localStorage.setItem('userLanguage', lang);
+    } catch (e) {
+      console.error(`无法加载语言包: ${lang}`, e);
+    }
+  }
+  
+  // 初始化语言
+  export async function setupI18n() {
+    // 从存储中获取用户偏好
+    const savedLang = localStorage.getItem('userLanguage');
+    const browserLang = navigator.language.split('-')[0];
+    
+    // 加载默认语言
+    await loadLanguageAsync(savedLang || browserLang || 'en');
+    
+    return i18n;
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+- 处理日期、数字和货币格式：
+  ```vue
+  <template>
+    <div>
+      <!-- 使用不同区域设置格式化日期 -->
+      <p>{{ $d(date, 'short') }}</p>  <!-- 短格式：2023/4/1 -->
+      <p>{{ $d(date, 'long') }}</p>   <!-- 长格式：2023年4月1日 -->
+      
+      <!-- 格式化数字 -->
+      <p>{{ $n(number, 'decimal') }}</p>  <!-- 十进制：1,234.5 -->
+      <p>{{ $n(price, 'currency', { currency: 'CNY' }) }}</p>  <!-- 货币：¥99.99 -->
+      <p>{{ $n(percent, 'percent') }}</p>  <!-- 百分比：75% -->
+    </div>
+  </template>
+  
+  <script setup>
+  import { ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  
+  const { d, n } = useI18n({
+    numberFormats: {
+      'zh-CN': {
+        decimal: {
+          style: 'decimal',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        },
+        percent: {
+          style: 'percent',
+          useGrouping: false
+        },
+        currency: {
+          style: 'currency',
+          currency: 'CNY',
+          notation: 'standard'
+        }
+      },
+      'en-US': {
+        decimal: {
+          style: 'decimal',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        },
+        percent: {
+          style: 'percent',
+          useGrouping: false
+        },
+        currency: {
+          style: 'currency',
+          currency: 'USD',
+          notation: 'standard'
+        }
+      }
+    },
+    datetimeFormats: {
+      'zh-CN': {
+        short: {
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric'
+        },
+        long: {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          weekday: 'long'
+        }
+      },
+      'en-US': {
+        short: {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        },
+        long: {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          weekday: 'long'
+        }
+      }
+    }
+  });
+  
+  const date = ref(new Date());
+  const number = ref(1234.5);
+  const price = ref(99.99);
+  const percent = ref(0.75);
+  </script>
+  ```
+
+- 国际化最佳实践：
+  ```ts
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 1. 使用命名空间避免冲突
+  const messages = {
+    zh: {
+      auth: {
+        login: {
+          title: '登录',
+          username: '用户名',
+          password: '密码',
+          submit: '提交'
+        },
+        register: {
+          title: '注册'
+          // ...
+        }
+      }
+    }
+  };
+  
+  // 2. 处理复数形式
+  // messages.js
+  export default {
+    zh: {
+      apples: '没有苹果 | 1 个苹果 | {count} 个苹果'
+    },
+    en: {
+      apples: 'no apples | one apple | {count} apples'
+    }
+  };
+  
+  // 3. 使用插值处理变量
+  // 可翻译的错误消息
+  export const getErrorMessage = (i18n, errorCode, params = {}) => {
+    return i18n.t(`errors.${errorCode}`, params);
+  };
+  
+  // 4. 支持 RTL (从右到左) 布局
+  // App.vue
+  const rtlLanguages = ['ar', 'he'];
+  
+  // 监听语言变化，调整文档方向
+  watch(
+    () => i18n.global.locale.value,
+    (newLocale) => {
+      const dir = rtlLanguages.includes(newLocale) ? 'rtl' : 'ltr';
+      document.documentElement.setAttribute('dir', dir);
+      // 可以添加 RTL 特定样式
+      if (dir === 'rtl') {
+        document.documentElement.classList.add('rtl');
+      } else {
+        document.documentElement.classList.remove('rtl');
+      }
+    },
+    { immediate: true }
+  );
+  /* [AI-BLOCK-END] */
+  ```

@@ -3,6 +3,10 @@ description:
 globs: 
 alwaysApply: false
 ---
+# AI 辅助前端代码生成规范 (React & Tailwind CSS)
+生成工具: Cursor AI 0.2  
+生成日期: 2024-06-20  
+
 ## 1. 总体规范
 - 使用 pnpm 管理依赖，命令示例：
   ```bash
@@ -15,20 +19,20 @@ alwaysApply: false
 - **AI 生成代码块注释规范**：
   - 多行标注 (TSX/JSX 等)：
     ```tsx
-    /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+    /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
     // AI 生成组件示例...
     /* [AI-BLOCK-END] */
     ```
   - 单行标注：
     ```tsx
-    const result = compute(); // [AI-LINE: Cursor AI 0.1]
+    const result = compute(); // [AI-LINE: Cursor AI 0.2]
     ```
 
 ## 2. React 组件规范
 - 文件后缀：`.tsx`，组件名称使用 PascalCase。
 - 使用函数式组件 (Functional Component)：
   ```tsx
-  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
   import React, { useState, useEffect } from 'react';
 
   interface MyComponentProps {
@@ -39,7 +43,7 @@ alwaysApply: false
     const [count, setCount] = useState(0);
 
     useEffect(() => {
-      // side effect // [AI-LINE: Cursor AI 0.1]
+      // side effect 
       console.log(title);
     }, [title]);
 
@@ -57,7 +61,7 @@ alwaysApply: false
 
 - 支持 `forwardRef` 和高阶组件：
   ```tsx
-  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.1 */
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
   import React, { forwardRef } from 'react';
 
   interface InputProps {
@@ -73,6 +77,38 @@ alwaysApply: false
   /* [AI-BLOCK-END] */
   ```
 
+- 使用 React 18 新特性：
+  ```tsx
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  import { useState, useTransition, useDeferredValue } from 'react';
+  
+  function SearchComponent() {
+    const [query, setQuery] = useState('');
+    const [isPending, startTransition] = useTransition();
+    const deferredQuery = useDeferredValue(query);
+    
+    const handleChange = (e) => {
+      // 即时更新输入框
+      setQuery(e.target.value);
+      
+      // 标记为非紧急更新
+      startTransition(() => {
+        // 执行耗时计算或渲染
+        searchResults(e.target.value);
+      });
+    };
+    
+    return (
+      <div>
+        <input value={query} onChange={handleChange} />
+        {isPending && <Spinner />}
+        <Results query={deferredQuery} />
+      </div>
+    );
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
 ## 3. Tailwind CSS 使用规范
 - 在 JSX 中使用 `className`：
   ```tsx
@@ -84,6 +120,26 @@ alwaysApply: false
   <div className={clsx('p-4', active && 'bg-blue-500')}>...</div>
   ```
 - 在全局或模块化样式文件中使用 `@apply` 复用常用样式。
+- 使用 Tailwind 主题系统管理设计变量：
+  ```js
+  // tailwind.config.js
+  module.exports = {
+    theme: {
+      extend: {
+        colors: {
+          primary: {
+            light: '#85d7ff',
+            DEFAULT: '#1fb6ff',
+            dark: '#009eeb',
+          },
+        },
+        spacing: {
+          '128': '32rem',
+        }
+      }
+    }
+  }
+  ```
 
 ## 4. pnpm 脚本规范
 - 根目录 `package.json` 示例：
@@ -92,24 +148,44 @@ alwaysApply: false
     "scripts": {
       "dev": "vite",
       "build": "vite build",
-      "preview": "vite preview"
+      "preview": "vite preview",
+      "test": "vitest",
+      "test:e2e": "playwright test",
+      "lint": "eslint src --ext .ts,.tsx",
+      "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+      "typecheck": "tsc --noEmit",
+      "storybook": "storybook dev -p 6006",
+      "build-storybook": "storybook build"
     }
   }
   ```
 - 推荐使用 pnpm workspace 管理多包。
+- 使用 `changesets` 管理版本和发布。
 
 ## 5. 项目目录结构
 - 根目录示例：
   ```text
   src/
-  ├── assets/        # 静态资源 (images, fonts)
-  ├── components/    # 共享组件
-  ├── hooks/         # 自定义 Hooks
-  ├── pages/         # 页面级组件
-  ├── router/        # 路由配置
-  ├── store/         # 状态管理 (Redux / Zustand)
-  ├── styles/        # 全局样式 (Tailwind entry)
-  └── utils/         # 工具函数
+  ├── assets/           # 静态资源 (images, fonts)
+  ├── components/       # 共享组件
+  │   ├── ui/           # 通用UI组件
+  │   └── layout/       # 布局相关组件
+  ├── hooks/            # 自定义 Hooks
+  ├── pages/            # 页面级组件
+  ├── features/         # 业务功能模块
+  │   ├── auth/         # 认证相关功能
+  │   │   ├── api.ts    # API 接口
+  │   │   ├── hooks.ts  # 自定义 Hooks
+  │   │   ├── types.ts  # 类型定义
+  │   │   └── index.ts  # 导出
+  │   └── profile/      # 用户资料模块
+  ├── router/           # 路由配置
+  ├── store/            # 状态管理 (Redux / Zustand)
+  ├── services/         # API服务和数据获取
+  ├── types/            # 全局类型定义
+  ├── styles/           # 全局样式 (Tailwind entry)
+  ├── utils/            # 工具函数
+  └── contexts/         # React Context 定义
   ```
 
 ## 6. 命名规范
@@ -118,7 +194,12 @@ alwaysApply: false
 - Hooks：`useXxx.ts`
 - 工具函数：camelCase.ts
 - 常量：UPPER_SNAKE_CASE
-- 事件回调：`onXxx` // [AI-LINE: Cursor AI 0.1]
+- 事件回调：`onXxx` 或 `handleXxx`
+- 状态更新函数：`setXxx`
+- 布尔值命名：`isXxx`、`hasXxx`、`canXxx`
+- Context提供者：`XxxProvider`
+- 组件 Props 类型：`XxxProps`
+- 枚举：`XxxEnum` 或 `XxxType`
 
 ## 7. 代码引入方式
 - 路径别名 `@` 指向 `src`：
@@ -133,6 +214,23 @@ alwaysApply: false
   ```ts
   import logo from '@/assets/logo.png';
   ```
+- 根据类型导入顺序推荐：
+  1. React核心库
+  2. 第三方库
+  3. 自定义hooks
+  4. 组件
+  5. 工具函数
+  6. 类型
+  7. 样式/资源
+- 使用 Barrel Exports 简化导入路径：
+  ```tsx
+  // src/components/ui/index.ts
+  export { default as Button } from './Button';
+  export { default as Card } from './Card';
+  
+  // 使用时
+  import { Button, Card } from '@/components/ui';
+  ```
 
 ## 8. 错误处理
 - API 调用封装：
@@ -146,16 +244,33 @@ alwaysApply: false
   ```
 - React 错误边界：
   ```tsx
-  <ErrorBoundary>
+  <ErrorBoundary fallback={<ErrorPage />}>
     <App />
   </ErrorBoundary>
   ```
-- 全局异常捕获（可选）：
+- 全局异常捕获：
   ```ts
-  window.onerror = (msg) => {
+  window.onerror = (msg, url, line, column, error) => {
     console.error(msg);
-    // [AI-LINE: Cursor AI 0.1]
+    captureException(error);
   };
+  ```
+- 异步错误处理：
+  ```ts
+  import { useQuery } from '@tanstack/react-query';
+  
+  const { data, error, isLoading } = useQuery({
+    queryKey: ['todos'],
+    queryFn: fetchTodos,
+  });
+  
+  if (error) return <ErrorDisplay error={error} />;
+  ```
+- React Suspense 错误处理：
+  ```tsx
+  <Suspense fallback={<Spinner />}>
+    <ProfilePage />
+  </Suspense>
   ```
 
 ## 9. 组件定义细则
@@ -163,24 +278,411 @@ alwaysApply: false
 - 使用 React.FC 或自定义函数签名。
 - 为组件添加 `displayName` 以便调试。
 - 必要时使用 React Hooks 组织逻辑。
+- 推荐组件解构方式：
+  ```tsx
+  const Button = ({ 
+    children, 
+    variant = 'primary', 
+    onClick, 
+    disabled = false 
+  }: ButtonProps) => {
+    // ...
+  };
+  ```
+- 默认属性处理：
+  ```tsx
+  // 推荐：在解构参数时设置默认值
+  function Button({ size = 'md' }: ButtonProps) {}
+  
+  // 或使用函数默认参数
+  function Button(props: ButtonProps = { size: 'md' }) {}
+  ```
+- 组件合成模式：
+  ```tsx
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // Compound Components 模式
+  const Tabs = ({ children, defaultIndex = 0 }) => {
+    const [activeIndex, setActiveIndex] = useState(defaultIndex);
+    
+    return (
+      <TabsContext.Provider value={{ activeIndex, setActiveIndex }}>
+        <div className="tabs">{children}</div>
+      </TabsContext.Provider>
+    );
+  };
+  
+  Tabs.Tab = ({ children, index }) => {
+    const { activeIndex, setActiveIndex } = useTabsContext();
+    
+    return (
+      <button 
+        className={activeIndex === index ? 'active' : ''}
+        onClick={() => setActiveIndex(index)}
+      >
+        {children}
+      </button>
+    );
+  };
+  
+  Tabs.Panel = ({ children, index }) => {
+    const { activeIndex } = useTabsContext();
+    
+    return activeIndex === index ? <div>{children}</div> : null;
+  };
+  
+  // 使用
+  <Tabs>
+    <div className="tab-list">
+      <Tabs.Tab index={0}>Tab 1</Tabs.Tab>
+      <Tabs.Tab index={1}>Tab 2</Tabs.Tab>
+    </div>
+    <div className="tab-panels">
+      <Tabs.Panel index={0}>Panel 1</Tabs.Panel>
+      <Tabs.Panel index={1}>Panel 2</Tabs.Panel>
+    </div>
+  </Tabs>
+  /* [AI-BLOCK-END] */
+  ```
 
 ## 10. 样式定义细则
 - 优先使用 Tailwind Utility Classes。
 - 在样式文件中使用 `@apply` 复用。
 - 禁止使用内联样式（inline style）。
-- 可选使用 CSS Modules：
-  ```css
-  .btn {
-    @apply bg-blue-500 text-white;
-  }
+- 可选 CSS-in-JS 方案：
+  - CSS Modules (推荐)：
+    ```css
+    /* Button.module.css */
+    .btn {
+      @apply bg-blue-500 text-white px-4 py-2 rounded;
+    }
+    ```
+  - Styled Components：
+    ```tsx
+    import styled from 'styled-components';
+    
+    const Button = styled.button`
+      @apply bg-blue-500 text-white px-4 py-2 rounded;
+    `;
+    ```
+- 特殊状态处理（hover/focus/active）：
+  ```tsx
+  <button className="bg-blue-500 hover:bg-blue-700 focus:ring-2">
+    Click me
+  </button>
+  ```
+- 主题暗黑模式支持：
+  ```tsx
+  // 使用 Tailwind 暗黑模式  
+  <div className="bg-white dark:bg-gray-800 text-black dark:text-white">
+    内容将根据暗黑模式自动调整
+  </div>
   ```
 
-## 11. 设计原则 & 最佳实践
-- **单一职责 (SRP)**：每个组件只解决一个问题。 // [AI-LINE: Cursor AI 0.1]
-- **DRY**：避免重复逻辑和样式。 // [AI-LINE: Cursor AI 0.1]
-- **KISS**：保持代码简单可读。 // [AI-LINE: Cursor AI 0.1]
-- **TypeScript 强类型**：完整类型注解。 // [AI-LINE: Cursor AI 0.1]
-- **测试覆盖**：Jest + Testing Library，Cypress E2E。 // [AI-LINE: Cursor AI 0.1]
-- **性能优化**：Tree Shaking, 代码分割。 // [AI-LINE: Cursor AI 0.1]
-- **可访问性 (a11y)**：符合 WCAG 标准。 // [AI-LINE: Cursor AI 0.1]
-- **国际化**：react-intl / i18next 管理。 // [AI-LINE: Cursor AI 0.1]
+## 11. 技术栈规范
+- **核心框架**：
+  - React 18+ (支持Concurrent Mode)
+  - TypeScript 5+
+  - Vite 5+ (构建工具)
+  - React Router 6+ (路由管理)
+- **状态管理**：
+  - Zustand (推荐轻量级状态管理)
+  - Redux Toolkit (大型应用)
+  - Jotai/Recoil (原子化状态)
+  - React Query/SWR (服务端状态)
+- **UI 组件库**：
+  - Ant Design 5+ (推荐)
+  - Chakra UI
+  - Material UI
+  - Shadcn UI
+  - Radix UI (无样式组件库)
+- **工具库**：
+  - date-fns - 日期处理
+  - axios/ky - HTTP 请求
+  - zod - 数据验证
+  - i18next - 国际化
+  - clsx/classnames - 类名合并
+  - lodash-es - 工具函数
+  - immer - 不可变数据处理
+  - React Hook Form - 表单处理
+- **CSS 解决方案**：
+  - Tailwind CSS 3+
+  - CSS Modules
+  - Styled Components/Emotion (按需)
+- **测试工具**：
+  - Vitest - 单元测试
+  - React Testing Library - 组件测试
+  - Playwright - E2E 测试
+  - MSW - API Mock
+- **开发工具**：
+  - pnpm 8+ - 包管理
+  - ESLint + Prettier - 代码检查和格式化
+  - TypeScript 5+ - 静态类型检查
+  - Husky + lint-staged - Git Hook
+  - Storybook 7+ - 组件文档和开发
+
+## 12. 图标使用规范
+- 统一使用 Ant Design 的图标系统：
+  ```tsx
+  import { UserOutlined, SettingFilled } from '@ant-design/icons';
+  
+  function UserProfile() {
+    return (
+      <div>
+        <UserOutlined className="mr-2" />
+        User Profile
+        <SettingFilled className="ml-2" />
+      </div>
+    );
+  }
+  ```
+- 图标注册方式：
+  - 按需引入（推荐）：
+    ```tsx
+    import { UserOutlined, SettingFilled } from '@ant-design/icons';
+    ```
+  - 图标组件封装（复杂场景）：
+    ```tsx
+    import { IconProps } from '@/types';
+    
+    function Icon({ name, ...props }: IconProps) {
+      const IconComponent = icons[name];
+      return <IconComponent {...props} />;
+    }
+    ```
+- 自定义 SVG 图标规范：
+  - 放置在 `src/assets/icons/` 目录中
+  - 使用 SVGR 转换为 React 组件
+  - 封装统一的 `Icon` 组件提供一致的 API
+
+## 13. 编码规范
+- **TypeScript 规范**：
+  - 启用严格模式 (`strict: true`)
+  - 声明所有变量类型，避免 `any`
+  - 优先使用 interface 定义对象类型
+  - 使用 type 定义联合类型和工具类型
+  - 使用泛型增强代码复用和类型安全
+- **React 组件规范**：
+  - 单一职责原则，每个组件只做一件事
+  - 组件文件最大 300 行，超出需拆分
+  - 复杂组件逻辑抽取为自定义 Hooks
+  - Props 必须定义类型和必要的默认值
+  - 优先使用受控组件
+  - 避免过深组件树（最多 3-4 层嵌套）
+- **Hooks 规范**：
+  - 遵循 Hooks 调用规则（顶层调用，不在条件/循环中）
+  - 依赖数组包含所有使用的外部变量
+  - 使用 useCallback/useMemo 优化性能
+  - 抽取复杂逻辑为自定义 Hooks
+- **代码质量**：
+  - 变量和函数命名具有明确含义
+  - 代码缩进统一 2 空格
+  - 行尾使用分号
+  - 字符串优先使用单引号
+  - 对象属性简写
+  - 避免过深嵌套（最多 3 层）
+  - 使用常量代替魔法数字
+
+## 14. 文档规范
+- **组件文档**：
+  - 使用 Storybook 维护交互式组件文档
+  - 每个组件文档必须包含：
+    - 组件描述
+    - Props 表格
+    - 典型用例
+    - 变体展示
+    - 交互演示
+- **项目文档**：
+  - `README.md` - 项目概述和开发指南
+  - `CONTRIBUTING.md` - 贡献指南
+  - `CHANGELOG.md` - 版本变更记录
+  - `/docs` 目录 - 详细文档
+- **代码注释规范**：
+  - 组件顶部注释说明用途
+  - 复杂逻辑添加注释
+  - 公共 API 使用 JSDoc 文档
+  - 使用 TODO/FIXME 标记待处理问题
+- **API 文档**：
+  - 使用 OpenAPI/Swagger 规范文档化 API
+  - 前端 API 调用对应后端文档实现类型定义
+
+## 15. 测试规范
+- **测试覆盖率要求**：
+  - 核心业务逻辑单元测试覆盖率 ≥80%
+  - UI 组件测试覆盖率 ≥60%
+  - E2E 测试覆盖关键用户流程
+- **单元测试**：
+  - 使用 Vitest 编写单元测试
+  - 工具函数和 Hooks 必须有对应测试
+  - 测试文件命名：`*.test.tsx` 或 `*.spec.tsx`
+  - 测试目录结构与源代码一致
+- **组件测试**：
+  - 使用 React Testing Library 测试渲染和用户交互
+  - 关注组件对外行为，不测试实现细节
+  - 使用 MSW 模拟 API 调用
+  - 测试示例：
+    ```tsx
+    import { render, screen, fireEvent } from '@testing-library/react';
+    import Counter from './Counter';
+    
+    test('increments count when button is clicked', () => {
+      render(<Counter />);
+      const button = screen.getByRole('button', { name: /increment/i });
+      fireEvent.click(button);
+      expect(screen.getByText(/count: 1/i)).toBeInTheDocument();
+    });
+    ```
+- **E2E 测试**：
+  - 使用 Playwright 编写端到端测试
+  - 测试关键用户流程
+  - 在类生产环境执行测试
+  - CI 流程中包含 E2E 测试
+
+## 16. 性能优化规范
+- **加载性能要求**：
+  - FCP (First Contentful Paint) < 1.2s
+  - LCP (Largest Contentful Paint) < 2.5s
+  - TTI (Time to Interactive) < 3.5s
+  - 首屏资源总大小 < 2MB
+- **渲染性能**：
+  - 使用 `React.memo` 避免不必要的重渲染
+  - 使用 `useCallback` 和 `useMemo` 缓存函数和计算值
+  - 长列表使用虚拟滚动 (react-window/react-virtualized)
+  - 使用 CSS transitions 代替 JS 动画
+  - 大型表单使用防抖/节流
+- **构建优化**：
+  - 代码分割 (React.lazy + Suspense)
+  - 预加载关键路由
+  - Tree Shaking
+  - 图片优化 (WebP/AVIF)
+  - 静态资源 CDN 
+  - 开启 gzip/brotli 压缩
+- **React 18 性能优化**：
+  - 使用 `startTransition` 标记非紧急更新
+  - 使用 `useDeferredValue` 延迟更新高开销值
+  - 使用 `<Suspense>` 展示加载状态并优化用户体验
+  - 使用自动批处理 (`automatic batching`) 减少渲染
+  - 使用服务器组件 (`Server Components`) 减少客户端 JavaScript
+
+## 17. 监控与诊断
+- **错误监控**：
+  - 集成 Sentry 捕获前端异常
+  - 自定义错误边界处理组件错误
+  - API 错误统一记录和分析
+- **性能监控**：
+  - 集成 Core Web Vitals 监控
+  - 使用 React Profiler 分析组件性能
+  - 记录和分析关键交互指标
+- **日志系统**：
+  - 开发环境使用结构化日志
+  - 生产环境按级别记录日志 (error/warn/info)
+  - 关键操作记录审计日志
+- **监控看板**：
+  - 构建错误和性能趋势报告
+  - 设置关键指标告警阈值
+  - 使用 Grafana/Datadog 可视化监控数据
+
+## 18. 辅助功能 (Accessibility)
+- **WCAG 兼容性**：
+  - 遵循 WCAG 2.1 AA 级标准
+  - 确保页面可用键盘完全导航
+  - 提供适当的颜色对比度
+  - 添加适当的 ARIA 标签
+- **语义化 HTML**：
+  - 使用适当的 HTML 元素（button, a, nav, section 等）
+  - 保持正确的标题层级 (h1-h6)
+  - 使用合适的表单标签和关联
+- **辅助工具支持**：
+  - 支持屏幕阅读器
+  - 提供跳转链接
+  - 动画提供暂停选项
+- **实现方式**：
+  ```tsx
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 无障碍导航菜单示例
+  <nav aria-label="主导航">
+    <ul>
+      <li>
+        <a href="#main" className="skip-link">
+          跳转到主内容
+        </a>
+      </li>
+      <li>
+        <a href="/" aria-current={isHome ? 'page' : undefined}>
+          首页
+        </a>
+      </li>
+    </ul>
+  </nav>
+  
+  // 无障碍表单示例
+  <form>
+    <div>
+      <label htmlFor="name-input">姓名</label>
+      <input 
+        id="name-input"
+        type="text"
+        aria-required="true"
+        aria-invalid={!!errors.name}
+        aria-describedby="name-error"
+      />
+      {errors.name && (
+        <span id="name-error" role="alert">
+          {errors.name}
+        </span>
+      )}
+    </div>
+  </form>
+  /* [AI-BLOCK-END] */
+  ```
+
+## 19. 设计原则 & 最佳实践
+
+- ### 设计原则
+  - **单一职责 (SRP)**：每个组件/模块只负责一件事。
+  - **开放-封闭 (OCP)**：对扩展开放，对修改封闭。
+  - **依赖倒置 (DIP)**：高层模块不依赖低层模块，通过抽象建立依赖。
+  - **不重复自己 (DRY)**：避免代码/逻辑重复，抽取复用。
+  - **保持简单 (KISS)**：追求简单可读的实现，降低认知负担。
+  - **持续重构**：定期审查和重构代码，清除技术债务。
+  - **可访问性 (a11y)**：符合 WCAG 标准，支持屏幕阅读器和键盘导航。
+  - **响应式优先**：移动端优先设计，保证多端适配。
+
+- ### React 最佳实践
+  - **组件设计**：
+    - 组件尽量小而专注
+    - 使用组合而非继承
+    - 使用 Render Props 或 HOC 共享横切关注点
+    - 使用 Compound Components 模式构建复杂组件
+  - **状态管理**：
+    - 在最近的共同父组件管理共享状态
+    - 使用 Context API 避免 props 深度传递
+    - 复杂应用使用 Zustand/Redux
+    - 服务端数据使用 React Query/SWR
+  - **Hooks 使用**：
+    - 使用 custom hooks 抽取和复用逻辑
+    - 遵循 useEffect 的依赖规则
+    - 避免过度使用 useCallback/useMemo
+    - 理解闭包陷阱，避免过期状态引用
+  - **性能优化**：
+    - 使用 Chrome Performance 分析性能瓶颈
+    - 避免组件层级过深
+    - 延迟加载非关键组件
+    - 保持组件纯粹，避免副作用
+  - **React 18 最佳实践**：
+    - 使用 `useId` 生成唯一ID
+    - 合理使用 Suspense 提升用户体验
+    - 采用 `<Offscreen>` 预渲染或保持状态
+    - 使用 `flushSync` 强制立即更新
+    - 迁移至 `createRoot` API
+  
+- ### 一般最佳实践
+  - **TypeScript 强类型**：尽量为接口、props、state 等添加类型注解，降低运行时错误。
+  - **逻辑复用**：使用自定义 Hooks 抽取和复用逻辑。
+  - **单元测试**：使用 Vitest + Testing Library 对核心逻辑和组件进行单元测试。
+  - **端到端测试**：使用 Playwright 对关键用户流程进行 E2E 测试。
+  - **性能优化**：开启 Tree Shaking，采用代码分割，减少首屏加载体积。
+  - **组件文档**：使用 Storybook 维护交互文档，结合自动化文档插件。
+  - **错误监控**：集成 Sentry，捕获前端运行时异常，触发告警和上报。
+  - **国际化支持**：使用 i18next 管理多语言，避免硬编码文字。
+  - **CI/CD 流水线**：配置自动化测试、Lint、构建与部署。
+  - **Git 工作流**：采用 Git Flow 或 trunk-based flow，规范分支命名与提交信息。
