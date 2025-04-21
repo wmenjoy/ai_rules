@@ -1556,3 +1556,178 @@ alwaysApply: true
   );
   /* [AI-BLOCK-END] */
   ```
+
+  - 图标注册方式：
+  - 按需引入（推荐）：
+    ```ts
+    import { UserOutlined, SettingFilled } from '@ant-design/icons-vue';
+    ```
+  - 全局注册（避免）：
+    ```ts
+    import * as Icons from '@ant-design/icons-vue';
+    
+    // 在 main.ts 中
+    Object.keys(Icons).forEach(key => {
+      app.component(key, Icons[key]);
+    });
+    ```
+- 自定义 SVG 图标规范：
+  - 放置在 `src/assets/icons/` 目录中
+  - 使用 `vite-plugin-svg-icons` 统一管理
+  - 封装 `SvgIcon` 组件提供统一调用方式
+
+## 14. 编码规范
+- **TypeScript 规范**：
+  - 全面启用严格模式 (`strict: true`)
+  - 显式声明所有变量类型，避免使用 `any`
+  - 使用 interface 定义对象类型，type 用于联合类型和工具类型
+  - 使用范型增强代码复用
+- **Vue 组件规范**：
+  - 严格遵循单文件组件 (SFC) 结构
+  - 组件文件最大 300 行，超出须考虑拆分
+  - props 必须定义类型和默认值
+  - 所有 emit 事件必须在 `defineEmits` 中声明
+  - 避免副作用，组合式函数封装复杂逻辑
+  - 使用 `<script setup>` 语法糖
+- **代码质量**：
+  - 变量和函数命名需有明确含义，避免缩写
+  - 代码缩进统一使用 2 空格
+  - 行尾必须使用分号
+  - 字符串使用单引号
+  - 对象属性使用简写语法
+  - 避免过深嵌套 (最多 3 层)
+  - 避免魔法数字，使用有意义的常量
+
+## 15. 文档规范
+- **组件文档**：
+  - 使用 Storybook 或 Histoire 维护交互式组件文档
+  - 每个组件必须包含以下文档部分：
+    - 组件描述
+    - Props/Events/Slots 表格
+    - 典型用法示例
+    - 变体展示
+- **项目文档**：
+  - `README.md` - 项目概述、安装步骤、开发指南
+  - `CONTRIBUTING.md` - 贡献指南
+  - `CHANGELOG.md` - 版本变更记录 (遵循 Semantic Versioning)
+  - `/docs` 目录 - 详细文档
+- **代码注释规范**：
+  - 组件顶部注释说明组件用途
+  - 复杂逻辑需加注释说明
+  - 公共 API 必须有 JSDoc 文档
+  - 使用 TODO/FIXME 标记待处理问题
+- **API 文档**：
+  - 使用 Swagger/OpenAPI 规范文档化后端 API
+  - 前端 API 调用应参照后端文档实现类型定义
+
+## 16. 测试规范
+- **测试覆盖率要求**：
+  - 核心业务逻辑单元测试覆盖率 ≥80%
+  - 组件测试覆盖率 ≥60%
+  - E2E 测试覆盖所有关键用户路径
+- **单元测试**：
+  - 使用 Vitest 编写单元测试
+  - 每个工具函数和组合式函数必须有对应测试
+  - 测试文件命名：`*.spec.ts` 或 `*.test.ts`
+  - 测试目录结构与源代码保持一致
+- **组件测试**：
+  - 使用 Vue Test Utils 测试组件渲染和交互
+  - 关注组件输入输出，避免测试实现细节
+  - 模拟外部依赖（API、Router等）
+- **E2E 测试**：
+  - 使用 Playwright 编写端到端测试
+  - 关注用户核心流程和关键功能
+  - 测试应在类生产环境执行
+  - CI 流程中必须包含 E2E 测试
+
+## 17. 性能优化规范
+- **加载性能要求**：
+  - 首页 FCP (First Contentful Paint) < 1.2s
+  - TTI (Time to Interactive) < 3.5s
+  - 首屏加载资源总大小 < 2MB
+- **运行时性能**：
+  - 避免不必要的渲染
+  - 长列表使用虚拟滚动
+  - 使用 `v-once` 或 `v-memo` 优化静态内容
+  - 计算密集型操作放入 Web Worker
+  - 大型表单使用防抖/节流
+- **构建优化**：
+  - 使用动态导入拆分代码
+  - 启用现代模式构建
+  - 图片资源优化（WebP/AVIF格式）
+  - 关键CSS内联
+  - 非关键资源使用预加载/预取
+  - 启用 gzip/brotli 压缩
+- **缓存策略**：
+  - 静态资源启用强缓存（1年）
+  - API 数据使用适当的缓存策略
+  - 利用 localStorage/IndexedDB 存储适当数据
+
+## 18. 监控与诊断
+- **错误监控**：
+  - 集成 Sentry 捕获前端异常
+  - 自定义错误边界处理组件错误
+  - API 错误统一记录和分析
+- **性能监控**：
+  - 集成 Web Vitals 监控核心指标
+  - 自定义性能标记关键操作
+  - 实施用户体验监控
+- **日志系统**：
+  - 开发环境使用结构化日志
+  - 生产环境分级记录（error/warn/info）
+  - 关键操作必须记录审计日志
+- **监控报表**：
+  - 定期生成性能和错误趋势报告
+  - 设置关键指标告警阈值
+  - 使用 Grafana/Datadog 等工具可视化监控数据
+
+## 19. 设计原则 & 最佳实践
+
+- ### 设计原则
+  - **单一职责 (SRP)**：每个组件/模块只负责一件事。
+  - **开放-封闭 (OCP)**：对扩展开放，对修改封闭。
+  - **依赖倒置 (DIP)**：高层模块不依赖低层模块，而是通过抽象相互依赖。
+  - **不重复自己 (DRY)**：避免复制粘贴，通用逻辑/样式抽取复用。
+  - **保持简单 (KISS)**：追求简单可读的实现，降低认知负担。
+  - **持续重构**：定期审查和重构，清除技术债务。
+  - **可访问性 (a11y)**：确保组件符合无障碍标准，支持键盘导航与屏幕阅读器等。
+  - **响应式优先**：自顶向下设计移动端优先，保证多终端适配。
+
+- ### Vue 最佳实践
+  - **响应式陷阱避免**：
+    - 使用 `shallowRef` 和 `shallowReactive` 优化大型对象
+    - 避免深层嵌套的响应式对象
+    - 使用 `toRaw` 获取原始对象进行操作
+  - **组件通信**：
+    - 父子组件使用 props/emit
+    - 跨层级使用 provide/inject
+    - 复杂状态使用 Pinia
+    - 避免使用全局事件总线
+  - **生命周期管理**：
+    - 在 `onMounted` 中初始化数据和副作用
+    - 在 `onBeforeUnmount` 中清理资源
+    - 使用 `watchEffect` 自动追踪依赖
+    - 使用 `onActivated`/`onDeactivated` 处理缓存组件
+  - **组合式函数设计**：
+    - 返回响应式状态和操作方法
+    - 独立测试业务逻辑
+    - 使用 `unref` 处理可能的 ref 值
+    - 正确处理生命周期和清理逻辑
+
+- ### 一般最佳实践
+  - **TypeScript 强类型**：尽量为接口、props、state 等添加类型注解，降低运行时错误。
+  - **逻辑复用**：Vue 使用 Composition API，React 使用 Hooks，实现功能逻辑集中管理与复用。
+  - **单元测试**：使用 Jest + Testing Library 对核心逻辑和组件进行单元测试，覆盖率保持在高水平。
+  - **端到端测试**：使用 Cypress/Playwright 对关键用户流程进行 E2E 测试，保障功能可靠性。
+  - **性能优化**：开启 Tree Shaking，采用代码分割（React.lazy / defineAsyncComponent），减少首屏加载体积。
+  - **组件文档**：使用 Storybook 维护交互文档，并结合自动化文档插件（addon-docs）。
+  - **错误监控**：集成 Sentry 或 LogRocket，捕获前端运行时异常，触发告警和上报。
+  - **国际化支持**：统一使用 vue-i18n / react-intl 管理多语言，避免硬编码文字。
+  - **CI/CD 流水线**：在 GitHub Actions / GitLab CI 上配置自动化测试、Lint、构建与部署，确保高质量交付。
+  - **Git 工作流**：采用 Git Flow 或 trunk-based flow，分支命名与提交信息遵循团队规范。
+
+  - **错误监控**：集成 Sentry 或 LogRocket，捕获前端运行时异常，触发告警和上报。
+  - **国际化支持**：统一使用 vue-i18n / react-intl 管理多语言，避免硬编码文字。
+  - **CI/CD 流水线**：在 GitHub Actions / GitLab CI 上配置自动化测试、Lint、构建与部署，确保高质量交付。
+  - **Git 工作流**：采用 Git Flow 或 trunk-based flow，分支命名与提交信息遵循团队规范。
+

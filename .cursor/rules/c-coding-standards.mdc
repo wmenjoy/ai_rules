@@ -1,5 +1,114 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# C 语言编程规范
+
+## 文件结构
+- 每个 `.c` 文件应有对应的 `.h` 头文件
+- 头文件使用保护宏防止重复包含:
+  ```c
+  #ifndef PROJECT_MODULE_H
+  #define PROJECT_MODULE_H
+  
+  // 头文件内容
+  
+  #endif /* PROJECT_MODULE_H */
+  ```
+
+## 命名规范
+- **函数命名**: 使用小写字母加下划线（snake_case）
+  ```c
+  int calculate_sum(int a, int b);
+  ```
+- **常量与宏**: 使用全大写字母加下划线
+  ```c
+  #define MAX_BUFFER_SIZE 1024
+  ```
+- **变量命名**: 使用小写字母加下划线
+  ```c
+  int user_count = 0;
+  ```
+- **结构体与类型**: 使用 snake_case，通常以 `_t` 结尾
+  ```c
+  typedef struct {
+    int id;
+    char name[50];
+  } user_info_t;
+  ```
+
+## 函数设计
+- 函数应当短小精悍，每个函数只完成一项功能
+- 函数参数不宜过多，通常不超过5个
+- 推荐函数结构:
+  ```c
+  /**
+   * @brief 函数描述
+   * @param param1 参数1描述
+   * @return 返回值描述
+   */
+  int function_name(int param1)
+  {
+      // 变量声明
+      int result = 0;
+      
+      // 参数验证
+      if (param1 < 0) {
+          return ERROR_INVALID_PARAM;
+      }
+      
+      // 主体功能实现
+      result = process_data(param1);
+      
+      // 返回结果
+      return result;
+  }
+  ```
+
+## 错误处理
+- 检查函数返回值，不忽略错误状态
+- 资源获取后确保正确释放:
+  ```c
+  FILE *file = fopen(filename, "r");
+  if (file == NULL) {
+      return -1;
+  }
+  
+  // 处理文件...
+  
+  fclose(file);  // 确保关闭文件
+  ```
+
+## 内存管理
+- 动态分配的内存必须正确释放
+- 使用内存屏障确保资源释放:
+  ```c
+  int *data = malloc(sizeof(int) * 100);
+  if (data == NULL) {
+      return -1;
+  }
+  
+  // 处理数据...
+  if (error_condition) {
+      free(data);
+      return -1;
+  }
+  
+  // 更多处理...
+  free(data);
+  ```
+
+## 代码安全
+- 使用安全字符串函数避免缓冲区溢出:
+  ```c
+  // 安全:
+  char dest[MAX_SIZE];
+  strncpy(dest, src, MAX_SIZE - 1);
+  dest[MAX_SIZE - 1] = '\0';
+  ```
+- 避免常见安全漏洞:
+  - 始终检查缓冲区长度
+  - 避免使用不安全的函数如 `gets()`, `sprintf()`
+  - 避免整数溢出
+  - 初始化变量再使用

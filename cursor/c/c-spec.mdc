@@ -1,5 +1,365 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# C 语言编程规范
+生成工具: Cursor AI 0.2  
+生成日期: 2024-07-10
+
+## 1. 代码组织与文件结构
+- 文件命名采用小写字母加下划线：`file_name.c`、`file_name.h`
+- 每个 `.c` 文件应有对应的 `.h` 头文件
+- 推荐项目结构:
+  ```
+  project/
+  ├── include/            # 公共头文件
+  │   └── project/        # 项目特定头文件
+  ├── src/                # 源文件
+  ├── tests/              # 测试代码
+  ├── docs/               # 文档
+  ├── examples/           # 示例代码
+  ├── lib/                # 第三方库
+  └── build/              # 构建产物
+  ```
+
+## 2. 头文件规范
+- 使用头文件保护宏防止重复包含:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  #ifndef PROJECT_MODULE_H
+  #define PROJECT_MODULE_H
+  
+  // 头文件内容
+  
+  #ifdef __cplusplus
+  extern "C" {
+  #endif
+  
+  // C 接口声明
+  
+  #ifdef __cplusplus
+  }
+  #endif
+  
+  #endif /* PROJECT_MODULE_H */
+  /* [AI-BLOCK-END] */
+  ```
+  
+- 头文件中只包含必要的依赖，尽量减少包含其他头文件
+
+## 3. 命名规范
+- **函数命名**: 使用小写字母加下划线（snake_case）
+  ```c
+  int calculate_sum(int a, int b);
+  ```
+  
+- **常量与宏**: 使用全大写字母加下划线
+  ```c
+  #define MAX_BUFFER_SIZE 1024
+  ```
+  
+- **变量命名**: 使用小写字母加下划线，尽量描述其用途
+  ```c
+  int user_count = 0;
+  char *file_name = "data.txt";
+  ```
+  
+- **结构体与类型**: 使用 snake_case，通常以 `_t` 结尾
+  ```c
+  typedef struct {
+    int id;
+    char name[50];
+  } user_info_t;
+  ```
+
+## 4. 函数设计
+- 函数应当**短小精悍**，每个函数只完成一项功能
+- 长函数应当重构为多个短函数
+- 函数参数不宜过多，通常不超过5个
+- 推荐函数结构:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  /**
+   * @brief 函数描述
+   * @param param1 参数1描述
+   * @param param2 参数2描述
+   * @return 返回值描述
+   */
+  int function_name(int param1, char *param2)
+  {
+      // 变量声明
+      int result = 0;
+      
+      // 参数验证
+      if (param2 == NULL) {
+          return ERROR_NULL_POINTER;
+      }
+      
+      // 主体功能实现
+      result = process_data(param1, param2);
+      
+      // 返回结果
+      return result;
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 5. 注释规范
+- 使用 Doxygen 风格的注释:
+  ```c
+  /**
+   * @brief 简短描述
+   * @details 详细描述（可选）
+   * @param name 参数描述
+   * @return 返回值描述
+   * @note 额外说明（可选）
+   * @warning 警告（可选）
+   * @see 相关函数（可选）
+   */
+  ```
+  
+- 复杂逻辑应当添加注释，说明实现思路
+
+## 6. 错误处理
+- 检查函数返回值，不忽略错误状态
+- 使用统一的错误码或错误信息机制
+- 资源获取后确保正确释放:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  int process_file(const char *filename)
+  {
+      FILE *file = fopen(filename, "r");
+      if (file == NULL) {
+          perror("无法打开文件");
+          return -1;
+      }
+      
+      // 处理文件...
+      int result = do_something_with_file(file);
+      
+      // 总是关闭文件
+      fclose(file);
+      
+      return result;
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 7. 内存管理
+- 动态分配的内存必须正确释放
+- 使用内存屏障避免内存泄漏:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  int process_data()
+  {
+      int *data = malloc(sizeof(int) * 100);
+      if (data == NULL) {
+          return -1;
+      }
+      
+      int result = 0;
+      // 处理数据...
+      if (condition_error) {
+          result = -1;
+          goto cleanup;
+      }
+      
+      // 更多处理...
+      
+  cleanup:
+      free(data);
+      return result;
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+- 对于复杂数据结构，实现清晰的创建与销毁函数:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  typedef struct {
+      char *name;
+      int *values;
+      size_t count;
+  } resource_t;
+  
+  resource_t *resource_create(const char *name, size_t count)
+  {
+      resource_t *res = malloc(sizeof(resource_t));
+      if (res == NULL) {
+          return NULL;
+      }
+      
+      // 初始化为NULL，以便安全清理
+      res->name = NULL;
+      res->values = NULL;
+      
+      res->name = strdup(name);
+      if (res->name == NULL) {
+          resource_destroy(res);
+          return NULL;
+      }
+      
+      res->values = malloc(sizeof(int) * count);
+      if (res->values == NULL) {
+          resource_destroy(res);
+          return NULL;
+      }
+      
+      res->count = count;
+      return res;
+  }
+  
+  void resource_destroy(resource_t *res)
+  {
+      if (res == NULL) {
+          return;
+      }
+      
+      free(res->name);
+      free(res->values);
+      free(res);
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 8. 编译预处理
+- 使用条件编译确保代码可移植性:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  #ifdef _WIN32
+  #include <windows.h>
+  void sleep_ms(int milliseconds)
+  {
+      Sleep(milliseconds);
+  }
+  #else
+  #include <unistd.h>
+  void sleep_ms(int milliseconds)
+  {
+      usleep(milliseconds * 1000);
+  }
+  #endif
+  /* [AI-BLOCK-END] */
+  ```
+
+- 使用 `#pragma once` 作为头文件保护的替代（如果编译器支持）
+
+## 9. 类型安全
+- 使用 `size_t` 表示大小和索引
+- 使用 `stdint.h` 中的类型确保固定大小:
+  ```c
+  #include <stdint.h>
+  
+  uint32_t counter = 0;
+  int16_t value = -100;
+  ```
+
+- 对于指针类型转换，使用合适的类型转换:
+  ```c
+  void *data = malloc(size);
+  int *int_data = (int *)data;
+  ```
+
+## 10. 安全编程实践
+- 使用安全字符串函数避免缓冲区溢出:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  // 不安全:
+  // strcpy(dest, src);
+  
+  // 安全:
+  char dest[MAX_SIZE];
+  strncpy(dest, src, MAX_SIZE - 1);
+  dest[MAX_SIZE - 1] = '\0';
+  
+  // 更安全（C11）:
+  #define __STDC_WANT_LIB_EXT1__ 1
+  #include <string.h>
+  
+  if (strcpy_s(dest, MAX_SIZE, src) != 0) {
+      // 错误处理
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+- 避免常见安全漏洞:
+  - 始终检查缓冲区长度
+  - 避免使用不安全的函数如 `gets()`、`sprintf()`
+  - 避免整数溢出
+  - 初始化变量再使用
+
+## 11. 代码格式化
+- 使用一致的缩进（推荐4个空格）
+- 大括号位置遵循 K&R 风格:
+  ```c
+  if (condition) {
+      // 代码
+  } else {
+      // 代码
+  }
+  ```
+  
+- 保持适当行宽，通常不超过80-100个字符
+- 适当使用空行分隔逻辑块
+
+## 12. 性能考虑
+- 避免不必要的内存分配和拷贝
+- 考虑局部性原则，合理组织数据结构
+- 大型数组考虑按列优先或行优先访问以利用缓存
+- 避免不必要的函数调用，特别是在循环内部
+
+## 13. 构建与依赖
+- 使用 CMake 或 Make 管理构建过程
+- 明确指定依赖关系，避免隐式依赖
+- 静态代码分析工具集成:
+  - cppcheck
+  - clang-tidy
+  - scan-build
+  
+## 14. 单元测试
+- 使用 Unity、CUnit 或 Check 框架编写单元测试
+- 测试驱动开发，先写测试再实现功能
+- 示例Unity测试:
+  ```c
+  /* [AI-BLOCK-START] - 生成工具: Cursor AI 0.2 */
+  #include "unity.h"
+  #include "module_to_test.h"
+  
+  void setUp(void)
+  {
+      // 测试前设置
+  }
+  
+  void tearDown(void)
+  {
+      // 测试后清理
+  }
+  
+  void test_function_returns_correct_value(void)
+  {
+      // 准备测试数据
+      int result = calculate_sum(2, 3);
+      
+      // 验证结果
+      TEST_ASSERT_EQUAL_INT(5, result);
+  }
+  
+  int main(void)
+  {
+      UNITY_BEGIN();
+      RUN_TEST(test_function_returns_correct_value);
+      return UNITY_END();
+  }
+  /* [AI-BLOCK-END] */
+  ```
+
+## 15. 文档
+- 每个模块、函数、结构体都应当有文档注释
+- 使用 Doxygen 生成代码文档
+- 项目应当包含 README.md 文件，描述:
+  - 项目目的
+  - 如何构建
+  - 如何使用
+  - 依赖关系
+  - 许可证信息

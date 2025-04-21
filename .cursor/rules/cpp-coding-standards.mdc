@@ -1,5 +1,134 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# C++ 语言编程规范
+
+## 命名空间
+- 使用命名空间避免名称冲突:
+  ```cpp
+  namespace project {
+  namespace module {
+      
+  // 命名空间内的代码
+  class MyClass {
+      // ...
+  };
+  
+  } // namespace module
+  } // namespace project
+  ```
+- 避免在头文件中使用 `using namespace` 指令
+
+## 命名规范
+- **类和结构体**: 使用 PascalCase
+  ```cpp
+  class NetworkManager {};
+  struct ConfigOptions {};
+  ```
+- **函数和方法**: 使用 camelCase
+  ```cpp
+  void sendRequest();
+  int calculateTotal();
+  ```
+- **变量**: 使用 camelCase，成员变量可以添加后缀 `_`
+  ```cpp
+  int itemCount = 0;
+  std::string userName;
+  
+  class User {
+  private:
+      std::string name_;
+      int age_;
+  };
+  ```
+- **常量**: 使用 kPascalCase 或全大写
+  ```cpp
+  const int kMaxConnections = 100;
+  constexpr double PI = 3.14159265359;
+  ```
+
+## 资源管理
+- 使用智能指针代替裸指针:
+  ```cpp
+  // 单一所有权
+  std::unique_ptr<Resource> resource = std::make_unique<Resource>();
+  
+  // 共享所有权
+  std::shared_ptr<Resource> sharedResource = std::make_shared<Resource>();
+  ```
+- 遵循 RAII 原则 (资源获取即初始化)
+- 使用移动语义优化性能:
+  ```cpp
+  std::vector<int> createLargeVector() {
+      std::vector<int> result(1000000);
+      // 填充数据...
+      return result;  // 自动使用移动语义
+  }
+  
+  void processVector(std::vector<int>&& vec) {
+      // 使用移动的vector
+      std::vector<int> localVec = std::move(vec);
+  }
+  ```
+
+## 类设计
+- 每个类应遵循单一职责原则
+- 使用 public/protected/private 清晰分隔接口与实现
+- 实现 "Rule of Five" 或禁用拷贝和移动:
+  ```cpp
+  class FileHandler {
+  public:
+      // 构造和析构函数...
+      
+      // 禁止拷贝
+      FileHandler(const FileHandler&) = delete;
+      FileHandler& operator=(const FileHandler&) = delete;
+      
+      // 可选：实现移动构造和赋值
+      FileHandler(FileHandler&& other) noexcept;
+      FileHandler& operator=(FileHandler&& other) noexcept;
+  };
+  ```
+
+## 错误处理
+- 使用异常处理错误情况
+- 在析构函数中不要抛出异常
+- 考虑使用 `noexcept` 标记不会抛出异常的函数
+
+## 模板与泛型编程
+- 模板定义通常放在头文件中
+- 使用 `typename` 表示依赖类型
+- 使用概念 (C++20) 约束模板参数:
+  ```cpp
+  template <typename T>
+  requires std::is_arithmetic_v<T>
+  T add(T a, T b) {
+      return a + b;
+  }
+  ```
+
+## 代码性能
+- 避免不必要的拷贝，使用引用和移动语义
+- 使用 `constexpr` 在编译时评估表达式
+- 内联小函数:
+  ```cpp
+  inline double calculateDistance(double x1, double y1, double x2, double y2) {
+      double dx = x2 - x1;
+      double dy = y2 - y1;
+      return std::sqrt(dx*dx + dy*dy);
+  }
+  ```
+
+## 标准库使用
+- 充分利用标准库容器与算法
+- 使用 `<algorithm>` 中的函数而非手写循环:
+  ```cpp
+  // 查找
+  auto it = std::find_if(vec.begin(), vec.end(), [](int x) { return x > 10; });
+  
+  // 转换
+  std::transform(input.begin(), input.end(), output.begin(),
+                [](int x) { return x * x; });
+  ```
