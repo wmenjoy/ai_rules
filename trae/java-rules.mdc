@@ -1,0 +1,159 @@
+# Java 代码规范
+
+## 1. 项目结构
+- 遵循标准Maven/Gradle目录结构。
+- 推荐分层：controller、service、repository、model、util等。
+- 目录结构示例：
+  ```
+  project/
+  ├── src/
+  │   ├── main/
+  │   │   ├── java/com/example/project/controller
+  │   │   ├── java/com/example/project/service
+  │   │   ├── java/com/example/project/repository
+  │   │   ├── java/com/example/project/model
+  │   │   └── resources/
+  │   └── test/
+  ├── docs/
+  ├── scripts/
+  ├── Dockerfile
+  ├── README.md
+  └── pom.xml / build.gradle
+  ```
+- 推荐使用Spring Boot最佳实践，控制层、服务层、持久层、实体层分明。
+
+## 2. 命名规范
+- 包名全部小写，使用反域名。
+- 类名使用大驼峰（PascalCase）。
+- 接口名以I开头（如IUserService）。
+- 方法、变量名使用小驼峰（camelCase）。
+- 常量全大写，单词间下划线分隔。
+- 数据库表、字段名小写下划线。
+
+## 3. 代码风格
+- 遵循Google Java风格指南。
+- 每行不超过120字符。
+- 使用4空格缩进，不使用Tab。
+- 大括号不换行。
+- 文件名与类名保持一致。
+- 所有文件使用UTF-8编码。
+- 注释规范，类/方法/复杂逻辑需有Javadoc注释。
+- 创建Web服务时遵循RESTful API设计。
+
+## 4. 依赖管理
+- 推荐使用Maven或Gradle统一管理依赖。
+- 依赖版本锁定，避免使用最新快照。
+- 合理使用Spring Boot Starter简化依赖。
+
+## 5. 文档规范
+- 每个类使用类级别Javadoc。
+- 公共方法添加方法级别Javadoc。
+- 项目需包含README.md、CHANGELOG.md、/docs目录。
+- 推荐使用Swagger/OpenAPI生成接口文档。
+
+## 6. 编码规范
+- 推荐使用Checkstyle、SpotBugs等工具进行静态检查。
+- 单元测试放在test目录，测试类以Test结尾。
+- 避免魔法数字，使用常量。
+- 错误处理要规范，优先使用自定义异常。
+- 推荐使用Lombok简化代码，但需团队统一。
+- 推荐使用构造器注入依赖，避免字段注入。
+- 合理使用事务、日志、校验等Spring特性。
+
+## 7. 技术链和错误处理
+
+## 8. 常用库推荐
+
+### 开发框架
+- **Spring生态**: Spring Boot, Spring MVC, Spring Data, Spring Security, Spring Cloud
+- **微服务框架**: Spring Cloud Alibaba, Dubbo, gRPC
+- **Web框架**: Micronaut, Quarkus, Vert.x
+
+### 工具类库
+- **Apache Commons**: Commons Lang, Commons IO, Commons Collections
+- **Google Guava**: 集合、缓存、并发等工具
+- **Lombok**: 简化Java代码
+- **MapStruct**: 对象映射工具
+
+### 测试框架
+- **JUnit 5**: 单元测试框架
+- **Mockito**: Mock测试框架
+- **Testcontainers**: 集成测试工具
+- **AssertJ**: 流式断言库
+
+### 数据库
+- **JPA实现**: Hibernate, EclipseLink
+- **MyBatis**: MyBatis, MyBatis-Plus
+- **连接池**: HikariCP, Druid
+- **NoSQL客户端**: Jedis, Lettuce, MongoDB Driver
+
+### 消息队列
+- **RabbitMQ**: AMQP协议实现
+- **Kafka**: 高吞吐量消息系统
+- **RocketMQ**: 阿里开源消息中间件
+
+### 监控与指标
+- **Micrometer**: 应用指标收集
+- **Prometheus**: 监控系统
+- **SkyWalking**: 分布式追踪系统
+
+### 其他
+- **Jackson/Gson**: JSON处理
+- **Joda-Time**: 日期时间处理
+- **Netty**: 高性能网络框架
+- **OkHttp**: HTTP客户端
+
+### Spring Boot最佳实践
+
+#### 依赖注入
+- 优先使用构造器注入，避免字段注入
+- 使用`@RequiredArgsConstructor`简化构造器注入
+- 避免循环依赖，保持组件职责单一
+
+#### 异常处理
+- 使用`@ControllerAdvice`和`@ExceptionHandler`进行全局异常处理
+- 自定义业务异常继承`RuntimeException`
+- 异常信息国际化处理
+- REST API返回统一错误格式
+
+#### 配置管理
+- 使用`@ConfigurationProperties`绑定配置
+- 敏感信息使用环境变量或配置中心
+- 多环境配置：`application-{profile}.yml`
+- 配置验证：使用`@Validated`注解
+
+#### 日志管理
+- 使用SLF4J + Logback
+- 合理配置日志级别(ERROR/WARN/INFO/DEBUG)
+- 添加请求ID等上下文信息
+- 配置日志滚动策略和保留周期
+
+#### 监控与指标
+- 使用Spring Boot Actuator暴露健康检查、指标等端点
+- 集成Prometheus收集应用指标
+- 使用Micrometer实现自定义指标
+
+#### 数据库访问
+- 使用Spring Data JPA或MyBatis-Plus简化CRUD
+- 合理使用事务`@Transactional`
+- 批量操作使用批处理模式
+- 实现读写分离
+
+#### 缓存
+- 使用Spring Cache抽象
+- 合理设置缓存过期时间
+- 注意缓存穿透、雪崩问题
+- 重要操作实现双写一致性
+
+#### 消息队列
+- 使用Spring AMQP或Spring Kafka
+- 实现消息幂等处理
+- 死信队列处理失败消息
+- 消息轨迹追踪
+
+#### 安全
+- 使用Spring Security实现认证授权
+- 密码加密存储
+- 接口权限控制
+- CSRF防护
+- 定期更新依赖库版本
