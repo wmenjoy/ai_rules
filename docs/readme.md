@@ -1,8 +1,8 @@
 # UI 设计指南文档
 
 ## 使用AI + mcp 实现
-1. [MCP: Software-Planning-MCP](https://github.com/NightTrek/Software-planning-mcp)
-2. [MCP: sequentialthinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking)
+1. [MCP: Software-Planning-MCP](https://github.com/NightTrek/Software-planning-mcp): todo Lists
+2. [MCP: sequentialthinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking)： 结合大模型提供完善的思考模式
 
 
 ## 使用的提示语
