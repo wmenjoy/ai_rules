@@ -1962,3 +1962,1699 @@ export const InlineGroup: React.FC<InlineGroupProps> = ({
   </div>
 </section>
 ``` 
+
+## 11. 图表系统设计 (Charts System Design)
+
+图表系统是数据可视化的基础，它提供了展示和解释数据的结构化方法。本节详细说明在 React + TypeScript + Tailwind CSS 项目中如何设计和实现一个全面、灵活且可访问的图表系统。
+
+### 11.1 图表设计原则 (Chart Design Principles)
+
+数据可视化设计遵循以下核心原则，确保图表既美观又有效地传达信息：
+
+| 原则 | 说明 | 实践示例 |
+|------|------|---------|
+| 清晰性 | 图表应当清晰直观地传达其信息 | 使用明确的标题和标签，避免过度装饰 |
+| 准确性 | 图表应当准确表示数据，不歪曲事实 | Y轴通常从零开始，保持比例适当 |
+| 简洁性 | 移除所有不必要的元素，专注于数据 | 避免使用3D效果、过度网格线和不必要的图例 |
+| 目的性 | 每个图表都应有明确的目的和要传达的信息 | 设计前明确图表应当回答什么问题 |
+| 上下文性 | 提供足够的上下文，使读者能够正确理解数据 | 包括合适的标签、注释和参考线 |
+| 一致性 | 在整个应用中保持视觉语言的一致性 | 使用一致的颜色方案、字体和排版 |
+| 响应性 | 图表应当适应不同的屏幕尺寸和设备 | 在小屏幕上简化图表，调整细节层次 |
+| 可访问性 | 确保所有用户都能理解图表，包括使用辅助技术的用户 | 提供替代文本、键盘导航和足够的颜色对比度 |
+
+#### 11.1.1 数据墨水比 (Data-Ink Ratio)
+
+数据墨水比是指图表中用于实际表示数据的墨水（像素）与用于装饰或冗余元素的墨水的比率。高数据墨水比的图表更加高效和清晰。
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+// 低数据墨水比的图表配置示例
+const lowDataInkRatioConfig = {
+  grid: {
+    show: true,
+    horizontal: true,
+    vertical: true,
+    strokeDasharray: "3 3",
+    strokeWidth: 1
+  },
+  axis: {
+    x: {
+      showLine: true,
+      showTicks: true,
+      showGrid: true,
+      showLabel: true
+    },
+    y: {
+      showLine: true,
+      showTicks: true,
+      showGrid: true,
+      showLabel: true
+    }
+  },
+  legend: {
+    show: true,
+    border: true,
+    background: true
+  },
+  chart: {
+    background: true,
+    border: true,
+    gradientFill: true,
+    shadow: true
+  }
+};
+
+// 高数据墨水比的图表配置示例 
+const highDataInkRatioConfig = {
+  grid: {
+    show: false,
+    horizontal: false,
+    vertical: false
+  },
+  axis: {
+    x: {
+      showLine: true,
+      showTicks: true,
+      showGrid: false,
+      showLabel: true
+    },
+    y: {
+      showLine: false,
+      showTicks: true,
+      showGrid: false,
+      showLabel: true
+    }
+  },
+  legend: {
+    show: true,
+    border: false,
+    background: false
+  },
+  chart: {
+    background: false,
+    border: false,
+    gradientFill: false,
+    shadow: false
+  }
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.1.2 色彩使用原则
+
+图表中的色彩应当用于增强数据的可理解性，而非纯粹的装饰：
+
+1. **目的性色彩** - 每种颜色都应有特定目的，如分类区分或表示数值范围
+2. **有限色调** - 通常在一个图表中使用2-7种颜色最为有效
+3. **颜色一致性** - 在整个应用中对相同数据类别使用一致的颜色
+4. **可访问性色彩** - 使用对色盲友好的调色板，确保足够的对比度
+5. **语义色彩** - 利用色彩的文化关联（如红色表示负面、绿色表示正面）
+
+### 11.2 图表类型及用途 (Chart Types and Use Cases)
+
+选择正确的图表类型对于有效传达数据至关重要。以下是常见图表类型及其适用场景：
+
+#### 11.2.1 常见图表类型及适用场景
+
+| 图表类型 | 描述 | 适用场景 | 不适用场景 |
+|---------|------|---------|-----------|
+| 柱状图(Bar Chart) | 使用矩形条形展示分类数据 | 比较不同类别的数值大小<br>显示排名或频率分布 | 显示连续时间数据<br>数据点极多时 |
+| 折线图(Line Chart) | 使用线条连接数据点 | 展示连续时间序列数据<br>显示趋势和变化 | 比较不同类别之间的差异<br>数据点很少时 |
+| 饼图/环形图(Pie/Donut Chart) | 圆形分割展示部分与整体的关系 | 显示组成比例(不超过6个类别)<br>部分与整体的关系 | 精确比较多个类别<br>类别数量过多(>6)时 |
+| 面积图(Area Chart) | 线下方区域填充的折线图 | 展示总量变化趋势<br>显示部分与整体随时间变化 | 比较多个类别的精确数值<br>数据波动剧烈时 |
+| 散点图(Scatter Plot) | 在笛卡尔坐标系中显示数据点 | 检查两个变量之间的关系<br>识别相关性和异常值 | 展示时间序列数据<br>类别比较 |
+| 热图(Heatmap) | 使用颜色强度表示数值大小 | 多维数据的模式识别<br>显示大型数据集中的变化 | 精确数值比较<br>少量数据点展示 |
+| 雷达图(Radar Chart) | 围绕中心点的多变量数据展示 | 比较多个变量的实体<br>性能评估和对比 | 变量过多(>8)时<br>精确数值比较 |
+| 树图(Treemap) | 嵌套矩形表示层次数据 | 展示层次结构和大小关系<br>空间效率高的数据展示 | 精确数值比较<br>时间序列数据 |
+| 桑基图(Sankey Diagram) | 流量图，展示从一组值到另一组值的流动 | 展示流程、转化和分配<br>资源流动和能量转换 | 简单类别比较<br>时间序列数据 |
+| 组合图表(Combo Chart) | 结合多种图表类型 | 展示关联的不同类型数据<br>比较不同尺度的指标 | 简单单一类型的数据<br>可用单一图表展示时 |
+
+#### 11.2.2 图表类型选择决策树
+
+选择合适的图表类型可以遵循以下决策流程：
+
+1. **确定目的**
+   - 比较不同类别值 → 柱状图、条形图
+   - 显示趋势和随时间变化 → 折线图、面积图
+   - 展示部分与整体关系 → 饼图、环形图、堆叠柱状图
+   - 展示相关性 → 散点图、气泡图
+   - 显示分布 → 直方图、箱线图
+
+2. **考虑数据特性**
+   - 分类数据 → 柱状图、饼图
+   - 时间序列数据 → 折线图、面积图
+   - 多变量数据 → 散点图、雷达图、平行坐标图
+   - 层次数据 → 树图、旭日图
+
+3. **考虑数据量和复杂度**
+   - 数据点少且简单 → 柱状图、饼图
+   - 大量数据点 → 散点图、热图
+   - 复杂多变量数据 → 雷达图、平行坐标图
+
+#### 11.2.3 基本图表类型实现示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { 
+  BarChart, Bar, 
+  LineChart, Line, 
+  PieChart, Pie, Cell,
+  AreaChart, Area,
+  ScatterChart, Scatter, 
+  ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend
+} from 'recharts';
+
+// 示例数据
+const data = [
+  { name: '一月', value: 400, value2: 240 },
+  { name: '二月', value: 300, value2: 139 },
+  { name: '三月', value: 200, value2: 980 },
+  { name: '四月', value: 278, value2: 390 },
+  { name: '五月', value: 189, value2: 480 },
+  { name: '六月', value: 239, value2: 380 },
+];
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+// 柱状图示例
+export const BasicBarChartExample = () => (
+  <div className="w-full">
+    <h4 className="text-base font-medium mb-4">月度销售额对比</h4>
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="name" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Bar dataKey="value" fill="#8884d8" name="销售额" />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+);
+
+// 折线图示例
+export const BasicLineChartExample = () => (
+  <div className="w-full">
+    <h4 className="text-base font-medium mb-4">月度趋势分析</h4>
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="name" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Line type="monotone" dataKey="value" stroke="#8884d8" name="销售额" />
+        <Line type="monotone" dataKey="value2" stroke="#82ca9d" name="利润" />
+      </LineChart>
+    </ResponsiveContainer>
+  </div>
+);
+
+// 饼图示例
+export const BasicPieChartExample = () => {
+  const pieData = data.map(item => ({ name: item.name, value: item.value }));
+  
+  return (
+    <div className="w-full">
+      <h4 className="text-base font-medium mb-4">销售额分布</h4>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie
+            data={pieData}
+            cx="50%"
+            cy="50%"
+            labelLine={true}
+            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+            outerRadius={80}
+            fill="#8884d8"
+            dataKey="value"
+          >
+            {pieData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// 面积图示例
+export const BasicAreaChartExample = () => (
+  <div className="w-full">
+    <h4 className="text-base font-medium mb-4">累计销售额趋势</h4>
+    <ResponsiveContainer width="100%" height={300}>
+      <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="name" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Area type="monotone" dataKey="value" stackId="1" stroke="#8884d8" fill="#8884d8" name="销售额" />
+        <Area type="monotone" dataKey="value2" stackId="1" stroke="#82ca9d" fill="#82ca9d" name="利润" />
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>
+);
+
+// 散点图示例
+export const BasicScatterChartExample = () => {
+  const scatterData = data.map(item => ({ x: item.value, y: item.value2, z: item.value / 10, name: item.name }));
+  
+  return (
+    <div className="w-full">
+      <h4 className="text-base font-medium mb-4">销售额与利润相关性</h4>
+      <ResponsiveContainer width="100%" height={300}>
+        <ScatterChart margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis type="number" dataKey="x" name="销售额" unit="元" />
+          <YAxis type="number" dataKey="y" name="利润" unit="元" />
+          <Tooltip cursor={{ strokeDasharray: '3 3' }} formatter={(value) => [`${value}元`]} />
+          <Legend />
+          <Scatter name="月度数据" data={scatterData} fill="#8884d8" />
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+### 11.3 图表组件 TypeScript 接口 (Chart Component TypeScript Interfaces)
+
+为了确保图表组件的类型安全和一致性，以下是图表组件的 TypeScript 接口定义：
+
+#### 11.3.1 基础图表接口
+
+```typescript
+// 图表边距配置
+interface ChartMargin {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+
+// 图例配置
+interface LegendConfig {
+  show?: boolean;
+  position?: 'top' | 'right' | 'bottom' | 'left';
+  align?: 'start' | 'center' | 'end';
+  layout?: 'horizontal' | 'vertical';
+  iconType?: 'circle' | 'square' | 'rect' | 'diamond' | 'triangle' | 'wye';
+  iconSize?: number;
+}
+
+// 提示框配置
+interface TooltipConfig {
+  enabled?: boolean;
+  formatter?: (value: any, name: string, props: any) => string | React.ReactNode;
+  labelFormatter?: (label: any) => string | React.ReactNode;
+  cursor?: boolean | object;
+  contentStyle?: React.CSSProperties;
+  itemStyle?: React.CSSProperties;
+  shared?: boolean;
+}
+
+// 轴配置
+interface AxisConfig {
+  show?: boolean;
+  dataKey?: string;
+  type?: 'category' | 'number' | 'time';
+  name?: string;
+  unit?: string;
+  domain?: [number, number] | 'auto' | 'dataMin' | 'dataMax';
+  tickCount?: number;
+  tickFormatter?: (value: any) => string;
+  label?: string | React.ReactNode;
+  scale?: 'auto' | 'linear' | 'pow' | 'sqrt' | 'log' | 'time';
+  padding?: { left?: number; right?: number };
+}
+
+// 主题类型
+type ChartTheme = 'light' | 'dark' | 'custom';
+
+// 动画配置
+interface AnimationConfig {
+  enabled?: boolean;
+  duration?: number;
+  easing?: 'ease' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'linear';
+  delay?: number;
+}
+
+// 可访问性配置
+interface AccessibilityConfig {
+  ariaLabel?: string;
+  ariaDescription?: string;
+  includeDataTableView?: boolean;
+  keyboardNavigation?: boolean;
+  screenReaderInstructions?: string;
+}
+
+// 基础图表属性
+interface BaseChartProps {
+  data: any[];
+  width?: number | string;
+  height?: number | string;
+  margin?: ChartMargin;
+  colors?: string[];
+  title?: string;
+  legendConfig?: LegendConfig;
+  tooltipConfig?: TooltipConfig;
+  xAxisConfig?: AxisConfig;
+  yAxisConfig?: AxisConfig;
+  animationConfig?: AnimationConfig;
+  accessibility?: AccessibilityConfig;
+  theme?: ChartTheme;
+  className?: string;
+  responsive?: boolean;
+  children?: React.ReactNode;
+}
+```
+
+#### 11.3.2 特定图表类型接口
+
+```typescript
+// 柱状图属性
+interface BarChartProps extends BaseChartProps {
+  layout?: 'vertical' | 'horizontal';
+  barSize?: number;
+  barGap?: number;
+  barCategoryGap?: number | string;
+  isStacked?: boolean;
+  barDataKeys: string[];
+  barNames?: { [key: string]: string };
+  barColors?: { [key: string]: string };
+  groupMode?: 'grouped' | 'stacked';
+  maxBarSize?: number;
+}
+
+// 折线图属性
+interface LineChartProps extends BaseChartProps {
+  lineDataKeys: string[];
+  lineType?: 'linear' | 'monotone' | 'step' | 'stepBefore' | 'stepAfter';
+  lineNames?: { [key: string]: string };
+  lineColors?: { [key: string]: string };
+  showPoints?: boolean;
+  pointSize?: number;
+  connectNulls?: boolean;
+  strokeWidth?: number;
+  dotConfig?: {
+    strokeWidth?: number;
+    stroke?: string;
+    fill?: string;
+    radius?: number;
+  };
+}
+
+// 饼图/环形图属性
+interface PieChartProps extends BaseChartProps {
+  dataKey: string;
+  nameKey: string;
+  innerRadius?: number | string;
+  outerRadius?: number | string;
+  paddingAngle?: number;
+  startAngle?: number;
+  endAngle?: number;
+  minAngle?: number;
+  labelPosition?: 'inside' | 'outside' | 'insideLeft' | 'insideRight';
+  labelType?: 'percent' | 'value' | 'name' | 'value-and-percent';
+  donut?: boolean;
+  activeIndex?: number | number[];
+}
+
+// 面积图属性
+interface AreaChartProps extends BaseChartProps {
+  areaDataKeys: string[];
+  areaNames?: { [key: string]: string };
+  areaColors?: { [key: string]: string };
+  stackId?: string | string[];
+  areaType?: 'basis' | 'linear' | 'monotone' | 'step' | 'stepBefore' | 'stepAfter';
+  connectNulls?: boolean;
+  baseValue?: number | 'dataMin' | 'dataMax';
+  fillOpacity?: number;
+  isStacked?: boolean;
+  strokeWidth?: number;
+}
+
+// 散点图属性
+interface ScatterChartProps extends BaseChartProps {
+  xDataKey: string;
+  yDataKey: string;
+  zDataKey?: string;
+  nameKey?: string;
+  symbolSize?: number | ((dataPoint: any) => number);
+  fillOpacity?: number;
+  strokeWidth?: number;
+}
+
+// 热图属性
+interface HeatmapProps extends BaseChartProps {
+  dataKey: string;
+  xCategories: string[];
+  yCategories: string[];
+  colorScale?: string[];
+  cellPadding?: number;
+  cellRadius?: number;
+  showCellLabels?: boolean;
+  cellLabelFormat?: (value: any) => string;
+  minValue?: number;
+  maxValue?: number;
+}
+
+// 雷达图属性
+interface RadarChartProps extends BaseChartProps {
+  radarDataKeys: string[];
+  radarNames?: { [key: string]: string };
+  radarColors?: { [key: string]: string };
+  polarGrid?: {
+    gridType?: 'polygon' | 'circle';
+    gridCount?: number;
+    stroke?: string;
+    strokeDasharray?: string;
+  };
+  polarAngleAxis?: {
+    dataKey: string;
+    domain?: [number, number];
+    tickCount?: number;
+  };
+  polarRadiusAxis?: {
+    angle?: number;
+    domain?: [number, number];
+    tickCount?: number;
+  };
+  fillOpacity?: number;
+}
+```
+
+#### 11.3.3 图表配置接口
+
+```typescript
+// 图表网格配置
+interface GridConfig {
+  show?: boolean;
+  horizontal?: boolean;
+  vertical?: boolean;
+  stroke?: string;
+  strokeDasharray?: string;
+  strokeWidth?: number;
+}
+
+// 参考线配置
+interface ReferenceLineConfig {
+  x?: number | string;
+  y?: number | string;
+  stroke?: string;
+  strokeDasharray?: string;
+  strokeWidth?: number;
+  label?: string | React.ReactNode;
+  labelPosition?: 'top' | 'bottom' | 'left' | 'right' | 'insideTopLeft' | 'insideTopRight' | 'insideBottomLeft' | 'insideBottomRight';
+}
+
+// 缩放/平移配置
+interface ZoomPanConfig {
+  enabled?: boolean;
+  zoomType?: 'x' | 'y' | 'xy';
+  panType?: 'x' | 'y' | 'xy';
+  mouseWheelZoom?: boolean;
+  doubleClickZoom?: boolean;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+// 图表事件处理
+interface ChartEventHandlers {
+  onClick?: (data: any, index: number, event: React.MouseEvent) => void;
+  onMouseEnter?: (data: any, index: number, event: React.MouseEvent) => void;
+  onMouseLeave?: (data: any, index: number, event: React.MouseEvent) => void;
+  onMouseMove?: (data: any, index: number, event: React.MouseEvent) => void;
+  onLegendClick?: (dataKey: string, index: number, event: React.MouseEvent) => void;
+}
+
+// 数据标签配置
+interface DataLabelConfig {
+  enabled?: boolean;
+  position?: 'top' | 'bottom' | 'left' | 'right' | 'inside' | 'outside' | 'insideLeft' | 'insideRight' | 'insideTop' | 'insideBottom';
+  formatter?: (value: any, entry: any) => string | React.ReactNode;
+  fill?: string;
+  stroke?: string;
+  fontSize?: number;
+  fontWeight?: string | number;
+}
+```
+
+### 11.4 图表组件实现示例 (Chart Component Implementation Examples)
+
+以下是基于之前定义的接口和原则的图表组件实现示例：
+
+#### 11.4.1 基础图表容器组件
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { ResponsiveContainer } from 'recharts';
+import { classNames } from '../utils';
+
+export const ChartContainer: React.FC<{
+  title?: string;
+  description?: string;
+  width?: number | string;
+  height?: number | string;
+  ariaLabel?: string;
+  className?: string;
+  children: React.ReactNode;
+}> = ({
+  title,
+  description,
+  width = '100%',
+  height = 400,
+  ariaLabel,
+  className,
+  children
+}) => {
+  return (
+    <div
+      className={classNames('chart-container', className)}
+      aria-label={ariaLabel || title || 'Chart'}
+    >
+      {title && (
+        <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
+      )}
+      {description && (
+        <p className="text-sm text-gray-500 mb-4">{description}</p>
+      )}
+      <div className="chart-wrapper" role="img" aria-label={ariaLabel || title || 'Chart'}>
+        <ResponsiveContainer width={width} height={height}>
+          {children}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.4.2 柱状图组件实现
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, Legend, ReferenceLine, ResponsiveContainer 
+} from 'recharts';
+import { ChartContainer } from './ChartContainer';
+import { classNames } from '../utils';
+
+export const BarChartComponent: React.FC<BarChartProps> = ({
+  data,
+  width = '100%',
+  height = 400,
+  margin = { top: 20, right: 30, bottom: 20, left: 30 },
+  ...props
+}) => {
+  return (
+    <ChartContainer
+      title="柱状图示例"
+      description="展示不同类别的销售额"
+      ariaLabel="柱状图"
+      className="bar-chart"
+    >
+      <BarChart
+        data={data}
+        margin={margin}
+        layout="vertical"
+        barSize={30}
+        barCategoryGap={10}
+        barGap={5}
+        {...props}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis type="number" />
+        <YAxis dataKey="name" type="category" />
+        <Tooltip />
+        <Legend />
+        <ReferenceLine y={0} stroke="#000" />
+        <Bar dataKey="value" fill="#8884d8" />
+      </BarChart>
+    </ChartContainer>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.4.3 饼图组件实现
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { ChartContainer } from './ChartContainer';
+import { classNames } from '../utils';
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+export const PieChartComponent: React.FC<PieChartProps> = ({
+  data,
+  dataKey,
+  nameKey,
+  innerRadius = 0,
+  outerRadius = '50%',
+  paddingAngle = 0,
+  startAngle = 0,
+  endAngle = 360,
+  minAngle = 0,
+  labelPosition = 'inside',
+  labelType = 'value',
+  ...props
+}) => {
+  return (
+    <ChartContainer
+      title="饼图示例"
+      description="展示不同类别的销售额占比"
+      ariaLabel="饼图"
+      className="pie-chart"
+    >
+      <PieChart>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          labelLine={false}
+          label={labelType === 'value' ? ({ name, value }) => `${name}: ${value}` : undefined}
+          outerRadius={outerRadius}
+          innerRadius={innerRadius}
+          paddingAngle={paddingAngle}
+          startAngle={startAngle}
+          endAngle={endAngle}
+          minAngle={minAngle}
+          fill="#8884d8"
+          dataKey={dataKey}
+          {...props}
+        >
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip />
+      </PieChart>
+    </ChartContainer>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.4.4 折线图组件实现
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ChartContainer } from './ChartContainer';
+import { classNames } from '../utils';
+
+export const LineChartComponent: React.FC<LineChartProps> = ({
+  data,
+  lineDataKeys,
+  lineNames,
+  lineColors,
+  lineType = 'linear',
+  showPoints = false,
+  pointSize = 2,
+  ...props
+}) => {
+  return (
+    <ChartContainer
+      title="折线图示例"
+      description="展示不同类别的销售额趋势"
+      ariaLabel="折线图"
+      className="line-chart"
+    >
+      <LineChart
+        data={data}
+        margin={{ top: 20, right: 30, bottom: 20, left: 20 }}
+        {...props}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="name" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Line type={lineType} dataKey={lineDataKeys[0]} stroke={lineColors[0]} name={lineNames[0]} dot={showPoints} />
+        <Line type={lineType} dataKey={lineDataKeys[1]} stroke={lineColors[1]} name={lineNames[1]} dot={showPoints} />
+        <Line type={lineType} dataKey={lineDataKeys[2]} stroke={lineColors[2]} name={lineNames[2]} dot={showPoints} />
+        <Line type={lineType} dataKey={lineDataKeys[3]} stroke={lineColors[3]} name={lineNames[3]} dot={showPoints} />
+        <Tooltip />
+      </LineChart>
+    </ChartContainer>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+### 11.5 图表可访问性指南 (Chart Accessibility Guidelines)
+
+### 11.6 响应式图表设计 (Responsive Chart Design)
+
+响应式图表设计是确保数据可视化在各种设备和屏幕尺寸上都能有效呈现的关键。本节介绍在不同环境下优化图表体验的策略和技术。
+
+#### 11.6.1 响应式图表的核心原则
+
+1. **流体宽度** - 图表应占据可用容器宽度，而非固定像素宽度
+2. **内容优先** - 优先展示最重要的数据，在小屏幕上简化非核心内容
+3. **渐进式细节** - 随着屏幕尺寸增加逐步显示更多细节
+4. **维持可读性** - 确保标签、图例和数据点在所有尺寸下都清晰可辨
+5. **触摸友好** - 为触摸设备优化交互目标大小和行为
+
+#### 11.6.2 响应式图表容器
+
+使用 Recharts 的 `ResponsiveContainer` 和流体宽度策略实现基础响应式行为：
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { useResizeObserver } from '../hooks/useResizeObserver';
+
+interface ResponsiveChartProps {
+  data: any[];
+  aspectRatio?: number;
+  minHeight?: number;
+  maxHeight?: number;
+  children: React.ReactNode;
+}
+
+export const ResponsiveChartContainer: React.FC<ResponsiveChartProps> = ({
+  data,
+  aspectRatio = 2, // 宽高比，默认2:1
+  minHeight = 200,
+  maxHeight = 500,
+  children,
+}) => {
+  const [containerRef, { width }] = useResizeObserver<HTMLDivElement>();
+  
+  // 基于容器宽度和宽高比计算高度
+  const calculateHeight = () => {
+    if (!width) return minHeight;
+    
+    const calculatedHeight = width / aspectRatio;
+    return Math.max(minHeight, Math.min(calculatedHeight, maxHeight));
+  };
+  
+  const height = calculateHeight();
+  
+  return (
+    <div ref={containerRef} className="w-full responsive-chart-container">
+      <div style={{ height: `${height}px` }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {children}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+// 自定义 useResizeObserver hook 实现
+export const useResizeObserver = <T extends Element>(): [
+  React.RefObject<T>,
+  { width: number | undefined; height: number | undefined }
+] => {
+  const ref = React.useRef<T>(null);
+  const [dimensions, setDimensions] = React.useState<{
+    width: number | undefined;
+    height: number | undefined;
+  }>({
+    width: undefined,
+    height: undefined,
+  });
+
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries?.length) return;
+      
+      const entry = entries[0];
+      const { width, height } = entry.contentRect;
+      setDimensions({ width, height });
+    });
+
+    resizeObserver.observe(element);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [ref]);
+
+  return [ref, dimensions];
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.6.3 断点适应策略
+
+在不同断点下优化图表展示的策略：
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React, { useMemo } from 'react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+interface BreakpointAwareChartProps {
+  data: any[];
+  title: string;
+  // 其他属性...
+}
+
+export const BreakpointAwareChart: React.FC<BreakpointAwareChartProps> = ({
+  data,
+  title,
+  // 其他属性...
+}) => {
+  // 定义常用断点
+  const isMobile = useMediaQuery('(max-width: 639px)');
+  const isTablet = useMediaQuery('(min-width: 640px) and (max-width: 1023px)');
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  
+  // 根据断点调整配置
+  const chartConfig = useMemo(() => {
+    if (isMobile) {
+      return {
+        margin: { top: 20, right: 10, left: 10, bottom: 60 },
+        barSize: 20,
+        xAxisAngle: -45,
+        showYGridLines: false,
+        legendPosition: 'bottom',
+        dataKeys: ['value1'], // 移动设备只显示主要数据系列
+        aspectRatio: 1.2, // 更接近正方形的宽高比
+        labelFormatter: (value: string) => value.substring(0, 3) // 缩短标签
+      };
+    } else if (isTablet) {
+      return {
+        margin: { top: 20, right: 20, left: 20, bottom: 30 },
+        barSize: 25,
+        xAxisAngle: 0,
+        showYGridLines: true,
+        legendPosition: 'bottom',
+        dataKeys: ['value1', 'value2'], // 平板显示两个系列
+        aspectRatio: 1.5,
+        labelFormatter: (value: string) => value
+      };
+    } else {
+      return {
+        margin: { top: 20, right: 30, left: 30, bottom: 20 },
+        barSize: 30,
+        xAxisAngle: 0,
+        showYGridLines: true,
+        legendPosition: 'right',
+        dataKeys: ['value1', 'value2', 'value3'], // 桌面显示所有系列
+        aspectRatio: 2,
+        labelFormatter: (value: string) => value
+      };
+    }
+  }, [isMobile, isTablet, isDesktop]);
+  
+  // 自定义媒体查询钩子
+  function useMediaQuery(query: string): boolean {
+    const [matches, setMatches] = React.useState(false);
+    
+    React.useEffect(() => {
+      const mediaQuery = window.matchMedia(query);
+      setMatches(mediaQuery.matches);
+      
+      const handler = (event: MediaQueryListEvent) => {
+        setMatches(event.matches);
+      };
+      
+      mediaQuery.addEventListener('change', handler);
+      return () => {
+        mediaQuery.removeEventListener('change', handler);
+      };
+    }, [query]);
+    
+    return matches;
+  }
+  
+  // 计算图表高度
+  const chartHeight = useMemo(() => {
+    const baseHeight = isDesktop ? 400 : (isTablet ? 350 : 300);
+    return baseHeight;
+  }, [isDesktop, isTablet]);
+  
+  // 处理过长数据
+  const processedData = useMemo(() => {
+    if (isMobile && data.length > 6) {
+      // 在移动设备上展示不超过6个数据点
+      return data.slice(0, 6);
+    }
+    return data;
+  }, [data, isMobile]);
+  
+  return (
+    <div className="responsive-chart-wrapper">
+      <h3 className="text-lg font-medium mb-2">{title}</h3>
+      
+      <div style={{ height: `${chartHeight}px` }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={processedData}
+            margin={chartConfig.margin}
+          >
+            <CartesianGrid strokeDasharray="3 3" vertical={false} horizontal={chartConfig.showYGridLines} />
+            <XAxis 
+              dataKey="name" 
+              tick={{ fontSize: isMobile ? 10 : 12 }}
+              angle={chartConfig.xAxisAngle}
+              tickFormatter={chartConfig.labelFormatter}
+              textAnchor={isMobile ? 'end' : 'middle'}
+              height={isMobile ? 60 : 30}
+            />
+            <YAxis 
+              tick={{ fontSize: isMobile ? 10 : 12 }}
+              width={isMobile ? 30 : 40}
+            />
+            <Tooltip />
+            <Legend 
+              layout={isDesktop ? 'vertical' : 'horizontal'}
+              verticalAlign={chartConfig.legendPosition === 'bottom' ? 'bottom' : 'middle'}
+              align={chartConfig.legendPosition === 'right' ? 'right' : 'center'}
+              wrapperStyle={isDesktop ? { paddingLeft: '10px' } : { paddingTop: '10px' }}
+            />
+            
+            {/* 根据断点渲染不同数量的数据系列 */}
+            {chartConfig.dataKeys.includes('value1') && (
+              <Bar dataKey="value1" name="销售额" fill="#8884d8" barSize={chartConfig.barSize} />
+            )}
+            
+            {chartConfig.dataKeys.includes('value2') && (
+              <Bar dataKey="value2" name="利润" fill="#82ca9d" barSize={chartConfig.barSize} />
+            )}
+            
+            {chartConfig.dataKeys.includes('value3') && (
+              <Bar dataKey="value3" name="成本" fill="#ffc658" barSize={chartConfig.barSize} />
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      
+      {/* 移动设备上显示查看完整数据的选项 */}
+      {isMobile && data.length > 6 && (
+        <div className="text-center mt-2">
+          <button className="text-sm text-blue-600">查看全部 {data.length} 条数据</button>
+        </div>
+      )}
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.6.4 移动设备优化技术
+
+针对移动设备的触摸交互和小屏幕特别优化策略：
+
+1. **简化数据集**
+   - 在小屏幕上显示关键数据点，避免过度拥挤
+   - 允许用户选择细节级别（如"查看全部"功能）
+
+2. **触摸交互优化**
+   - 增大触摸目标尺寸（至少44×44像素）
+   - 实现触摸友好的工具提示和选择行为
+
+3. **垂直布局重组**
+   - 在移动设备上将图例移至图表下方
+   - 调整标签方向，确保可读性
+
+4. **图表类型转换**
+   - 在小屏幕上使用更适合垂直布局的图表类型
+   - 例如：将多系列条形图转为堆叠条形图
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer } from 'recharts';
+
+interface AdaptiveChartProps {
+  data: any[];
+  chartType?: 'bar' | 'line' | 'pie';
+  // 其他属性...
+}
+
+export const MobileOptimizedChart: React.FC<AdaptiveChartProps> = ({
+  data,
+  chartType = 'bar',
+  // 其他属性...
+}) => {
+  const isMobile = useMediaQuery('(max-width: 639px)');
+  
+  // 为移动设备优化数据
+  const optimizedData = React.useMemo(() => {
+    if (!isMobile || data.length <= 6) return data;
+    
+    // 策略1: 减少数据点，保留最新/最重要的数据
+    // return data.slice(data.length - 6);
+    
+    // 策略2: 数据聚合 - 将早期数据合并为"其他"类别
+    const recentData = data.slice(data.length - 5);
+    const olderData = data.slice(0, data.length - 5);
+    
+    if (olderData.length === 0) return recentData;
+    
+    const aggregated = {
+      name: '早期',
+      value: olderData.reduce((sum, item) => sum + item.value, 0),
+      // 聚合其他数据...
+    };
+    
+    return [aggregated, ...recentData];
+  }, [data, isMobile]);
+  
+  // 根据屏幕尺寸选择最合适的图表类型
+  const responsiveChartType = React.useMemo(() => {
+    if (!isMobile) return chartType;
+    
+    // 在移动设备上，复杂的多系列图表可能转换为更简单的表示
+    if (chartType === 'bar' && data.some(d => d.value2 && d.value3)) {
+      return 'stacked-bar'; // 多系列条形图转为堆叠条形图
+    }
+    
+    if (chartType === 'line' && data.some(d => d.value2 && d.value3 && d.value4)) {
+      return 'reduced-line'; // 多系列折线图减少系列数量
+    }
+    
+    return chartType;
+  }, [chartType, data, isMobile]);
+  
+  // 为触摸设备优化交互区域
+  const getTouchFriendlyProps = () => {
+    if (!isMobile) return {};
+    
+    return {
+      // 增大触摸区域
+      activeDot: { r: 8 }, // 更大的活动点
+      dot: { r: 5 }, // 更大的点
+      barSize: 30, // 更粗的条形
+      // 自定义工具提示，使其更易于触摸
+      tooltip: { 
+        cursor: { strokeWidth: 2 },
+        itemStyle: { padding: '8px' }
+      }
+    };
+  };
+  
+  // 渲染适合当前设备的图表
+  const renderChart = () => {
+    const touchProps = getTouchFriendlyProps();
+    
+    switch (responsiveChartType) {
+      case 'bar':
+        return (
+          <BarChart data={optimizedData} margin={{ top: 20, right: 10, left: isMobile ? 0 : 20, bottom: isMobile ? 60 : 20 }}>
+            {/* 图表组件... */}
+            <Bar dataKey="value" fill="#8884d8" {...touchProps} />
+            {/* 其他 Bar 组件... */}
+          </BarChart>
+        );
+        
+      case 'stacked-bar':
+        return (
+          <BarChart data={optimizedData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
+            {/* 图表组件... */}
+            <Bar dataKey="value" stackId="a" fill="#8884d8" {...touchProps} />
+            <Bar dataKey="value2" stackId="a" fill="#82ca9d" {...touchProps} />
+            <Bar dataKey="value3" stackId="a" fill="#ffc658" {...touchProps} />
+          </BarChart>
+        );
+        
+      case 'line':
+        return (
+          <LineChart data={optimizedData} margin={{ top: 20, right: 10, left: isMobile ? 0 : 20, bottom: isMobile ? 60 : 20 }}>
+            {/* 图表组件... */}
+            <Line type="monotone" dataKey="value" stroke="#8884d8" {...touchProps} />
+            {/* 其他 Line 组件... */}
+          </LineChart>
+        );
+        
+      case 'reduced-line':
+        // 移动设备上只显示最重要的2条线
+        return (
+          <LineChart data={optimizedData} margin={{ top: 20, right: 10, left: 0, bottom: 60 }}>
+            {/* 图表组件... */}
+            <Line type="monotone" dataKey="value" stroke="#8884d8" {...touchProps} />
+            <Line type="monotone" dataKey="value2" stroke="#82ca9d" {...touchProps} />
+            {/* 省略其他线 */}
+          </LineChart>
+        );
+        
+      case 'pie':
+        return (
+          <PieChart margin={{ top: 20, right: 10, left: 10, bottom: 20 }}>
+            <Pie
+              data={optimizedData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={isMobile ? 80 : 100}
+              label={!isMobile || optimizedData.length <= 5}
+              {...touchProps}
+            />
+          </PieChart>
+        );
+        
+      default:
+        return null;
+    }
+  };
+  
+  return (
+    <div className={`mobile-optimized-chart ${isMobile ? 'mobile-view' : ''}`}>
+      <ResponsiveContainer width="100%" height={isMobile ? 300 : 400}>
+        {renderChart()}
+      </ResponsiveContainer>
+      
+      {/* 移动端简化控件 */}
+      {isMobile && (
+        <div className="mobile-controls mt-4">
+          <select className="form-select w-full max-w-xs mx-auto block text-center">
+            <option value="recent">最近数据</option>
+            <option value="all">查看全部</option>
+            <option value="yearly">年度汇总</option>
+          </select>
+        </div>
+      )}
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.6.5 响应式图表最佳实践
+
+1. **性能与数据量**
+   - 在移动设备上减少数据点和计算复杂度
+   - 考虑使用数据聚合或窗口化技术
+   - 避免重型动画和过度交互
+
+2. **渐进式增强**
+   - 从简单的移动布局开始设计
+   - 随着屏幕尺寸增加，逐步添加功能和详细信息
+   - 使用CSS媒体查询和JS检测适应不同设备
+
+3. **组件的响应式行为**
+   - 图例: 小屏幕上移至底部，大屏幕上放置在右侧或顶部
+   - 轴标签: 小屏幕上旋转或截断，大屏幕上完整显示
+   - 工具提示: 小屏幕上简化内容，大屏幕上显示详细信息
+   - 控件: 小屏幕上减少控件数量，确保尺寸适合触摸
+
+4. **测试各种设备**
+   - 在不同尺寸的设备上测试图表表现
+   - 考虑横屏和竖屏模式
+   - 验证触摸交互和手势的有效性
+   - 确保加载性能在各种网络条件下可接受
+
+### 11.7 图表最佳实践 (Chart Best Practices)
+
+有效的数据可视化不仅关乎技术实现，更关乎设计选择和最佳实践的应用。本节提供图表设计和实现的关键最佳实践。
+
+#### 11.7.1 图表类型选择
+
+选择正确的图表类型是有效数据可视化的基础：
+
+| 目标 | 推荐图表类型 | 避免使用 |
+|------|------------|---------|
+| 比较不同类别之间的值 | 柱状图、条形图 | 饼图、雷达图 |
+| 展示趋势和时间变化 | 折线图、面积图 | 散点图、饼图 |
+| 展示部分与整体的关系 | 饼图(≤6类别)、堆叠柱状图、树图 | 多系列折线图 |
+| 显示数据分布 | 直方图、箱线图、小提琴图 | 饼图、雷达图 |
+| 展示相关性 | 散点图、热图 | 柱状图、饼图 |
+| 比较多个变量 | 雷达图(≤8变量)、平行坐标图 | 多个饼图 |
+| 展示地理数据 | 地图图表、热力地图 | 柱状图、折线图 |
+| 展示层次结构 | 树图、旭日图、桑基图 | 饼图、散点图 |
+
+#### 11.7.2 图表设计指南
+
+##### 轴设计
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { 
+  LineChart, Line, BarChart, Bar, 
+  XAxis, YAxis, CartesianGrid, 
+  Tooltip, Legend, ResponsiveContainer,
+  ReferenceLine, Label
+} from 'recharts';
+
+interface AxisBestPracticesProps {
+  data: any[];
+  startFromZero?: boolean;
+  includeAxisLabels?: boolean;
+  showGridLines?: boolean;
+  axisTickCount?: number;
+  // 其他属性...
+}
+
+export const AxisBestPracticesChart: React.FC<AxisBestPracticesProps> = ({
+  data,
+  startFromZero = true,
+  includeAxisLabels = true,
+  showGridLines = true,
+  axisTickCount = 5,
+  // 其他属性...
+}) => {
+  // 计算Y轴域
+  const calculateYDomain = () => {
+    if (startFromZero) {
+      // 从零开始 - 适用于柱状图
+      const maxValue = Math.max(...data.map(d => d.value));
+      return [0, Math.ceil(maxValue * 1.1)]; // 顶部留10%空间
+    } else {
+      // 基于数据范围 - 适用于折线图显示变化
+      const values = data.map(d => d.value);
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const padding = (max - min) * 0.1; // 顶部和底部各留10%空间
+      
+      return [
+        Math.floor(min - padding), 
+        Math.ceil(max + padding)
+      ];
+    }
+  };
+  
+  const yDomain = calculateYDomain();
+  
+  // 格式化大数字
+  const formatLargeNumber = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}M`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(1)}K`;
+    }
+    return value;
+  };
+  
+  // 创建刻度值
+  const createTickValues = (min: number, max: number, count: number) => {
+    const step = (max - min) / (count - 1);
+    return Array.from({ length: count }, (_, i) => Math.round(min + step * i));
+  };
+  
+  const yTickValues = createTickValues(yDomain[0], yDomain[1], axisTickCount);
+  
+  return (
+    <div className="axis-best-practices-chart">
+      <ResponsiveContainer width="100%" height={400}>
+        <LineChart
+          data={data}
+          margin={{ top: 20, right: 30, left: includeAxisLabels ? 60 : 20, bottom: includeAxisLabels ? 40 : 20 }}
+        >
+          {/* 网格线 - 仅使用水平线 */}
+          {showGridLines && (
+            <CartesianGrid 
+              strokeDasharray="3 3" 
+              horizontal={true} 
+              vertical={false} 
+              stroke="#e0e0e0"
+            />
+          )}
+          
+          {/* X轴 - 有含义的标签对齐 */}
+          <XAxis 
+            dataKey="name" 
+            padding={{ left: 20, right: 20 }}
+            tick={{ fill: '#666', fontSize: 12 }}
+            tickMargin={10}
+            axisLine={{ stroke: '#ccc' }}
+            tickLine={{ stroke: '#ccc' }}
+          >
+            {includeAxisLabels && (
+              <Label 
+                value="时间" 
+                position="insideBottomRight" 
+                offset={-10}
+                fill="#666"
+              />
+            )}
+          </XAxis>
+          
+          {/* Y轴 - 从0开始的度量 */}
+          <YAxis 
+            domain={yDomain}
+            ticks={yTickValues}
+            tickFormatter={formatLargeNumber}
+            tick={{ fill: '#666', fontSize: 12 }}
+            tickMargin={10}
+            axisLine={{ stroke: '#ccc' }}
+            tickLine={{ stroke: '#ccc' }}
+          >
+            {includeAxisLabels && (
+              <Label 
+                value="销售额 (元)" 
+                angle={-90}
+                position="insideLeft"
+                style={{ textAnchor: 'middle', fill: '#666' }}
+                offset={-45}
+              />
+            )}
+          </YAxis>
+          
+          {/* 为重要的参考点添加参考线 */}
+          <ReferenceLine 
+            y={data.reduce((sum, item) => sum + item.value, 0) / data.length} 
+            stroke="#ff7300" 
+            strokeDasharray="3 3"
+          >
+            <Label 
+              value="平均值" 
+              position="right" 
+              fill="#ff7300"
+            />
+          </ReferenceLine>
+          
+          <Tooltip formatter={(value: number) => [`${value} 元`, '销售额']} />
+          <Legend />
+          
+          <Line 
+            type="monotone" 
+            dataKey="value" 
+            name="销售额"
+            stroke="#8884d8" 
+            strokeWidth={2}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+      
+      <div className="axis-best-practices mt-4 text-sm text-gray-600">
+        <h4 className="font-medium text-gray-800 mb-2">图表轴的最佳实践:</h4>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>柱状图的Y轴应从0开始，以避免视觉误导</li>
+          <li>使用清晰的轴标签说明所显示的内容</li>
+          <li>格式化大数字 (例如10,000显示为10K)</li>
+          <li>仅使用水平网格线，减少视觉干扰</li>
+          <li>为重要的参考点添加参考线 (如平均值)</li>
+          <li>适当设置轴的范围，留出足够的边距</li>
+          <li>使用一致的刻度间隔</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+##### 色彩使用
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, Legend, ResponsiveContainer 
+} from 'recharts';
+
+interface ColorBestPracticesProps {
+  data: any[];
+  colorScheme?: 'categorical' | 'sequential' | 'diverging';
+  colorBlindFriendly?: boolean;
+  // 其他属性...
+}
+
+export const ColorBestPracticesChart: React.FC<ColorBestPracticesProps> = ({
+  data,
+  colorScheme = 'categorical',
+  colorBlindFriendly = true,
+  // 其他属性...
+}) => {
+  // 定义不同类型的色板
+  const colorPalettes = {
+    // 分类色板 - 适用于不同类别的比较
+    categorical: {
+      default: ['#4e79a7', '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949', '#af7aa1', '#ff9da7'],
+      colorBlindFriendly: ['#4e79a7', '#f28e2c', '#59a14f', '#af7aa1', '#82c0cc', '#8b7da8', '#b2b2b2', '#e15759']
+    },
+    // 序列色板 - 适用于表示从低到高的数量
+    sequential: {
+      default: ['#edf8fb', '#b3cde3', '#8c96c6', '#8856a7', '#810f7c'],
+      colorBlindFriendly: ['#f7fbff', '#d0d1e6', '#a6bddb', '#74a9cf', '#2b8cbe']
+    },
+    // 发散色板 - 适用于表示相对于中点的两个方向
+    diverging: {
+      default: ['#d73027', '#fc8d59', '#fee090', '#e0f3f8', '#91bfdb', '#4575b4'],
+      colorBlindFriendly: ['#d73027', '#fc8d59', '#fee090', '#ffffbf', '#e0f3f8', '#91bfdb', '#4575b4']
+    }
+  };
+  
+  // 选择适当的色板
+  const selectedPalette = colorBlindFriendly 
+    ? colorPalettes[colorScheme].colorBlindFriendly 
+    : colorPalettes[colorScheme].default;
+  
+  // 处理序列和发散色板的特殊情况
+  const getBarColors = () => {
+    if (colorScheme === 'sequential' || colorScheme === 'diverging') {
+      // 对于序列和发散色板，同一个数据系列中的不同条形可以使用不同颜色
+      return data.map((_, index) => {
+        const paletteIndex = Math.floor(index * selectedPalette.length / data.length);
+        return selectedPalette[paletteIndex];
+      });
+    }
+    
+    // 对于分类色板，每个数据系列使用一种颜色
+    return selectedPalette;
+  };
+  
+  const barColors = getBarColors();
+  
+  // 渲染不同类型的图表示例
+  const renderChart = () => {
+    if (colorScheme === 'categorical') {
+      // 分类色板 - 展示不同类别
+      return (
+        <BarChart
+          data={data}
+          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="name" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="value1" name="产品A" fill={barColors[0]} />
+          <Bar dataKey="value2" name="产品B" fill={barColors[1]} />
+          <Bar dataKey="value3" name="产品C" fill={barColors[2]} />
+        </BarChart>
+      );
+    } else if (colorScheme === 'sequential') {
+      // 序列色板 - 展示单一指标从低到高
+      return (
+        <BarChart
+          data={data}
+          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="name" />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="value1" name="销售额">
+            {data.map((entry, index) => (
+              <rect 
+                key={`rect-${index}`} 
+                x={0} 
+                y={0} 
+                width={20} 
+                height={20} 
+                fill={barColors[index % barColors.length]} 
+              />
+            ))}
+          </Bar>
+        </BarChart>
+      );
+    } else {
+      // 发散色板 - 展示相对于基准的正负变化
+      return (
+        <BarChart
+          data={data}
+          margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="name" />
+          <YAxis domain={[-100, 100]} />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey="value1" name="与上年相比变化 (%)">
+            {data.map((entry, index) => {
+              // 使用发散色板，负值使用红色系，正值使用蓝色系
+              const value = entry.value1;
+              const colorIndex = value < 0 
+                ? Math.floor(Math.abs(value) / 100 * (barColors.length / 2))
+                : Math.floor(value / 100 * (barColors.length / 2)) + Math.floor(barColors.length / 2);
+              
+              const safeIndex = Math.min(Math.max(0, colorIndex), barColors.length - 1);
+              
+              return (
+                <rect 
+                  key={`rect-${index}`} 
+                  x={0} 
+                  y={0} 
+                  width={20} 
+                  height={20} 
+                  fill={barColors[safeIndex]} 
+                />
+              );
+            })}
+          </Bar>
+        </BarChart>
+      );
+    }
+  };
+  
+  return (
+    <div className="color-best-practices-chart">
+      <ResponsiveContainer width="100%" height={400}>
+        {renderChart()}
+      </ResponsiveContainer>
+      
+      <div className="color-palette-samples mt-4 flex flex-wrap gap-2 mb-4">
+        {selectedPalette.map((color, index) => (
+          <div key={index} className="color-sample flex flex-col items-center">
+            <div 
+              style={{ 
+                backgroundColor: color, 
+                width: '40px', 
+                height: '20px', 
+                border: '1px solid #ddd' 
+              }} 
+            />
+            <span className="text-xs text-gray-600 mt-1">{color}</span>
+          </div>
+        ))}
+      </div>
+      
+      <div className="color-best-practices mt-2 text-sm text-gray-600">
+        <h4 className="font-medium text-gray-800 mb-2">色彩使用最佳实践:</h4>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>使用目的明确的色彩 - 每种颜色都应有特定含义</li>
+          <li>按数据类型选择合适的色板:
+            <ul className="pl-5 mt-1">
+              <li>分类数据: 使用分类色板</li>
+              <li>序列数据: 使用单色渐变</li>
+              <li>发散数据: 使用双色渐变</li>
+            </ul>
+          </li>
+          <li>考虑色觉缺陷用户 - 使用色盲友好色板</li>
+          <li>确保足够的颜色对比度</li>
+          <li>通常一个图表使用不超过7种颜色</li>
+          <li>使用一致的色彩编码 - 相同概念在不同图表中使用相同颜色</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+#### 11.7.3 数据准备与转换最佳实践
+
+数据可视化前的数据准备和转换对于展现有意义的洞察至关重要：
+
+1. **数据规范化**
+   - 确保不同尺度的数据可比较
+   - 使用百分比、对数尺度或标准化分数转换数据
+
+2. **数据聚合**
+   - 汇总大型数据集以突出关键趋势
+   - 使用平均值、中位数、总和等聚合方法
+   - 提供下钻功能查看详细数据
+
+3. **异常值处理**
+   - 识别和标记异常值
+   - 考虑使用箱线图等突出显示异常值的方式
+   - 在必要时过滤极端值，但要保持数据透明度
+
+4. **缺失值管理**
+   - 明确标识缺失值
+   - 选择合适的策略：跳过、插值或显示为零
+
+5. **分组和分类**
+   - 将连续数据分组为有意义的区间
+   - 为分类数据创建有意义的组
+   - 确保类别顺序有助于故事讲述
+
+#### 11.7.4 常见图表陷阱与如何避免
+
+| 陷阱 | 描述 | 避免方法 |
+|------|------|---------|
+| 截断的轴 | Y轴不从零开始，夸大差异 | 柱状图始终从零开始；折线图注明非零起点 |
+| 过度使用3D | 使用3D效果导致数据失真 | 使用2D图表；避免装饰性3D |
+| 图表过度拥挤 | 在一个图表中显示过多信息 | 拆分为多个简单图表；使用小倍数图 |
+| 误导性比例 | 使用比例不当的图形符号 | 确保视觉元素大小与数值成正比 |
+| 错误的图表类型 | 为数据选择不合适的图表类型 | 基于数据关系和目的选择图表类型 |
+| 不明确的标签 | 缺少或模糊的标题、标签、单位 | 添加清晰的标题、轴标签和单位 |
+| 颜色滥用 | 使用过多或混乱的颜色 | 限制颜色数量；确保颜色有意义 |
+| 忽视上下文 | 没有提供比较基准或参考点 | 添加参考线、历史平均值或行业基准 |
+
+#### 11.7.5 图表性能优化
+
+对于包含大量数据或需要频繁更新的图表，性能优化至关重要：
+
+1. **数据管理**
+   - 限制显示的数据点数量（通常<1000点）
+   - 实现数据窗口化和分页
+   - 针对大型数据集使用服务器端聚合
+
+2. **渲染优化**
+   - 使用canvas而非SVG渲染大量数据点
+   - 避免过度动画和过渡效果
+   - 对不经常变化的部分实施缓存
+
+3. **交互性能**
+   - 防抖动和节流用户交互事件
+   - 延迟加载非关键组件
+   - 实现虚拟滚动显示大型数据表
+
+4. **代码优化**
+   - 避免组件不必要的重渲染
+   - 使用React.memo和useMemo缓存计算结果
+   - 优化事件处理程序，减少内存消耗
+
+#### 11.7.6 图表测试与优化清单
+
+在发布前确保图表质量的检查清单：
+
+1. **功能检查**
+   - [ ] 数据正确性：图表准确反映输入数据
+   - [ ] 交互行为：悬停、点击、过滤等功能正常工作
+   - [ ] 动画效果：动画流畅且有意义
+   - [ ] 响应性：在各种设备和屏幕尺寸上正确显示
+
+2. **可用性检查**
+   - [ ] 直观易懂：外行用户能理解图表传达的信息
+   - [ ] 标签清晰：所有文本清晰可读
+   - [ ] 层次明确：重要数据得到视觉强调
+   - [ ] 符合预期：图表行为符合用户期望
+
+3. **性能检查**
+   - [ ] 加载时间：图表加载时间可接受
+   - [ ] 交互响应：交互没有明显延迟
+   - [ ] 内存使用：不导致明显的内存泄漏
+   - [ ] 大数据集：能有效处理大量数据
+
+4. **可访问性检查**
+   - [ ] 屏幕阅读器：提供适当的替代文本和结构
+   - [ ] 键盘导航：可以通过键盘访问所有功能
+   - [ ] 颜色对比：符合WCAG标准的颜色对比度
+   - [ ] 缩放行为：能够适应文本缩放和高对比度模式
+
+通过遵循这些最佳实践和避免常见陷阱，可以创建既美观又能有效传达数据故事的图表。记住，好的数据可视化不仅仅是技术准确，更是有效沟通的工具。
