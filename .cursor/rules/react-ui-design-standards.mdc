@@ -1,0 +1,940 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# React UI Design Standards
+
+## Introduction
+
+本文档定义了使用 React + TypeScript + Tailwind CSS 的 UI 设计标准。遵循这些指南可确保项目中的设计和实现保持一致性。
+
+## 目录
+
+- [布局系统](mdc:#布局系统)
+- [色彩系统](mdc:#色彩系统)
+- [排版系统](mdc:#排版系统)
+- [按钮组件](mdc:#按钮组件)
+- [表单组件](mdc:#表单组件)
+- [卡片组件](mdc:#卡片组件)
+- [图标系统](mdc:#图标系统)
+- [导航组件](mdc:#导航组件)
+- [反馈组件](mdc:#反馈组件)
+- [日期组件](mdc:#日期组件)
+
+## 布局系统
+
+### 概述
+
+布局系统是设计系统的基础，它提供了组织和排列页面元素的结构。
+
+### 网格系统 (Grid)
+
+网格系统提供了一种基于列的结构，帮助创建对齐的布局。
+
+#### 网格系统特点
+
+- 12列系统：基于12列的网格，便于划分不同比例的内容区域
+- 响应式列数：在不同断点可以定义不同的列数
+- 间隙控制：可自定义列间距和行间距
+- 自动均分：支持自动均分列宽
+- 显式定位：支持通过起始位置和跨度控制元素位置
+
+#### 网格系统接口
+
+```typescript
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+interface GridProps {
+  columns?: number | { [key: string]: number }; // 响应式列数
+  gap?: number | string | { [key: string]: number | string };
+  rowGap?: number | string;
+  columnGap?: number | string;
+  as?: React.ElementType;
+  autoFlow?: 'row' | 'column' | 'dense' | 'row dense' | 'column dense';
+  className?: string;
+  children: React.ReactNode;
+}
+
+interface GridItemProps {
+  colSpan?: number | { [key: string]: number };
+  rowSpan?: number | { [key: string]: number };
+  colStart?: number | { [key: string]: number };
+  rowStart?: number | { [key: string]: number };
+  as?: React.ElementType;
+  className?: string;
+  children: React.ReactNode;
+}
+// [AI-BLOCK-END]
+```
+
+#### 网格系统实现示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+export const Grid: React.FC<GridProps> = ({
+  columns = 12,
+  gap,
+  rowGap,
+  columnGap,
+  as: Component = 'div',
+  autoFlow = 'row',
+  className,
+  children,
+}) => {
+  // 处理响应式列数
+  const getColumnsClass = () => {
+    if (typeof columns === 'number') {
+      return `grid-cols-${columns}`;
+    }
+    
+    // 响应式对象，如 { sm: 2, md: 3, lg: 4 }
+    return Object.entries(columns)
+      .map(([breakpoint, value]) => {
+        return breakpoint === 'xs' 
+          ? `grid-cols-${value}` 
+          : `${breakpoint}:grid-cols-${value}`;
+      })
+      .join(' ');
+  };
+  
+  // 处理间隙
+  const getGapClass = () => {
+    if (!gap) return '';
+    
+    if (typeof gap === 'number' || typeof gap === 'string') {
+      return `gap-${gap}`;
+    }
+    
+    // 响应式对象
+    return Object.entries(gap)
+      .map(([breakpoint, value]) => {
+        return breakpoint === 'xs' 
+          ? `gap-${value}` 
+          : `${breakpoint}:gap-${value}`;
+      })
+      .join(' ');
+  };
+  
+  return (
+    <Component
+      className={classNames(
+        'grid',
+        getColumnsClass(),
+        getGapClass(),
+        rowGap ? `gap-y-${rowGap}` : '',
+        columnGap ? `gap-x-${columnGap}` : '',
+        `grid-flow-${autoFlow.replace(' ', '-')}`,
+        className
+      )}
+    >
+      {children}
+    </Component>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+### 容器组件
+
+提供不同尺寸的内容容器。
+
+#### 容器接口
+
+```typescript
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+interface ContainerProps {
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  padding?: boolean;
+  centered?: boolean;
+  as?: React.ElementType;
+  className?: string;
+  children: React.ReactNode;
+}
+// [AI-BLOCK-END]
+```
+
+#### 容器实现示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+export const Container: React.FC<ContainerProps> = ({
+  size = 'lg',
+  padding = true,
+  centered = true,
+  as: Component = 'div',
+  className,
+  children,
+}) => {
+  const sizeClasses = {
+    sm: 'max-w-screen-sm',
+    md: 'max-w-screen-md',
+    lg: 'max-w-screen-lg',
+    xl: 'max-w-screen-xl',
+    full: 'max-w-full',
+  };
+  
+  return (
+    <Component
+      className={classNames(
+        sizeClasses[size],
+        padding ? 'px-4 sm:px-6 lg:px-8' : '',
+        centered ? 'mx-auto' : '',
+        className
+      )}
+    >
+      {children}
+    </Component>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 色彩系统
+
+### 概述
+
+色彩系统是整个设计系统的基础，提供一致的视觉语言和品牌识别。
+
+### 主色系统
+
+主色代表品牌的核心色彩，用于主要界面元素、操作按钮和强调区域。
+
+| 色彩名称 | 色值 | Tailwind类 | 使用场景 |
+|---------|------|------------|---------|
+| 主色-600 | #0284c7 | bg-primary-600 text-primary-600 | 主要按钮、强调元素 |
+| 主色-700 | #0369a1 | bg-primary-700 text-primary-700 | 主按钮hover状态 |
+| 主色-800 | #075985 | bg-primary-800 text-primary-800 | 按钮active状态 |
+
+### Tailwind 配置示例
+
+```javascript
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          200: '#bae6fd',
+          300: '#7dd3fc',
+          400: '#38bdf8',
+          500: '#0ea5e9',
+          600: '#0284c7',
+          700: '#0369a1',
+          800: '#075985',
+          900: '#0c4a6e',
+          950: '#082f49',
+        },
+        secondary: {
+          // 辅助色系统...
+        },
+        // 其他颜色系统...
+      }
+    }
+  }
+};
+// [AI-BLOCK-END]
+```
+
+## 排版系统
+
+### 概述
+
+排版系统定义了文本的视觉层次和风格，保持阅读体验的一致性。
+
+### 字体家族
+
+使用无衬线字体作为主要字体，确保在各平台的可读性：
+
+```css
+/* [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet */
+font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+/* [AI-BLOCK-END] */
+```
+
+### 字体大小和行高
+
+| 类名 | 字体大小 | 行高 | 使用场景 |
+|------|---------|------|---------|
+| text-xs | 0.75rem (12px) | 1rem (16px) | 次要文本、标签、徽章 |
+| text-sm | 0.875rem (14px) | 1.25rem (20px) | 常规文本、按钮文本 |
+| text-base | 1rem (16px) | 1.5rem (24px) | 正文内容 |
+| text-lg | 1.125rem (18px) | 1.75rem (28px) | 小标题、强调文本 |
+| text-xl | 1.25rem (20px) | 1.75rem (28px) | 小节标题 |
+| text-2xl | 1.5rem (24px) | 2rem (32px) | 次级标题 |
+| text-3xl | 1.875rem (30px) | 2.25rem (36px) | 主标题 |
+| text-4xl | 2.25rem (36px) | 2.5rem (40px) | 大型标题 |
+
+### 标题组件示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+interface HeadingProps {
+  level: HeadingLevel;
+  children: React.ReactNode;
+  className?: string;
+}
+
+export const Heading: React.FC<HeadingProps> = ({ 
+  level, 
+  children, 
+  className 
+}) => {
+  const Tag = `h${level}` as keyof JSX.IntrinsicElements;
+  
+  const sizeClasses = {
+    1: 'text-3xl font-bold text-gray-900',
+    2: 'text-2xl font-bold text-gray-800',
+    3: 'text-xl font-semibold text-gray-800',
+    4: 'text-lg font-semibold text-gray-700',
+    5: 'text-base font-medium text-gray-700',
+    6: 'text-sm font-medium text-gray-700',
+  };
+  
+  return (
+    <Tag className={classNames(sizeClasses[level], className)}>
+      {children}
+    </Tag>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 按钮组件
+
+### 概述
+
+按钮是用户界面中最常见和最重要的交互元素之一，它们表明用户可以采取的行动并直接影响用户体验。
+
+### 按钮变体
+
+按钮变体根据其视觉重要性和应用场景进行分类，确保界面中的视觉层次一致。
+
+#### 主要按钮 (Primary)
+
+用于页面中最主要或最推荐的操作，如"提交"、"保存"、"确认"等。
+
+- 外观：填充背景色、白色文字
+- 使用场景：表单提交、主要操作、引导流程中的下一步
+- Tailwind类: `bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white focus:ring-2 focus:ring-primary-500 focus:ring-offset-2`
+
+#### 次要按钮 (Secondary)
+
+用于支持主要操作但不需要特别强调的操作，如"取消"、"上一步"等。
+
+- 外观：灰色填充背景、白色文字
+- 使用场景：次要操作、辅助功能
+
+### 按钮尺寸
+
+提供多种尺寸适应不同UI场景需求。
+
+| 尺寸 | 高度 | 内边距 | 字体大小 | Tailwind类 |
+|------|------|--------|---------|-----------|
+| 小型 (SM) | 32px | px-3 py-2 | 14px | text-sm px-3 py-2 |
+| 中型 (MD) - 默认 | 40px | px-4 py-2 | 14px | text-sm px-4 py-2 |
+| 大型 (LG) | 48px | px-6 py-3 | 16px | text-base px-6 py-3 |
+
+### 按钮状态
+
+- 默认状态
+- 悬停状态 (Hover)
+- 激活状态 (Active/Pressed)
+- 聚焦状态 (Focus)
+- 禁用状态 (Disabled)
+- 加载状态 (Loading)
+
+### 按钮接口
+
+```typescript
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'success';
+type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  /** 按钮变体类型 */
+  variant?: ButtonVariant;
+  /** 按钮尺寸 */
+  size?: ButtonSize;
+  /** 是否处于加载状态 */
+  isLoading?: boolean;
+  /** 左侧图标 */
+  leftIcon?: React.ReactNode;
+  /** 右侧图标 */
+  rightIcon?: React.ReactNode;
+  /** 是否铺满容器宽度 */
+  fullWidth?: boolean;
+  /** 自定义类名 */
+  className?: string;
+  /** 子元素 */
+  children: React.ReactNode;
+}
+// [AI-BLOCK-END]
+```
+
+### 按钮实现示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+export const Button: React.FC<ButtonProps> = ({ 
+  children,
+  variant = 'primary',
+  size = 'md',
+  isLoading = false,
+  leftIcon,
+  rightIcon,
+  fullWidth = false,
+  disabled,
+  className,
+  ...props
+}) => {
+  // 基础按钮类
+  const baseClasses = 'inline-flex items-center justify-center font-medium rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  
+  // 尺寸类
+  const sizeClasses = {
+    xs: 'text-xs px-2.5 py-1.5 rounded',
+    sm: 'text-sm px-3 py-2 rounded',
+    md: 'text-sm px-4 py-2 rounded-md',
+    lg: 'text-base px-6 py-3 rounded-md',
+  };
+  
+  // 变体类
+  const variantClasses = {
+    primary: 'bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 focus:ring-primary-500 disabled:bg-primary-300',
+    secondary: 'bg-gray-600 text-white hover:bg-gray-700 active:bg-gray-800 focus:ring-gray-500 disabled:bg-gray-300',
+    outline: 'border border-gray-300 text-gray-700 bg-transparent hover:bg-gray-50 active:bg-gray-100 focus:ring-gray-500 disabled:text-gray-300 disabled:border-gray-200',
+    ghost: 'text-gray-700 bg-transparent hover:bg-gray-100 active:bg-gray-200 focus:ring-gray-500 disabled:text-gray-300',
+    destructive: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus:ring-red-500 disabled:bg-red-300',
+    success: 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800 focus:ring-green-500 disabled:bg-green-300',
+  };
+  
+  // 宽度类
+  const widthClass = fullWidth ? 'w-full' : '';
+  
+  // 加载和禁用状态
+  const isDisabled = disabled || isLoading;
+  
+  return (
+    <button
+      className={classNames(
+        baseClasses,
+        sizeClasses[size],
+        variantClasses[variant],
+        widthClass,
+        isLoading && 'opacity-90 cursor-wait',
+        isDisabled && 'cursor-not-allowed opacity-60',
+        className
+      )}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+      {...props}
+    >
+      {isLoading && (
+        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-white" />
+      )}
+      {!isLoading && leftIcon && (
+        <span className="mr-2">{leftIcon}</span>
+      )}
+      {children}
+      {!isLoading && rightIcon && (
+        <span className="ml-2">{rightIcon}</span>
+      )}
+    </button>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 表单组件
+
+### 概述
+
+表单组件用于收集、验证和提交用户输入的数据。良好的表单设计可以提高用户体验并减少输入错误。
+
+### 输入框
+
+基本的文本输入组件。
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+  error?: string;
+  helperText?: string;
+}
+
+export const Input: React.FC<InputProps> = ({
+  label,
+  error,
+  helperText,
+  className,
+  id,
+  ...props
+}) => {
+  const inputId = id || `input-${Math.random().toString(36).substring(2, 9)}`;
+  
+  return (
+    <div className="w-full">
+      {label && (
+        <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        </label>
+      )}
+      <input
+        id={inputId}
+        className={classNames(
+          'w-full px-3 py-2 border rounded-md shadow-sm',
+          'focus:outline-none focus:ring-primary-500 focus:border-primary-500',
+          error ? 'border-red-300' : 'border-gray-300',
+          className
+        )}
+        {...props}
+      />
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {helperText && !error && <p className="mt-1 text-sm text-gray-500">{helperText}</p>}
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+### 选择框
+
+用于从预定义选项中选择一个或多个值。
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
+  label?: string;
+  options: Option[];
+  error?: string;
+  helperText?: string;
+  onChange?: (value: string) => void;
+}
+
+export const Select: React.FC<SelectProps> = ({
+  label,
+  options,
+  error,
+  helperText,
+  onChange,
+  className,
+  id,
+  ...props
+}) => {
+  const selectId = id || `select-${Math.random().toString(36).substring(2, 9)}`;
+  
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onChange?.(e.target.value);
+  };
+  
+  return (
+    <div className="w-full">
+      {label && (
+        <label htmlFor={selectId} className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        </label>
+      )}
+      <select
+        id={selectId}
+        className={classNames(
+          'w-full px-3 py-2 border rounded-md shadow-sm',
+          'focus:outline-none focus:ring-primary-500 focus:border-primary-500',
+          error ? 'border-red-300' : 'border-gray-300',
+          className
+        )}
+        onChange={handleChange}
+        {...props}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {helperText && !error && <p className="mt-1 text-sm text-gray-500">{helperText}</p>}
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 卡片组件
+
+### 概述
+
+卡片组件用于在统一的容器中展示相关内容和操作，为特定主题的信息提供可视化边界。
+
+### 卡片接口
+
+```typescript
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+interface CardProps {
+  title?: React.ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  padding?: boolean | 'sm' | 'md' | 'lg';
+  bordered?: boolean;
+  shadowed?: boolean;
+  className?: string;
+}
+// [AI-BLOCK-END]
+```
+
+### 卡片实现示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+export const Card: React.FC<CardProps> = ({
+  title,
+  children,
+  footer,
+  padding = 'md',
+  bordered = true,
+  shadowed = true,
+  className,
+}) => {
+  const getPaddingClass = () => {
+    if (padding === false) return '';
+    if (padding === true || padding === 'md') return 'p-4';
+    if (padding === 'sm') return 'p-3';
+    if (padding === 'lg') return 'p-6';
+    return '';
+  };
+  
+  return (
+    <div
+      className={classNames(
+        'rounded-lg overflow-hidden bg-white',
+        bordered && 'border border-gray-200',
+        shadowed && 'shadow-sm',
+        className
+      )}
+    >
+      {title && (
+        <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+          {typeof title === 'string' ? (
+            <h3 className="text-sm font-medium text-gray-700">{title}</h3>
+          ) : (
+            title
+          )}
+        </div>
+      )}
+      <div className={getPaddingClass()}>
+        {children}
+      </div>
+      {footer && (
+        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 图标系统
+
+### 概述
+
+图标系统提供一致的视觉语言，帮助用户识别常见操作和概念，增强界面的可用性和美观性。
+
+### 图标尺寸
+
+| 尺寸名称 | 尺寸值 | Tailwind类 | 使用场景 |
+|---------|-------|------------|---------|
+| 超小型 (XS) | 16px | w-4 h-4 | 紧凑型界面、辅助元素、表格操作 |
+| 小型 (SM) | 20px | w-5 h-5 | 按钮图标、表单元素、导航项 |
+| 中型 (MD) | 24px | w-6 h-6 | 主要界面元素、菜单项 |
+| 大型 (LG) | 32px | w-8 h-8 | 特色界面元素、状态指示 |
+| 超大型 (XL) | 40px | w-10 h-10 | 强调性元素、空状态插图 |
+
+### 图标组件示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+
+interface IconProps {
+  /** 图标名称 */
+  name: string;
+  /** 图标尺寸 */
+  size?: IconSize;
+  /** 颜色类名 */
+  color?: string;
+  /** 自定义类名 */
+  className?: string;
+  /** 额外属性 */
+  [key: string]: any;
+}
+
+export const Icon: React.FC<IconProps> = ({
+  name,
+  size = 'md',
+  color = 'text-gray-500',
+  className,
+  ...props
+}) => {
+  const sizeClasses = {
+    xs: 'w-4 h-4',
+    sm: 'w-5 h-5',
+    md: 'w-6 h-6',
+    lg: 'w-8 h-8',
+    xl: 'w-10 h-10',
+  };
+  
+  return (
+    <svg
+      className={classNames(sizeClasses[size], color, className)}
+      aria-hidden="true"
+      {...props}
+    >
+      <use href={`/assets/icons.svg#${name}`} />
+    </svg>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 导航组件
+
+### 概述
+
+导航组件帮助用户在应用程序中浏览和定位，提供清晰的路径和结构指引。
+
+### 导航栏组件示例
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon?: React.ReactNode;
+  isActive?: boolean;
+}
+
+interface NavbarProps {
+  items: NavItem[];
+  logo?: React.ReactNode;
+  className?: string;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  items,
+  logo,
+  className,
+}) => {
+  return (
+    <nav className={classNames(
+      'bg-white shadow',
+      className
+    )}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            {logo && (
+              <div className="flex-shrink-0 flex items-center">
+                {logo}
+              </div>
+            )}
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              {items.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={classNames(
+                    'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
+                    item.isActive
+                      ? 'border-primary-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                  )}
+                >
+                  {item.icon && <span className="mr-2">{item.icon}</span>}
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 反馈组件
+
+### 概述
+
+反馈组件用于向用户提供操作结果的信息和状态，包括成功、错误、警告和信息提示。
+
+### 警告提示组件
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import { classNames } from '../utils';
+
+type AlertVariant = 'info' | 'success' | 'warning' | 'error';
+
+interface AlertProps {
+  variant?: AlertVariant;
+  title?: string;
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  onClose?: () => void;
+  className?: string;
+}
+
+export const Alert: React.FC<AlertProps> = ({
+  variant = 'info',
+  title,
+  children,
+  icon,
+  onClose,
+  className,
+}) => {
+  const variantClasses = {
+    info: 'bg-blue-50 border-blue-200 text-blue-800',
+    success: 'bg-green-50 border-green-200 text-green-800',
+    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    error: 'bg-red-50 border-red-200 text-red-800',
+  };
+  
+  return (
+    <div
+      className={classNames(
+        'p-4 border-l-4 rounded-md',
+        variantClasses[variant],
+        className
+      )}
+      role="alert"
+    >
+      <div className="flex">
+        {icon && <div className="flex-shrink-0 mr-3">{icon}</div>}
+        <div className="flex-1">
+          {title && <h3 className="text-sm font-medium mb-1">{title}</h3>}
+          <div className="text-sm">{children}</div>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            className="ml-auto -mx-1.5 -my-1.5 rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
+            onClick={onClose}
+          >
+            <span className="sr-only">关闭</span>
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```
+
+## 日期组件
+
+### 概述
+
+日期组件用于显示和选择日期、时间或日期范围，在表单、预订系统和日程安排等场景中使用。
+
+### 日期选择器
+
+```tsx
+// [AI-BLOCK-START] - 生成工具: Claude 3.7 Sonnet
+import React from 'react';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import { classNames } from '../utils';
+
+interface DatePickerProps {
+  label?: string;
+  selectedDate: Date | null;
+  onChange: (date: Date | null) => void;
+  placeholder?: string;
+  error?: string;
+  className?: string;
+  disabled?: boolean;
+}
+
+export const CustomDatePicker: React.FC<DatePickerProps> = ({
+  label,
+  selectedDate,
+  onChange,
+  placeholder = 'Select date',
+  error,
+  className,
+  disabled = false,
+}) => {
+  return (
+    <div className="w-full">
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {label}
+        </label>
+      )}
+      <div className={classNames(
+        'relative rounded-md shadow-sm',
+        disabled && 'opacity-60 cursor-not-allowed'
+      )}>
+        <DatePicker
+          selected={selectedDate}
+          onChange={onChange}
+          placeholderText={placeholder}
+          disabled={disabled}
+          className={classNames(
+            'w-full px-3 py-2 border rounded-md shadow-sm',
+            'focus:outline-none focus:ring-primary-500 focus:border-primary-500',
+            error ? 'border-red-300' : 'border-gray-300',
+            className
+          )}
+          dateFormat="MMMM d, yyyy"
+        />
+      </div>
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+    </div>
+  );
+};
+// [AI-BLOCK-END]
+```

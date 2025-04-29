@@ -1,3 +1,12 @@
 demo
 go-demo/
 java-demo
+node_modules
+.aider*
+.idea
+.vscode
+prompt-backend
+prompt-front
+.DS_Store
+main
+**/main
