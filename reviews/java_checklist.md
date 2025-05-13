@@ -365,6 +365,399 @@ public class GracefulShutdownConfig {
 }
 ```
 
+## 11. 中间件技术检查点
+
+### 11.1 Tomcat配置
+- [严重] 线程池配置是否合理（核心线程数、最大线程数、队列容量）
+- [严重] 连接器配置是否优化（端口、协议、超时设置）
+- [重要] 内存配置是否合理（JVM参数调优）
+- [重要] 日志配置是否完善（级别、轮转策略、日志位置）
+- [重要] 安全配置是否到位（禁用不必要的HTTP方法、删除默认应用）
+- [次要] 是否配置了优雅停机策略
+
+```java
+// 示例：Tomcat线程池配置
+@Bean
+public ServletWebServerFactory servletContainer() {
+    TomcatServletWebServerFactory tomcat = new TomcatServletWebServerFactory();
+    tomcat.addConnectorCustomizers(connector -> {
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) connector.getProtocolHandler().getExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(200);
+        executor.setQueueCapacity(100);
+    });
+    return tomcat;
+}
+
+// 示例：Tomcat连接器配置
+@Bean
+public WebServerFactoryCustomizer<TomcatServletWebServerFactory> tomcatCustomizer() {
+    return (factory) -> {
+        factory.addConnectorCustomizers(connector -> {
+            connector.setPort(8080);
+            connector.setProperty("connectionTimeout", "20000");
+            connector.setProperty("relaxedQueryChars", "[]|{}^&#x5c;&#x60;&quot;&lt;&gt;");
+            connector.setProperty("maxKeepAliveRequests", "100");
+            connector.setProperty("keepAliveTimeout", "60000");
+        });
+    };
+}
+```
+
+### 11.2 Spring Boot配置
+- [严重] 是否理解并正确使用自动配置机制
+- [严重] Profile配置是否合理（环境隔离、配置分离）
+- [重要] 是否实现了自定义健康检查指标
+- [重要] Actuator端点是否安全配置
+- [重要] 是否实现了配置外部化（配置服务器整合）
+- [次要] 是否合理使用Spring缓存抽象
+
+```java
+// 示例：Spring Boot Profile和健康检查配置
+@Configuration
+@Profile("production")
+public class ProductionConfig {
+    
+    @Bean
+    public HealthIndicator databaseHealthIndicator(DataSource dataSource) {
+        return new DataSourceHealthIndicator(dataSource, "SELECT 1 FROM DUAL");
+    }
+    
+    @Bean
+    public HealthIndicator redisHealthIndicator(RedisConnectionFactory redisConnectionFactory) {
+        return new RedisHealthIndicator(redisConnectionFactory);
+    }
+}
+
+// 示例：Actuator端点安全配置
+@Configuration
+public class ActuatorSecurityConfig extends WebSecurityConfigurerAdapter {
+    
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.requestMatcher(EndpointRequest.toAnyEndpoint())
+            .authorizeRequests()
+            .requestMatchers(EndpointRequest.to("health", "info")).permitAll()
+            .anyRequest().hasRole("ACTUATOR_ADMIN")
+            .and()
+            .httpBasic();
+    }
+}
+```
+
+### 11.3 Redis配置
+- [严重] 连接池配置是否合理（连接数、超时设置）
+- [严重] 序列化方式是否安全高效（JSON/MessagePack/自定义）
+- [重要] 是否设置了合理的缓存过期策略
+- [重要] 是否实现了缓存穿透/击穿/雪崩防护措施
+- [重要] 是否监控Redis性能指标（命中率、延迟、内存使用）
+- [次要] 集群配置是否合理（主从复制、哨兵模式、集群模式）
+
+```java
+// 示例：Redis连接池和序列化配置
+@Bean
+public RedisConnectionFactory redisConnectionFactory() {
+    LettuceConnectionFactory factory = new LettuceConnectionFactory();
+    factory.setHostName("redis-host");
+    factory.setPort(6379);
+    factory.setPassword("password");
+    factory.setDatabase(0);
+    
+    // 连接池配置
+    LettucePoolingClientConfiguration.builder()
+        .commandTimeout(Duration.ofMillis(500))
+        .poolConfig(new GenericObjectPoolConfig<>() {{
+            setMaxTotal(50);
+            setMaxIdle(20);
+            setMinIdle(5);
+            setTestOnBorrow(true);
+            setTestOnReturn(true);
+            setTestWhileIdle(true);
+        }})
+        .build();
+    
+    return factory;
+}
+
+@Bean
+public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+    RedisTemplate<String, Object> template = new RedisTemplate<>();
+    template.setConnectionFactory(connectionFactory);
+    
+    // 使用JSON序列化
+    Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
+    template.setKeySerializer(new StringRedisSerializer());
+    template.setValueSerializer(serializer);
+    template.setHashKeySerializer(new StringRedisSerializer());
+    template.setHashValueSerializer(serializer);
+    
+    return template;
+}
+
+// 示例：缓存击穿防护 - 使用分布式锁
+public String getDataWithLock(String key) {
+    String value = redisTemplate.opsForValue().get(key);
+    if (value == null) {
+        String lockKey = "lock:" + key;
+        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", Duration.ofSeconds(10));
+        if (Boolean.TRUE.equals(acquired)) {
+            try {
+                // 双重检查
+                value = redisTemplate.opsForValue().get(key);
+                if (value == null) {
+                    // 从数据库获取数据
+                    value = loadFromDb(key);
+                    redisTemplate.opsForValue().set(key, value, Duration.ofHours(1));
+                }
+            } finally {
+                redisTemplate.delete(lockKey);
+            }
+        } else {
+            // 等待一会重试
+            Thread.sleep(50);
+            return getDataWithLock(key);
+        }
+    }
+    return value;
+}
+```
+
+### 11.4 Kafka配置
+- [严重] 生产者配置是否保证可靠性（幂等性、确认机制）
+- [严重] 消费者配置是否合理（消费组、偏移量管理、并行处理）
+- [重要] Topic设计是否合理（分区、副本因子、保留策略）
+- [重要] 是否实现了完善的重试与错误处理机制（死信队列）
+- [重要] 是否配置了消息监控指标（延迟、生产/消费速率）
+- [次要] 序列化和反序列化方式是否高效（Avro/Protobuf/JSON）
+
+```java
+// 示例：Kafka生产者配置
+@Bean
+public ProducerFactory<String, MyEvent> producerFactory() {
+    Map<String, Object> props = new HashMap<>();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+    
+    // 可靠性配置
+    props.put(ProducerConfig.ACKS_CONFIG, "all");
+    props.put(ProducerConfig.RETRIES_CONFIG, 3);
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+    
+    // 性能配置
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);
+    props.put(ProducerConfig.LINGER_MS_CONFIG, 10);
+    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy");
+    
+    return new DefaultKafkaProducerFactory<>(props);
+}
+
+// 示例：Kafka消费者配置
+@Bean
+public ConsumerFactory<String, MyEvent> consumerFactory() {
+    Map<String, Object> props = new HashMap<>();
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka:9092");
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, "my-consumer-group");
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+    
+    // 可靠性配置
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 500);
+    props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000);
+    
+    return new DefaultKafkaConsumerFactory<>(props);
+}
+
+// 示例：死信队列与重试配置
+@Bean
+public KafkaListenerContainerFactory<?> kafkaListenerContainerFactory(
+        ConsumerFactory<String, MyEvent> consumerFactory) {
+    ConcurrentKafkaListenerContainerFactory<String, MyEvent> factory = 
+        new ConcurrentKafkaListenerContainerFactory<>();
+    factory.setConsumerFactory(consumerFactory);
+    factory.setConcurrency(3);
+    factory.getContainerProperties().setAckMode(AckMode.MANUAL_IMMEDIATE);
+    
+    // 设置重试与死信
+    factory.setErrorHandler(new SeekToCurrentErrorHandler(
+        new DeadLetterPublishingRecoverer(kafkaTemplate, 
+            (r, e) -> new TopicPartition("my-topic.DLT", r.partition())),
+        new FixedBackOff(1000L, 3))); // 重试3次，间隔1秒
+    
+    return factory;
+}
+```
+
+### 11.5 Elasticsearch配置
+- [严重] 索引设计是否合理（映射、分析器、字段类型）
+- [严重] 查询是否优化（过滤器、聚合、分页）
+- [重要] 连接池配置是否合理（连接数、超时设置）
+- [重要] 是否使用批量操作提升性能
+- [重要] 分片与副本策略是否合理（分片数量、副本数）
+- [次要] 是否监控ES集群状态和性能
+
+```java
+// 示例：Elasticsearch客户端配置
+@Bean
+public RestHighLevelClient elasticsearchClient() {
+    ClientConfiguration clientConfiguration = ClientConfiguration.builder()
+        .connectedTo("elasticsearch:9200")
+        .withConnectTimeout(Duration.ofSeconds(5))
+        .withSocketTimeout(Duration.ofSeconds(30))
+        .withBasicAuth("username", "password")
+        .build();
+    
+    return RestClients.create(clientConfiguration).rest();
+}
+
+// 示例：索引创建与映射设置
+public void createProductIndex() {
+    try {
+        CreateIndexRequest request = new CreateIndexRequest("products");
+        
+        // 设置分片和副本
+        request.settings(Settings.builder()
+            .put("index.number_of_shards", 3)
+            .put("index.number_of_replicas", 2)
+            .put("index.refresh_interval", "1s")
+        );
+        
+        // 定义映射
+        Map<String, Object> properties = new HashMap<>();
+        
+        Map<String, Object> nameField = new HashMap<>();
+        nameField.put("type", "text");
+        nameField.put("analyzer", "ik_max_word");
+        nameField.put("search_analyzer", "ik_smart");
+        
+        Map<String, Object> priceField = new HashMap<>();
+        priceField.put("type", "double");
+        
+        Map<String, Object> createTimeField = new HashMap<>();
+        createTimeField.put("type", "date");
+        createTimeField.put("format", "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis");
+        
+        properties.put("name", nameField);
+        properties.put("price", priceField);
+        properties.put("createTime", createTimeField);
+        
+        Map<String, Object> mapping = new HashMap<>();
+        mapping.put("properties", properties);
+        
+        request.mapping(mapping);
+        
+        elasticsearchClient().indices().create(request, RequestOptions.DEFAULT);
+    } catch (IOException e) {
+        throw new RuntimeException("Failed to create product index", e);
+    }
+}
+
+// 示例：批量操作
+public void bulkIndexProducts(List<Product> products) {
+    BulkRequest bulkRequest = new BulkRequest();
+    for (Product product : products) {
+        IndexRequest indexRequest = new IndexRequest("products")
+            .id(product.getId().toString())
+            .source(convertProductToMap(product));
+        bulkRequest.add(indexRequest);
+    }
+    
+    try {
+        BulkResponse bulkResponse = elasticsearchClient().bulk(bulkRequest, RequestOptions.DEFAULT);
+        if (bulkResponse.hasFailures()) {
+            log.error("Bulk indexing has failures: {}", bulkResponse.buildFailureMessage());
+        }
+    } catch (IOException e) {
+        throw new RuntimeException("Failed to bulk index products", e);
+    }
+}
+```
+
+### 11.6 MySQL配置
+- [严重] 连接池配置是否合理（最大连接数、超时设置）
+- [严重] 事务管理是否正确（传播属性、隔离级别、超时）
+- [重要] 索引设计是否优化（主键、索引选择、联合索引顺序）
+- [重要] 是否合理使用批量操作提升性能
+- [重要] 是否配置了慢查询监控
+- [次要] 字段类型选择是否合理（数据类型、长度、字符集）
+
+```java
+// 示例：MySQL连接池配置
+@Bean
+public DataSource dataSource() {
+    HikariConfig config = new HikariConfig();
+    
+    // 基本连接配置
+    config.setJdbcUrl("jdbc:mysql://localhost:3306/mydb?useSSL=false&serverTimezone=UTC&characterEncoding=UTF-8");
+    config.setUsername("dbuser");
+    config.setPassword("dbpass");
+    
+    // 连接池设置
+    config.setMinimumIdle(10);                   // 最小空闲连接数
+    config.setMaximumPoolSize(50);               // 最大连接数
+    config.setIdleTimeout(600000);               // 连接最大空闲时间（毫秒）
+    config.setMaxLifetime(1800000);              // 连接最大生命周期（毫秒）
+    config.setConnectionTimeout(30000);          // 获取连接超时时间（毫秒）
+    
+    // 连接测试
+    config.setConnectionTestQuery("SELECT 1");   // 连接测试查询
+    config.setValidationTimeout(5000);           // 验证超时时间（毫秒）
+    
+    // 泄漏检测
+    config.setLeakDetectionThreshold(60000);     // 连接泄漏检测阈值
+    
+    return new HikariDataSource(config);
+}
+
+// 示例：事务管理配置
+@Bean
+public PlatformTransactionManager transactionManager(DataSource dataSource) {
+    DataSourceTransactionManager txManager = new DataSourceTransactionManager(dataSource);
+    // 设置默认超时（秒）
+    txManager.setDefaultTimeout(30);
+    return txManager;
+}
+
+// 示例：事务使用
+@Service
+public class UserService {
+    
+    private final UserRepository userRepository;
+    
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
+    // 使用声明式事务，指定传播行为和隔离级别
+    @Transactional(
+        propagation = Propagation.REQUIRED,
+        isolation = Isolation.READ_COMMITTED,
+        timeout = 10,
+        rollbackFor = Exception.class,
+        noRollbackFor = NotFoundException.class
+    )
+    public User createUser(UserDto userDto) {
+        // 业务逻辑
+        return userRepository.save(new User(userDto));
+    }
+    
+    // 批量操作示例
+    @Transactional
+    public void batchCreateUsers(List<UserDto> userDtos) {
+        List<User> users = userDtos.stream()
+            .map(User::new)
+            .collect(Collectors.toList());
+            
+        // 分批处理，每批500条
+        Lists.partition(users, 500).forEach(batch -> {
+            userRepository.saveAll(batch);
+        });
+    }
+}
+```
+
 ## 结语
 
 本检查清单不是一成不变的，应随着项目的发展和技术的进步不断更新。代码审查的目的不仅是发现问题，更是促进团队成长和知识共享。建议将本清单与自动化工具(如SonarQube、CheckStyle、SpotBugs等)结合使用，以提高代码审查的效率和质量。
