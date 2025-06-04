@@ -5780,30 +5780,1116 @@ class UserServicePerformanceTest {
 ## 11. 部署和运维检查
 
 ### 11.1 容器化 (Major)
-- [ ] Dockerfile最佳实践
-- [ ] 镜像安全扫描
-- [ ] 多阶段构建
-- [ ] 镜像大小优化
+
+#### 11.1.1 Dockerfile最佳实践
+- **检查方法**: 检查Dockerfile的构建效率和安全性
+- **检查标准**: 使用多阶段构建、选择合适的基础镜像、最小化镜像层数
+- **不正确实例**:
+```dockerfile
+# 错误示例 - 低效的Dockerfile
+FROM openjdk:11
+COPY . /app
+WORKDIR /app
+RUN apt-get update && apt-get install -y maven
+RUN mvn clean package
+EXPOSE 8080
+CMD ["java", "-jar", "target/app.jar"]
+
+# 正确示例 - 优化的多阶段构建
+# 构建阶段
+FROM maven:3.8.4-openjdk-11-slim AS builder
+WORKDIR /app
+
+# 先复制依赖文件，利用Docker层缓存
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# 复制源码并构建
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# 运行阶段
+FROM openjdk:11-jre-slim
+
+# 创建非root用户
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# 安装必要的工具
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 复制构建产物
+COPY --from=builder /app/target/*.jar app.jar
+
+# 设置JVM参数
+ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC"
+
+# 切换到非root用户
+USER appuser
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+EXPOSE 8080
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+```
+
+#### 11.1.2 镜像安全扫描
+- **检查方法**: 使用安全扫描工具检查镜像漏洞
+- **检查标准**: 定期扫描基础镜像和应用镜像的安全漏洞
+- **不正确实例**:
+```dockerfile
+# 错误示例 - 使用不安全的基础镜像
+FROM ubuntu:latest
+RUN apt-get update && apt-get install -y openjdk-11-jdk
+# 使用latest标签，不确定版本
+# 安装了完整的JDK而不是JRE
+
+# 正确示例 - 安全的基础镜像配置
+FROM openjdk:11.0.16-jre-slim-bullseye
+
+# 更新系统包并清理缓存
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# 创建应用目录和用户
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+RUN mkdir -p /app && chown appuser:appgroup /app
+
+# 设置安全的文件权限
+USER appuser
+WORKDIR /app
+
+# 复制应用文件
+COPY --chown=appuser:appgroup target/*.jar app.jar
+
+# 镜像安全扫描命令示例:
+# docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+#   aquasec/trivy image myapp:latest
+# 
+# 或使用Snyk:
+# snyk container test myapp:latest
+```
+
+#### 11.1.3 多阶段构建优化
+- **检查方法**: 检查是否使用多阶段构建减少镜像大小
+- **检查标准**: 分离构建环境和运行环境，只包含运行时必需的文件
+- **不正确实例**:
+```dockerfile
+# 错误示例 - 单阶段构建，镜像过大
+FROM maven:3.8.4-openjdk-11
+WORKDIR /app
+COPY . .
+RUN mvn clean package
+EXPOSE 8080
+CMD ["java", "-jar", "target/app.jar"]
+# 包含了Maven、源码等不必要的文件
+
+# 正确示例 - 多阶段构建优化
+# 第一阶段：构建
+FROM maven:3.8.4-openjdk-11-slim AS build
+WORKDIR /app
+
+# 复制依赖文件
+COPY pom.xml .
+COPY .mvn .mvn
+COPY mvnw .
+
+# 下载依赖
+RUN ./mvnw dependency:go-offline -B
+
+# 复制源码并构建
+COPY src ./src
+RUN ./mvnw clean package -DskipTests
+
+# 第二阶段：运行时
+FROM openjdk:11-jre-slim AS runtime
+
+# 创建非特权用户
+RUN addgroup --system appgroup && adduser --system --group appuser
+
+# 创建应用目录
+WORKDIR /app
+
+# 只复制必要的JAR文件
+COPY --from=build /app/target/*.jar app.jar
+
+# 切换到非特权用户
+USER appuser
+
+# 设置JVM参数
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseContainerSupport"
+
+EXPOSE 8080
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# 镜像大小对比:
+# 单阶段构建: ~800MB
+# 多阶段构建: ~200MB
+```
 
 ### 11.2 优雅关闭 (Critical)
-- [ ] 应用停机处理
-- [ ] 资源清理
-- [ ] 正在处理的请求完成
-- [ ] 健康检查状态更新
+
+#### 11.2.1 应用停机处理
+- **检查方法**: 检查应用对SIGTERM信号的处理
+- **检查标准**: 正确处理关闭信号，完成正在处理的请求
+- **不正确实例**:
+```java
+// 错误示例 - 没有优雅关闭机制
+@SpringBootApplication
+public class Application {
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+        // 没有关闭钩子，强制终止可能导致数据丢失
+    }
+}
+
+// 正确示例 - 实现优雅关闭
+@SpringBootApplication
+public class Application {
+    
+    private static final Logger logger = LoggerFactory.getLogger(Application.class);
+    
+    public static void main(String[] args) {
+        SpringApplication app = new SpringApplication(Application.class);
+        app.setRegisterShutdownHook(true);
+        
+        ConfigurableApplicationContext context = app.run(args);
+        
+        // 添加JVM关闭钩子
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            logger.info("Received shutdown signal, starting graceful shutdown...");
+            context.close();
+            logger.info("Application shutdown completed.");
+        }));
+    }
+}
+
+// 配置优雅关闭
+@Configuration
+public class GracefulShutdownConfig {
+    
+    @Bean
+    public GracefulShutdown gracefulShutdown() {
+        return new GracefulShutdown();
+    }
+    
+    @Bean
+    public ConfigurableServletWebServerFactory webServerFactory(GracefulShutdown gracefulShutdown) {
+        TomcatServletWebServerFactory factory = new TomcatServletWebServerFactory();
+        factory.addConnectorCustomizers(gracefulShutdown);
+        return factory;
+    }
+    
+    private static class GracefulShutdown implements TomcatConnectorCustomizer, ApplicationListener<ContextClosedEvent> {
+        
+        private static final Logger logger = LoggerFactory.getLogger(GracefulShutdown.class);
+        private volatile Connector connector;
+        
+        @Override
+        public void customize(Connector connector) {
+            this.connector = connector;
+        }
+        
+        @Override
+        public void onApplicationEvent(ContextClosedEvent event) {
+            if (connector != null) {
+                connector.pause();
+                Executor executor = connector.getProtocolHandler().getExecutor();
+                if (executor instanceof ThreadPoolExecutor) {
+                    try {
+                        ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;
+                        threadPoolExecutor.shutdown();
+                        if (!threadPoolExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                            logger.warn("Tomcat thread pool did not shut down gracefully within 30 seconds");
+                            threadPoolExecutor.shutdownNow();
+                        }
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+    }
+}
+
+# application.yml配置
+server:
+  shutdown: graceful
+  
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+```
+
+#### 11.2.2 资源清理
+- **检查方法**: 检查应用关闭时的资源清理逻辑
+- **检查标准**: 正确关闭数据库连接、缓存连接、文件句柄等资源
+- **不正确实例**:
+```java
+// 错误示例 - 资源清理不完整
+@Component
+public class ResourceManager {
+    
+    private RedisTemplate<String, Object> redisTemplate;
+    private DataSource dataSource;
+    
+    @PreDestroy
+    public void cleanup() {
+        // 只是简单的日志，没有实际清理资源
+        logger.info("Cleaning up resources...");
+    }
+}
+
+// 正确示例 - 完整的资源清理
+@Component
+public class ResourceManager {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ResourceManager.class);
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private DataSource dataSource;
+    
+    @Autowired
+    private ScheduledExecutorService scheduler;
+    
+    @Autowired
+    private CacheManager cacheManager;
+    
+    @PreDestroy
+    public void cleanup() {
+        logger.info("Starting resource cleanup...");
+        
+        // 1. 停止定时任务
+        if (scheduler != null && !scheduler.isShutdown()) {
+            logger.info("Shutting down scheduler...");
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(10, TimeUnit.SECONDS)) {
+                    logger.warn("Scheduler did not terminate gracefully");
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                scheduler.shutdownNow();
+            }
+        }
+        
+        // 2. 清理缓存
+        if (cacheManager != null) {
+            logger.info("Clearing caches...");
+            cacheManager.getCacheNames().forEach(cacheName -> {
+                Cache cache = cacheManager.getCache(cacheName);
+                if (cache != null) {
+                    cache.clear();
+                }
+            });
+        }
+        
+        // 3. 关闭Redis连接
+        if (redisTemplate != null) {
+            logger.info("Closing Redis connections...");
+            try {
+                RedisConnectionFactory connectionFactory = redisTemplate.getConnectionFactory();
+                if (connectionFactory instanceof DisposableBean) {
+                    ((DisposableBean) connectionFactory).destroy();
+                }
+            } catch (Exception e) {
+                logger.error("Error closing Redis connections", e);
+            }
+        }
+        
+        // 4. 关闭数据库连接池
+        if (dataSource instanceof HikariDataSource) {
+            logger.info("Closing database connection pool...");
+            ((HikariDataSource) dataSource).close();
+        }
+        
+        logger.info("Resource cleanup completed");
+    }
+}
+```
+
+#### 11.2.3 正在处理的请求完成
+- **检查方法**: 检查是否等待正在处理的请求完成
+- **检查标准**: 在关闭前等待活跃请求处理完成，避免数据丢失
+- **不正确实例**:
+```java
+// 错误示例 - 立即关闭，不等待请求完成
+@RestController
+public class UserController {
+    
+    @PostMapping("/users")
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        // 长时间处理逻辑
+        processUser(user);  // 可能需要10秒
+        return ResponseEntity.ok(user);
+    }
+    
+    // 没有优雅关闭机制，可能在处理过程中被强制终止
+}
+
+// 正确示例 - 等待请求完成的优雅关闭
+@RestController
+public class UserController {
+    
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
+    private final AtomicInteger activeRequests = new AtomicInteger(0);
+    private volatile boolean shutdownRequested = false;
+    
+    @PostMapping("/users")
+    public ResponseEntity<User> createUser(@RequestBody User user) {
+        if (shutdownRequested) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(null);
+        }
+        
+        activeRequests.incrementAndGet();
+        try {
+            logger.info("Processing user creation, active requests: {}", activeRequests.get());
+            processUser(user);
+            return ResponseEntity.ok(user);
+        } finally {
+            activeRequests.decrementAndGet();
+            logger.info("Completed user creation, active requests: {}", activeRequests.get());
+        }
+    }
+    
+    @EventListener
+    public void handleShutdown(ContextClosedEvent event) {
+        shutdownRequested = true;
+        logger.info("Shutdown requested, waiting for {} active requests to complete", 
+                   activeRequests.get());
+        
+        // 等待活跃请求完成
+        long startTime = System.currentTimeMillis();
+        while (activeRequests.get() > 0) {
+            try {
+                Thread.sleep(100);
+                if (System.currentTimeMillis() - startTime > 30000) {
+                    logger.warn("Timeout waiting for requests to complete, {} requests still active", 
+                               activeRequests.get());
+                    break;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        logger.info("All requests completed or timeout reached");
+    }
+}
+
+// 使用拦截器统一管理请求状态
+@Component
+public class GracefulShutdownInterceptor implements HandlerInterceptor {
+    
+    private final AtomicInteger activeRequests = new AtomicInteger(0);
+    private volatile boolean shutdownRequested = false;
+    
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, 
+                           Object handler) throws Exception {
+        if (shutdownRequested) {
+            response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+            response.getWriter().write("Service is shutting down");
+            return false;
+        }
+        
+        activeRequests.incrementAndGet();
+        request.setAttribute("requestStartTime", System.currentTimeMillis());
+        return true;
+    }
+    
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, 
+                              Object handler, Exception ex) throws Exception {
+        activeRequests.decrementAndGet();
+        Long startTime = (Long) request.getAttribute("requestStartTime");
+        if (startTime != null) {
+            long duration = System.currentTimeMillis() - startTime;
+            logger.debug("Request completed in {}ms, active requests: {}", 
+                        duration, activeRequests.get());
+        }
+    }
+    
+    @EventListener
+    public void handleShutdown(ContextClosedEvent event) {
+        shutdownRequested = true;
+        // 等待逻辑同上
+    }
+    
+    public int getActiveRequestCount() {
+        return activeRequests.get();
+    }
+}
+```
 
 ## 12. 依赖管理检查
 
 ### 12.1 依赖安全 (Critical)
-- [ ] 第三方库安全漏洞扫描
-- [ ] 依赖版本管理
-- [ ] 许可证合规检查
-- [ ] 依赖冲突解决
+
+#### 12.1.1 第三方库安全漏洞扫描
+- **检查方法**: 使用OWASP Dependency Check、Snyk等工具扫描依赖漏洞
+- **检查标准**: 定期扫描并及时更新有安全漏洞的依赖
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 使用有安全漏洞的依赖版本 -->
+<dependencies>
+    <!-- 使用过时版本，存在已知安全漏洞 -->
+    <dependency>
+        <groupId>org.apache.struts</groupId>
+        <artifactId>struts2-core</artifactId>
+        <version>2.3.16</version>  <!-- 存在CVE-2017-5638等严重漏洞 -->
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.9.8</version>  <!-- 存在反序列化漏洞 -->
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+        <version>4.3.18.RELEASE</version>  <!-- 过时版本 -->
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 使用安全的依赖版本 -->
+<dependencies>
+    <!-- 使用最新稳定版本，及时修复安全漏洞 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <version>2.7.14</version>  <!-- 使用最新稳定版本 -->
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.15.2</version>  <!-- 修复了已知漏洞的版本 -->
+    </dependency>
+    
+    <!-- 排除有漏洞的传递依赖 -->
+    <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpclient</artifactId>
+        <version>4.5.14</version>
+        <exclusions>
+            <exclusion>
+                <groupId>commons-logging</groupId>
+                <artifactId>commons-logging</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+</dependencies>
+
+<!-- 添加安全扫描插件 -->
+<build>
+    <plugins>
+        <!-- OWASP依赖检查插件 -->
+        <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>8.4.0</version>
+            <configuration>
+                <failBuildOnCVSS>7</failBuildOnCVSS>  <!-- CVSS评分>=7时构建失败 -->
+                <suppressionFile>owasp-suppressions.xml</suppressionFile>
+            </configuration>
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+        
+        <!-- Snyk漏洞扫描 -->
+        <plugin>
+            <groupId>io.snyk</groupId>
+            <artifactId>snyk-maven-plugin</artifactId>
+            <version>2.2.0</version>
+            <executions>
+                <execution>
+                    <id>snyk-test</id>
+                    <goals>
+                        <goal>test</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+#### 12.1.2 依赖版本管理
+- **检查方法**: 检查依赖版本的一致性和更新策略
+- **检查标准**: 使用版本管理策略，避免版本冲突
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 版本管理混乱 -->
+<dependencies>
+    <!-- 同一个库的不同版本 -->
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+        <version>5.3.21</version>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-context</artifactId>
+        <version>5.2.15.RELEASE</version>  <!-- 版本不一致 -->
+    </dependency>
+    
+    <!-- 使用SNAPSHOT版本在生产环境 -->
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>custom-lib</artifactId>
+        <version>1.0-SNAPSHOT</version>  <!-- 不稳定版本 -->
+    </dependency>
+    
+    <!-- 版本范围过于宽泛 -->
+    <dependency>
+        <groupId>commons-lang</groupId>
+        <artifactId>commons-lang</artifactId>
+        <version>[2.0,)</version>  <!-- 可能引入不兼容版本 -->
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 统一版本管理 -->
+<properties>
+    <!-- 统一定义版本号 -->
+    <spring.version>5.3.23</spring.version>
+    <jackson.version>2.15.2</jackson.version>
+    <junit.version>5.9.3</junit.version>
+    <mockito.version>4.11.0</mockito.version>
+</properties>
+
+<dependencyManagement>
+    <dependencies>
+        <!-- 使用BOM统一管理Spring Boot依赖版本 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-dependencies</artifactId>
+            <version>2.7.14</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        
+        <!-- 统一管理其他依赖版本 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <!-- 不指定版本，由dependencyManagement管理 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+    
+    <!-- 测试依赖 -->
+    <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+
+<!-- 版本检查插件 -->
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>versions-maven-plugin</artifactId>
+            <version>2.16.0</version>
+            <configuration>
+                <generateBackupPoms>false</generateBackupPoms>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
+
+#### 12.1.3 许可证合规检查
+- **检查方法**: 检查第三方依赖的许可证兼容性
+- **检查标准**: 确保所有依赖的许可证符合项目要求
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 没有许可证检查 -->
+<dependencies>
+    <!-- 使用GPL许可证的库，可能与商业项目冲突 -->
+    <dependency>
+        <groupId>some.gpl</groupId>
+        <artifactId>gpl-library</artifactId>
+        <version>1.0.0</version>
+    </dependency>
+    
+    <!-- 使用未知许可证的库 -->
+    <dependency>
+        <groupId>unknown.license</groupId>
+        <artifactId>mystery-lib</artifactId>
+        <version>2.0.0</version>
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 许可证合规管理 -->
+<build>
+    <plugins>
+        <!-- 许可证检查插件 -->
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>license-maven-plugin</artifactId>
+            <version>2.2.0</version>
+            <configuration>
+                <licenseMerges>
+                    <licenseMerge>Apache License, Version 2.0|Apache 2|Apache License 2.0</licenseMerge>
+                    <licenseMerge>MIT License|MIT|The MIT License</licenseMerge>
+                </licenseMerges>
+                <failOnMissing>true</failOnMissing>
+                <failOnBlacklist>true</failOnBlacklist>
+                <includedLicenses>
+                    <includedLicense>Apache License, Version 2.0</includedLicense>
+                    <includedLicense>MIT License</includedLicense>
+                    <includedLicense>BSD License</includedLicense>
+                    <includedLicense>Eclipse Public License</includedLicense>
+                </includedLicenses>
+                <excludedLicenses>
+                    <excludedLicense>GNU General Public License</excludedLicense>
+                    <excludedLicense>GNU Lesser General Public License</excludedLicense>
+                </excludedLicenses>
+            </configuration>
+            <executions>
+                <execution>
+                    <id>check-licenses</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>check-third-party</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+        
+        <!-- 生成许可证报告 -->
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>license-maven-plugin</artifactId>
+            <version>2.2.0</version>
+            <executions>
+                <execution>
+                    <id>generate-license-report</id>
+                    <phase>prepare-package</phase>
+                    <goals>
+                        <goal>aggregate-third-party-report</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+
+<!-- 许可证白名单配置文件 src/license/THIRD-PARTY.properties -->
+# 允许的许可证列表
+Apache License, Version 2.0=true
+MIT License=true
+BSD License=true
+Eclipse Public License=true
+
+# 禁止的许可证列表
+GNU General Public License=false
+GNU Lesser General Public License=false
+```
+
+#### 12.1.4 依赖冲突解决
+- **检查方法**: 检查并解决依赖冲突问题
+- **检查标准**: 确保没有版本冲突，使用合适的冲突解决策略
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 依赖冲突未解决 -->
+<dependencies>
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+        <version>5.3.21</version>
+    </dependency>
+    
+    <!-- 这个依赖可能引入不同版本的spring-core -->
+    <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-core</artifactId>
+        <version>5.6.10</version>
+        <!-- 可能依赖spring-core 5.3.18 -->
+    </dependency>
+    
+    <!-- 传递依赖冲突 -->
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>library-a</artifactId>
+        <version>1.0.0</version>
+        <!-- 依赖commons-lang 2.6 -->
+    </dependency>
+    
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>library-b</artifactId>
+        <version>2.0.0</version>
+        <!-- 依赖commons-lang 3.12.0 -->
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 解决依赖冲突 -->
+<dependencyManagement>
+    <dependencies>
+        <!-- 使用BOM统一版本管理 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-framework-bom</artifactId>
+            <version>5.3.23</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        
+        <!-- 强制指定冲突依赖的版本 -->
+        <dependency>
+            <groupId>commons-lang</groupId>
+            <artifactId>commons-lang</artifactId>
+            <version>2.6</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <!-- Spring依赖版本由BOM管理 -->
+    <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework.security</groupId>
+        <artifactId>spring-security-core</artifactId>
+    </dependency>
+    
+    <!-- 排除冲突的传递依赖 -->
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>library-a</artifactId>
+        <version>1.0.0</version>
+        <exclusions>
+            <exclusion>
+                <groupId>commons-lang</groupId>
+                <artifactId>commons-lang</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>library-b</artifactId>
+        <version>2.0.0</version>
+        <exclusions>
+            <exclusion>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-lang3</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    
+    <!-- 显式添加需要的版本 -->
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+    </dependency>
+</dependencies>
+
+<!-- 依赖分析插件 -->
+<build>
+    <plugins>
+        <!-- 依赖分析插件 -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>3.6.0</version>
+            <executions>
+                <execution>
+                    <id>analyze-dependencies</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>analyze-only</goal>
+                    </goals>
+                    <configuration>
+                        <failOnWarning>true</failOnWarning>
+                        <ignoreNonCompile>true</ignoreNonCompile>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        
+        <!-- 依赖树分析 -->
+        <!-- mvn dependency:tree -Dverbose -->
+        <!-- mvn dependency:analyze-duplicate -->
+    </plugins>
+</build>
+```
 
 ### 12.2 依赖优化 (Minor)
-- [ ] 移除未使用的依赖
-- [ ] 依赖版本统一管理
-- [ ] 传递依赖控制
-- [ ] 依赖文档维护
+
+#### 12.2.1 移除未使用的依赖
+- **检查方法**: 使用Maven dependency插件检查未使用的依赖
+- **检查标准**: 定期清理未使用的依赖，减少项目复杂度
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 包含大量未使用的依赖 -->
+<dependencies>
+    <!-- 添加了但从未使用的依赖 -->
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-math3</artifactId>
+        <version>3.6.1</version>
+    </dependency>
+    
+    <!-- 过时的依赖，已被其他依赖替代 -->
+    <dependency>
+        <groupId>commons-logging</groupId>
+        <artifactId>commons-logging</artifactId>
+        <version>1.2</version>
+    </dependency>
+    
+    <!-- 测试依赖但scope错误 -->
+    <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-core</artifactId>
+        <version>4.11.0</version>
+        <!-- 缺少scope=test -->
+    </dependency>
+    
+    <!-- 重复的功能依赖 -->
+    <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>32.1.2-jre</version>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-collections4</artifactId>
+        <version>4.4</version>
+        <!-- 与Guava功能重复 -->
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 精简的依赖管理 -->
+<dependencies>
+    <!-- 只包含实际使用的依赖 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    
+    <!-- 正确设置scope -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+    
+    <!-- 选择一个功能完整的库，避免重复 -->
+    <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>32.1.2-jre</version>
+    </dependency>
+</dependencies>
+
+<!-- 依赖分析和清理 -->
+<build>
+    <plugins>
+        <!-- 未使用依赖检查 -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>3.6.0</version>
+            <executions>
+                <execution>
+                    <id>analyze-unused</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>analyze-only</goal>
+                    </goals>
+                    <configuration>
+                        <failOnWarning>false</failOnWarning>
+                        <outputXML>true</outputXML>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        
+        <!-- 依赖范围检查 -->
+        <plugin>
+            <groupId>com.github.ferstl</groupId>
+            <artifactId>depgraph-maven-plugin</artifactId>
+            <version>4.0.2</version>
+            <configuration>
+                <createImage>true</createImage>
+                <imageFormat>png</imageFormat>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+
+<!-- 使用命令检查未使用依赖 -->
+<!-- mvn dependency:analyze -->
+<!-- mvn dependency:analyze-dep-mgt -->
+<!-- mvn dependency:purge-local-repository -->
+```
+
+#### 12.2.2 依赖版本统一管理
+- **检查方法**: 检查项目中依赖版本管理的一致性
+- **检查标准**: 使用统一的版本管理策略，避免版本碎片化
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 版本管理分散 -->
+<dependencies>
+    <!-- 版本号硬编码在各个依赖中 -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+        <version>2.15.2</version>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.15.1</version>  <!-- 版本不一致 -->
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
+        <version>2.14.2</version>  <!-- 版本更不一致 -->
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 统一版本管理 -->
+<properties>
+    <!-- 版本号统一定义 -->
+    <jackson.version>2.15.2</jackson.version>
+    <spring-boot.version>2.7.14</spring-boot.version>
+    <mysql.version>8.0.33</mysql.version>
+    <junit.version>5.9.3</junit.version>
+</properties>
+
+<dependencyManagement>
+    <dependencies>
+        <!-- 使用BOM管理相关依赖版本 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson</groupId>
+            <artifactId>jackson-bom</artifactId>
+            <version>${jackson.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-dependencies</artifactId>
+            <version>${spring-boot.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        
+        <!-- 其他依赖版本管理 -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <!-- 不指定版本，由dependencyManagement统一管理 -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-core</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.datatype</groupId>
+        <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+</dependencies>
+
+<!-- 版本更新检查 -->
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>versions-maven-plugin</artifactId>
+            <version>2.16.0</version>
+            <configuration>
+                <generateBackupPoms>false</generateBackupPoms>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+
+<!-- 版本检查命令 -->
+<!-- mvn versions:display-dependency-updates -->
+<!-- mvn versions:display-plugin-updates -->
+<!-- mvn versions:display-property-updates -->
+```
 
 ## 检查清单使用说明
 
