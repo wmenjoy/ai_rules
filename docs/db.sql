@@ -23,8 +23,7 @@ CREATE TABLE variables (
     name VARCHAR(100) NOT NULL,
     description VARCHAR(255),
     default_value TEXT,
-    required BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+    required BOOLEAN DEFAULT FALSE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Categories table
@@ -43,9 +42,7 @@ CREATE TABLE tags (
 CREATE TABLE template_tags (
     template_id BIGINT UNSIGNED NOT NULL,
     tag_id BIGINT UNSIGNED NOT NULL,
-    PRIMARY KEY (template_id, tag_id),
-    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+    PRIMARY KEY (template_id, tag_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Activities table
@@ -55,8 +52,7 @@ CREATE TABLE activities (
     template_title VARCHAR(255) NOT NULL,
     action ENUM('used', 'created', 'edited', 'deleted') NOT NULL,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    user VARCHAR(100),
-    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL
+    user VARCHAR(100)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Indexes for better performance

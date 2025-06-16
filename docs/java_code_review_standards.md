@@ -4060,55 +4060,55 @@ public class OrderStatusService {
 
 ### 4.6 业务正确性检查
 
-**第二十六条** 边界条件处理检查 🔴：
+**第二十六条** 输入边界条件检查 🔴：
 
-##### 4.6.1 输入边界条件检查
+##### 4.6.1 输入参数验证检查
 
 **1. 检测目标**
 
-a. 所有函数的输入边界条件（最小值、最大值、空值等）都有明确处理机制
-b. 输入验证应当尽早进行，避免异常传播
-c. 边界值处理逻辑应当明确且一致
+a. 所有函数的输入参数都有完整的验证逻辑
+b. 边界值（最小值、最大值、空值等）处理机制明确
+c. 输入验证在函数入口处进行，避免异常传播
 d. 特殊输入（0、负数、特殊字符等）都有对应处理逻辑
 
 **2. 检测方法**
 
-a. 代码审查：检查输入参数的验证逻辑
-b. 单元测试：边界值测试用例执行
+a. 代码审查：检查每个公共方法的参数验证逻辑
+b. 单元测试：编写边界值和异常输入的测试用例
 c. 静态分析：使用工具检查空指针和边界检查
-d. 异常路径分析：检查异常情况的处理逻辑
+d. 集成测试：验证参数验证在完整流程中的有效性
 
 **3. 错误示例**
 
 ```java
-// ❌ 错误：缺少边界条件检查
-public class MathUtils {
-    public static double divide(int a, int b) {
-        // 没有检查除数为0的情况
-        return a / b; // 可能抛出ArithmeticException
+// ❌ 错误：缺少输入参数验证
+@Service
+public class UserService {
+    public User createUser(String username, String email, int age) {
+        // 没有验证参数的有效性
+        User user = new User();
+        user.setUsername(username); // username可能为null或空
+        user.setEmail(email); // email可能格式不正确
+        user.setAge(age); // age可能为负数
+        return userRepository.save(user);
     }
     
-    public static int[] getSubArray(int[] array, int start, int end) {
-        // 没有检查数组为null、索引越界等情况
-        int[] result = new int[end - start];
-        for (int i = 0; i < result.length; i++) {
-            result[i] = array[start + i];
-        }
-        return result;
+    public List<User> getUsersByAge(int minAge, int maxAge) {
+        // 没有验证年龄范围的合理性
+        return userRepository.findByAgeBetween(minAge, maxAge);
     }
 }
 
-// ❌ 错误：未处理极端值
-@Service
-public class OrderService {
-    public void createBulkOrder(List<OrderItem> items, int quantity) {
-        // 没有限制批量创建的数量上限
-        for (OrderItem item : items) {
-            for (int i = 0; i < quantity; i++) {
-                orderRepository.save(new Order(item));
-                // 如果quantity非常大，可能导致系统资源耗尽
-            }
-        }
+// ❌ 错误：边界条件处理不当
+public class MathUtils {
+    public static double calculatePercentage(int part, int total) {
+        // 没有检查除数为0的情况
+        return (double) part / total * 100;
+    }
+    
+    public static String substring(String str, int start, int length) {
+        // 没有检查字符串和索引的有效性
+        return str.substring(start, start + length);
     }
 }
 ```
@@ -4116,86 +4116,581 @@ public class OrderService {
 **4. 正确示例**
 
 ```java
-// ✅ 正确：完善的边界条件处理
-public class MathUtils {
-    public static double divide(int a, int b) {
-        if (b == 0) {
-            throw new IllegalArgumentException("除数不能为0");
-        }
-        return (double) a / b;
+// ✅ 正确：完整的输入参数验证
+@Service
+public class UserService {
+    private static final int MIN_AGE = 0;
+    private static final int MAX_AGE = 150;
+    private static final int MAX_USERNAME_LENGTH = 50;
+    
+    public User createUser(String username, String email, int age) {
+        // 参数验证
+        validateUsername(username);
+        validateEmail(email);
+        validateAge(age);
+        
+        User user = new User();
+        user.setUsername(username.trim());
+        user.setEmail(email.toLowerCase().trim());
+        user.setAge(age);
+        
+        return userRepository.save(user);
     }
     
-    public static int[] getSubArray(int[] array, int start, int end) {
-        // 检查输入参数
-        Objects.requireNonNull(array, "数组不能为null");
-        if (start < 0 || end > array.length || start > end) {
+    public List<User> getUsersByAge(int minAge, int maxAge) {
+        // 验证年龄范围
+        if (minAge < MIN_AGE || maxAge > MAX_AGE) {
             throw new IllegalArgumentException(
-                String.format("无效的索引范围: start=%d, end=%d, array.length=%d", 
-                    start, end, array.length)
-            );
+                String.format("年龄范围无效: [%d, %d], 有效范围: [%d, %d]", 
+                    minAge, maxAge, MIN_AGE, MAX_AGE));
         }
         
-        int[] result = new int[end - start];
-        System.arraycopy(array, start, result, 0, end - start);
-        return result;
+        if (minAge > maxAge) {
+            throw new IllegalArgumentException(
+                String.format("最小年龄(%d)不能大于最大年龄(%d)", minAge, maxAge));
+        }
+        
+        return userRepository.findByAgeBetween(minAge, maxAge);
+    }
+    
+    private void validateUsername(String username) {
+        if (StringUtils.isBlank(username)) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        
+        if (username.length() > MAX_USERNAME_LENGTH) {
+            throw new IllegalArgumentException(
+                String.format("用户名长度不能超过%d个字符", MAX_USERNAME_LENGTH));
+        }
+        
+        if (!username.matches("^[a-zA-Z0-9_]+$")) {
+            throw new IllegalArgumentException("用户名只能包含字母、数字和下划线");
+        }
+    }
+    
+    private void validateEmail(String email) {
+        if (StringUtils.isBlank(email)) {
+            throw new IllegalArgumentException("邮箱不能为空");
+        }
+        
+        if (!EmailValidator.getInstance().isValid(email)) {
+            throw new IllegalArgumentException("邮箱格式不正确: " + email);
+        }
+    }
+    
+    private void validateAge(int age) {
+        if (age < MIN_AGE || age > MAX_AGE) {
+            throw new IllegalArgumentException(
+                String.format("年龄必须在%d到%d之间", MIN_AGE, MAX_AGE));
+        }
     }
 }
 
-// ✅ 正确：处理极端值
+// ✅ 正确：完善的边界条件处理
+public class MathUtils {
+    public static double calculatePercentage(int part, int total) {
+        if (total == 0) {
+            throw new IllegalArgumentException("总数不能为0");
+        }
+        
+        if (part < 0 || total < 0) {
+            throw new IllegalArgumentException("部分和总数都必须为非负数");
+        }
+        
+        if (part > total) {
+            throw new IllegalArgumentException(
+                String.format("部分(%d)不能大于总数(%d)", part, total));
+        }
+        
+        return (double) part / total * 100;
+    }
+    
+    public static String substring(String str, int start, int length) {
+        Objects.requireNonNull(str, "字符串不能为null");
+        
+        if (start < 0) {
+            throw new IllegalArgumentException("起始位置不能为负数: " + start);
+        }
+        
+        if (length < 0) {
+            throw new IllegalArgumentException("长度不能为负数: " + length);
+        }
+        
+        if (start >= str.length()) {
+            throw new IllegalArgumentException(
+                String.format("起始位置(%d)超出字符串长度(%d)", start, str.length()));
+        }
+        
+        int endIndex = Math.min(start + length, str.length());
+        return str.substring(start, endIndex);
+    }
+}
+```
+
+**第二十七条** 业务规则验证检查 🔴：
+
+##### 4.6.2 业务逻辑规则检查
+
+**1. 检测目标**
+
+a. 业务规则在代码中得到正确实现
+b. 复杂业务逻辑有清晰的验证机制
+c. 业务约束条件得到有效执行
+d. 业务流程的完整性和一致性得到保证
+
+**2. 检测方法**
+
+a. 需求对比：将代码实现与业务需求进行对比
+b. 业务测试：编写业务场景测试用例
+c. 规则引擎：使用规则引擎验证复杂业务逻辑
+d. 业务专家评审：邀请业务专家参与代码评审
+
+**3. 错误示例**
+
+```java
+// ❌ 错误：业务规则实现不完整
 @Service
 public class OrderService {
-    // 定义常量限制
-    private static final int MAX_BULK_ORDER_QUANTITY = 100;
+    public Order createOrder(OrderRequest request) {
+        // 缺少业务规则验证
+        Order order = new Order();
+        order.setCustomerId(request.getCustomerId());
+        order.setItems(request.getItems());
+        order.setTotalAmount(calculateTotal(request.getItems()));
+        
+        // 没有验证：
+        // 1. 客户是否有效
+        // 2. 商品库存是否充足
+        // 3. 订单金额是否合理
+        // 4. 客户信用额度是否足够
+        
+        return orderRepository.save(order);
+    }
     
-    public void createBulkOrder(List<OrderItem> items, int quantity) {
-        // 参数验证
-        Objects.requireNonNull(items, "订单项不能为null");
-        if (items.isEmpty()) {
-            throw new IllegalArgumentException("订单项不能为空");
+    public void processRefund(Long orderId, BigDecimal amount) {
+        Order order = orderRepository.findById(orderId).orElseThrow();
+        
+        // 缺少退款业务规则验证
+        order.setStatus(OrderStatus.REFUNDED);
+        order.setRefundAmount(amount);
+        
+        // 没有验证：
+        // 1. 订单是否可以退款
+        // 2. 退款金额是否合理
+        // 3. 退款时间限制
+        
+        orderRepository.save(order);
+    }
+}
+```
+
+**4. 正确示例**
+
+```java
+// ✅ 正确：完整的业务规则验证
+@Service
+public class OrderService {
+    private static final BigDecimal MAX_ORDER_AMOUNT = new BigDecimal("100000");
+    private static final int MAX_REFUND_DAYS = 30;
+    
+    @Autowired
+    private CustomerService customerService;
+    
+    @Autowired
+    private InventoryService inventoryService;
+    
+    @Autowired
+    private CreditService creditService;
+    
+    @Transactional
+    public Order createOrder(OrderRequest request) {
+        // 1. 验证客户有效性
+        Customer customer = customerService.getActiveCustomer(request.getCustomerId());
+        if (customer == null) {
+            throw new BusinessException("客户不存在或已停用: " + request.getCustomerId());
         }
         
-        if (quantity <= 0) {
-            throw new IllegalArgumentException("数量必须大于0");
+        // 2. 验证商品和库存
+        validateOrderItems(request.getItems());
+        
+        // 3. 计算订单金额
+        BigDecimal totalAmount = calculateTotal(request.getItems());
+        validateOrderAmount(totalAmount);
+        
+        // 4. 验证客户信用额度
+        if (!creditService.checkCreditLimit(customer.getId(), totalAmount)) {
+            throw new BusinessException("客户信用额度不足");
         }
         
-        if (quantity > MAX_BULK_ORDER_QUANTITY) {
-            throw new IllegalArgumentException(
-                String.format("批量订单数量不能超过%d", MAX_BULK_ORDER_QUANTITY)
-            );
+        // 5. 预扣库存
+        reserveInventory(request.getItems());
+        
+        try {
+            // 6. 创建订单
+            Order order = new Order();
+            order.setCustomerId(request.getCustomerId());
+            order.setItems(request.getItems());
+            order.setTotalAmount(totalAmount);
+            order.setStatus(OrderStatus.PENDING);
+            order.setCreatedAt(LocalDateTime.now());
+            
+            Order savedOrder = orderRepository.save(order);
+            
+            // 7. 记录业务日志
+            logOrderCreation(savedOrder, customer);
+            
+            return savedOrder;
+            
+        } catch (Exception e) {
+            // 回滚库存预扣
+            releaseInventory(request.getItems());
+            throw new BusinessException("订单创建失败", e);
+        }
+    }
+    
+    @Transactional
+    public void processRefund(Long orderId, BigDecimal amount, String reason) {
+        // 1. 获取订单信息
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new BusinessException("订单不存在: " + orderId));
+        
+        // 2. 验证退款业务规则
+        validateRefundEligibility(order);
+        validateRefundAmount(order, amount);
+        validateRefundTimeLimit(order);
+        
+        // 3. 检查重复退款
+        if (order.getStatus() == OrderStatus.REFUNDED) {
+            throw new BusinessException("订单已经退款，不能重复操作");
         }
         
-        // 安全地创建订单
+        // 4. 执行退款逻辑
+        try {
+            // 更新订单状态
+            order.setStatus(OrderStatus.REFUNDED);
+            order.setRefundAmount(amount);
+            order.setRefundReason(reason);
+            order.setRefundAt(LocalDateTime.now());
+            
+            orderRepository.save(order);
+            
+            // 恢复库存
+            restoreInventory(order.getItems());
+            
+            // 恢复信用额度
+            creditService.restoreCreditLimit(order.getCustomerId(), amount);
+            
+            // 记录退款日志
+            logRefundProcess(order, amount, reason);
+            
+        } catch (Exception e) {
+            throw new BusinessException("退款处理失败", e);
+        }
+    }
+    
+    private void validateOrderItems(List<OrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new BusinessException("订单项不能为空");
+        }
+        
         for (OrderItem item : items) {
-            List<Order> orders = new ArrayList<>(quantity);
-            for (int i = 0; i < quantity; i++) {
-                orders.add(new Order(item));
+            // 验证商品存在性
+            if (!inventoryService.productExists(item.getProductId())) {
+                throw new BusinessException("商品不存在: " + item.getProductId());
             }
-            // 批量保存，提高性能
-            orderRepository.saveAll(orders);
+            
+            // 验证库存充足性
+            if (!inventoryService.hasEnoughStock(item.getProductId(), item.getQuantity())) {
+                throw new BusinessException(
+                    String.format("商品库存不足: productId=%s, required=%d", 
+                        item.getProductId(), item.getQuantity()));
+            }
+            
+            // 验证商品状态
+            if (!inventoryService.isProductActive(item.getProductId())) {
+                throw new BusinessException("商品已下架: " + item.getProductId());
+            }
+        }
+    }
+    
+    private void validateOrderAmount(BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("订单金额必须大于0");
+        }
+        
+        if (amount.compareTo(MAX_ORDER_AMOUNT) > 0) {
+            throw new BusinessException(
+                String.format("订单金额不能超过%s", MAX_ORDER_AMOUNT));
+        }
+    }
+    
+    private void validateRefundEligibility(Order order) {
+        if (order.getStatus() != OrderStatus.COMPLETED && 
+            order.getStatus() != OrderStatus.DELIVERED) {
+            throw new BusinessException(
+                String.format("订单状态为%s，不允许退款", order.getStatus()));
+        }
+    }
+    
+    private void validateRefundAmount(Order order, BigDecimal refundAmount) {
+        if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("退款金额必须大于0");
+        }
+        
+        if (refundAmount.compareTo(order.getTotalAmount()) > 0) {
+            throw new BusinessException(
+                String.format("退款金额(%s)不能超过订单金额(%s)", 
+                    refundAmount, order.getTotalAmount()));
+        }
+    }
+    
+    private void validateRefundTimeLimit(Order order) {
+        LocalDateTime orderTime = order.getCreatedAt();
+        LocalDateTime now = LocalDateTime.now();
+        long daysBetween = ChronoUnit.DAYS.between(orderTime, now);
+        
+        if (daysBetween > MAX_REFUND_DAYS) {
+            throw new BusinessException(
+                String.format("订单创建时间超过%d天，不允许退款", MAX_REFUND_DAYS));
         }
     }
 }
 ```
 
-**第二十七条** 算法正确性检查 🔴：
+**第二十八条** 数据一致性检查 🔴：
 
-##### 4.6.2 算法逻辑正确性检查
+##### 4.6.3 业务数据一致性检查
 
 **1. 检测目标**
 
-a. 算法实现逻辑与设计要求一致
-b. 算法在各种输入条件下都能得到正确结果
-c. 算法的时间和空间复杂度符合要求
-d. 算法实现没有隐藏的逻辑错误
+a. 关联数据在业务操作中保持一致性
+b. 数据状态变更遵循业务规则
+c. 并发操作不会破坏数据一致性
+d. 分布式环境下数据最终一致性得到保证
 
 **2. 检测方法**
 
-a. 代码审查：检查算法实现的逻辑正确性
-b. 单元测试：全面测试用例验证算法结果
-c. 性能测试：验证算法在大数据量下的表现
-d. 边界测试：验证极端情况下的正确性
+a. 事务测试：验证事务边界和回滚机制
+b. 并发测试：模拟并发操作验证数据一致性
+c. 数据校验：定期检查数据完整性
+d. 分布式测试：验证分布式事务的一致性
 
 **3. 错误示例**
+
+```java
+// ❌ 错误：数据一致性处理不当
+@Service
+public class AccountService {
+    public void transfer(Long fromAccountId, Long toAccountId, BigDecimal amount) {
+        Account fromAccount = accountRepository.findById(fromAccountId).orElseThrow();
+        Account toAccount = accountRepository.findById(toAccountId).orElseThrow();
+        
+        // 没有事务保护，可能导致数据不一致
+        fromAccount.setBalance(fromAccount.getBalance().subtract(amount));
+        accountRepository.save(fromAccount);
+        
+        // 如果这里发生异常，fromAccount已经扣款但toAccount没有收到钱
+        toAccount.setBalance(toAccount.getBalance().add(amount));
+        accountRepository.save(toAccount);
+        
+        // 没有记录转账流水
+    }
+    
+    public void updateUserProfile(Long userId, UserProfile profile) {
+        User user = userRepository.findById(userId).orElseThrow();
+        
+        // 更新用户信息，但没有同步更新相关的缓存和索引
+        user.setName(profile.getName());
+        user.setEmail(profile.getEmail());
+        userRepository.save(user);
+        
+        // 缓存和搜索索引可能与数据库不一致
+    }
+}
+```
+
+**4. 正确示例**
+
+```java
+// ✅ 正确：保证数据一致性
+@Service
+public class AccountService {
+    
+    @Autowired
+    private AccountRepository accountRepository;
+    
+    @Autowired
+    private TransactionLogRepository transactionLogRepository;
+    
+    @Autowired
+    private UserCacheService userCacheService;
+    
+    @Autowired
+    private SearchIndexService searchIndexService;
+    
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public TransferResult transfer(Long fromAccountId, Long toAccountId, BigDecimal amount) {
+        // 1. 参数验证
+        validateTransferParams(fromAccountId, toAccountId, amount);
+        
+        // 2. 加锁获取账户（防止并发问题）
+        Account fromAccount = accountRepository.findByIdForUpdate(fromAccountId)
+            .orElseThrow(() -> new BusinessException("转出账户不存在"));
+        Account toAccount = accountRepository.findByIdForUpdate(toAccountId)
+            .orElseThrow(() -> new BusinessException("转入账户不存在"));
+        
+        // 3. 业务规则验证
+        validateTransferBusiness(fromAccount, toAccount, amount);
+        
+        // 4. 执行转账操作
+        BigDecimal originalFromBalance = fromAccount.getBalance();
+        BigDecimal originalToBalance = toAccount.getBalance();
+        
+        try {
+            // 扣款
+            fromAccount.setBalance(originalFromBalance.subtract(amount));
+            fromAccount.setLastUpdated(LocalDateTime.now());
+            accountRepository.save(fromAccount);
+            
+            // 入账
+            toAccount.setBalance(originalToBalance.add(amount));
+            toAccount.setLastUpdated(LocalDateTime.now());
+            accountRepository.save(toAccount);
+            
+            // 5. 记录交易流水
+            TransactionLog log = createTransactionLog(fromAccountId, toAccountId, amount);
+            transactionLogRepository.save(log);
+            
+            // 6. 发布事件（用于异步处理通知等）
+            publishTransferEvent(fromAccountId, toAccountId, amount, log.getId());
+            
+            return TransferResult.success(log.getId(), 
+                fromAccount.getBalance(), toAccount.getBalance());
+            
+        } catch (Exception e) {
+            // 事务会自动回滚
+            log.error("转账失败: from={}, to={}, amount={}", 
+                fromAccountId, toAccountId, amount, e);
+            throw new BusinessException("转账操作失败", e);
+        }
+    }
+    
+    @Transactional
+    public void updateUserProfile(Long userId, UserProfile profile) {
+        // 1. 获取用户信息
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        
+        // 2. 记录变更前的状态
+        String oldName = user.getName();
+        String oldEmail = user.getEmail();
+        
+        try {
+            // 3. 更新数据库
+            user.setName(profile.getName());
+            user.setEmail(profile.getEmail());
+            user.setLastUpdated(LocalDateTime.now());
+            User savedUser = userRepository.save(user);
+            
+            // 4. 同步更新缓存
+            userCacheService.updateUserCache(savedUser);
+            
+            // 5. 同步更新搜索索引
+            searchIndexService.updateUserIndex(savedUser);
+            
+            // 6. 记录变更日志
+            logProfileChange(userId, oldName, oldEmail, profile);
+            
+        } catch (Exception e) {
+            // 如果缓存或索引更新失败，记录错误但不影响主流程
+            log.error("用户资料更新后的同步操作失败: userId={}", userId, e);
+            
+            // 可以考虑使用消息队列进行异步重试
+            scheduleDataSyncRetry(userId);
+            
+            throw new BusinessException("用户资料更新失败", e);
+        }
+    }
+    
+    // 数据一致性校验方法
+    @Scheduled(cron = "0 0 2 * * ?") // 每天凌晨2点执行
+    public void validateDataConsistency() {
+        log.info("开始数据一致性校验");
+        
+        try {
+            // 1. 校验账户余额与交易流水的一致性
+            validateAccountBalanceConsistency();
+            
+            // 2. 校验缓存与数据库的一致性
+            validateCacheConsistency();
+            
+            // 3. 校验搜索索引与数据库的一致性
+            validateSearchIndexConsistency();
+            
+            log.info("数据一致性校验完成");
+            
+        } catch (Exception e) {
+            log.error("数据一致性校验失败", e);
+            // 发送告警通知
+            alertService.sendDataInconsistencyAlert(e.getMessage());
+        }
+    }
+    
+    private void validateTransferParams(Long fromAccountId, Long toAccountId, BigDecimal amount) {
+        Objects.requireNonNull(fromAccountId, "转出账户ID不能为空");
+        Objects.requireNonNull(toAccountId, "转入账户ID不能为空");
+        Objects.requireNonNull(amount, "转账金额不能为空");
+        
+        if (fromAccountId.equals(toAccountId)) {
+            throw new BusinessException("不能向自己转账");
+        }
+        
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("转账金额必须大于0");
+        }
+    }
+    
+    private void validateTransferBusiness(Account fromAccount, Account toAccount, BigDecimal amount) {
+        // 检查账户状态
+        if (!fromAccount.isActive()) {
+            throw new BusinessException("转出账户已被冻结");
+        }
+        
+        if (!toAccount.isActive()) {
+            throw new BusinessException("转入账户已被冻结");
+        }
+        
+        // 检查余额
+        if (fromAccount.getBalance().compareTo(amount) < 0) {
+            throw new BusinessException("账户余额不足");
+        }
+        
+        // 检查转账限额
+        if (amount.compareTo(fromAccount.getDailyTransferLimit()) > 0) {
+            throw new BusinessException("超过单日转账限额");
+        }
+    }
+    
+    private void validateAccountBalanceConsistency() {
+        // 实现账户余额与交易流水的一致性校验逻辑
+        List<Account> accounts = accountRepository.findAll();
+        
+        for (Account account : accounts) {
+            BigDecimal calculatedBalance = calculateBalanceFromTransactions(account.getId());
+            BigDecimal actualBalance = account.getBalance();
+            
+            if (calculatedBalance.compareTo(actualBalance) != 0) {
+                log.error("账户余额不一致: accountId={}, actual={}, calculated={}", 
+                    account.getId(), actualBalance, calculatedBalance);
+                
+                // 记录不一致问题
+                recordInconsistencyIssue(account.getId(), "BALANCE_MISMATCH", 
+                    String.format("实际余额: %s, 计算余额: %s", actualBalance, calculatedBalance));
+            }
+        }
+    }
+}
+```
 
 ```java
 // ❌ 错误：存在逻辑错误的算法
@@ -4479,130 +4974,45 @@ public class SafeConcurrencyExample {
 
 ### 4.7 资源管理检查
 
-**第二十九条** 数据库连接池检查 🔴：
-
-##### 4.29.1 数据库连接池配置合理性
+##### 4.7.1 内存资源管理检查
 
 **1. 检测目标**
 
-a. 最小连接数：不少于 2，不超过 CPU 核数
-b. 最大连接数：不超过数据库最大连接数的 80%
-c. 连接超时：5-30 秒之间
-d. 空闲超时：10-60 分钟之间
-e. 必须配置连接有效性检查
-f. 禁止使用默认连接池配置
+a. 避免内存泄漏和内存溢出
+b. 合理使用集合和缓存，设置大小限制
+c. 及时释放大对象和临时对象
+d. 正确处理静态变量和单例对象
+e. 避免创建不必要的对象
 
 **2. 检测方法**
 
-a. 配置审查：检查 application.yml 或 application.properties
-b. 运行时监控：JMX 监控连接池状态
-c. 压力测试：验证连接池在高并发下的表现
-d. 日志分析：检查连接获取失败的日志
+a. 静态分析：使用 SpotBugs、FindBugs 检测内存泄漏
+b. 内存分析：使用 JProfiler、MAT 分析内存使用
+c. 压力测试：长时间运行验证内存稳定性
+d. 代码审查：检查集合使用和对象生命周期
 
 **3. 错误示例**
 
-```yaml
-# ❌ 错误：使用默认配置，缺少关键参数
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/test
-    username: root
-    password: password
-```
-
 ```java
-// ❌ 错误：手动管理连接，容易泄漏
-@Service
-public class UserService {
-    @Autowired
-    private DataSource dataSource;
+// ❌ 错误：无限制的缓存导致内存泄漏
+public class UserCache {
+    private static final Map<String, User> cache = new HashMap<>();
     
-    public User findUser(Long id) {
-        Connection conn = null;
-        try {
-            conn = dataSource.getConnection();
-            // 查询逻辑
-        } catch (SQLException e) {
-            // 异常处理
+    public User getUser(String id) {
+        if (!cache.containsKey(id)) {
+            User user = userService.findById(id);
+            cache.put(id, user); // 无限制添加，可能导致OOM
         }
-        // ❌ 忘记关闭连接
-        return user;
+        return cache.get(id);
     }
 }
-```
 
-**4. 正确示例**
-
-```yaml
-# ✅ 正确：完整的连接池配置
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/test
-    username: root
-    password: password
-    hikari:
-      minimum-idle: 5
-      maximum-pool-size: 20
-      connection-timeout: 20000
-      idle-timeout: 300000
-      max-lifetime: 1200000
-      connection-test-query: SELECT 1
-      pool-name: "HikariCP-Pool"
-```
-
-```java
-// ✅ 正确：使用 JdbcTemplate 或 JPA，自动管理连接
-@Service
-public class UserService {
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+// ❌ 错误：静态集合持有对象引用
+public class EventManager {
+    private static final List<EventListener> listeners = new ArrayList<>();
     
-    public User findUser(Long id) {
-        return jdbcTemplate.queryForObject(
-            "SELECT * FROM users WHERE id = ?",
-            new Object[]{id},
-            new UserRowMapper()
-        );
-    }
-}
-```
-
-**第三十条** HTTP客户端连接池检查 🔴：
-
-##### 4.30.1 HTTP客户端连接池配置合理性
-
-**1. 检测目标**
-
-a. 必须使用连接池，禁止每次请求创建新连接
-b. 最大连接数：根据下游服务能力设定，通常 50-200
-c. 连接超时：3-10 秒
-d. 读取超时：10-60 秒
-e. 必须设置重试策略和熔断机制
-
-**2. 检测方法**
-
-a. 代码审查：检查 RestTemplate、OkHttp、Apache HttpClient 配置
-b. 网络监控：监控连接数和响应时间
-c. 压力测试：验证连接池效果
-
-**3. 错误示例**
-
-```java
-// ❌ 错误：每次创建新的 RestTemplate
-@Service
-public class ApiService {
-    public String callApi(String url) {
-        RestTemplate restTemplate = new RestTemplate(); // 每次新建
-        return restTemplate.getForObject(url, String.class);
-    }
-}
-
-// ❌ 错误：没有设置超时
-@Configuration
-public class RestConfig {
-    @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate(); // 使用默认配置
+    public static void addListener(EventListener listener) {
+        listeners.add(listener); // 永远不清理，导致内存泄漏
     }
 }
 ```
@@ -4610,56 +5020,55 @@ public class RestConfig {
 **4. 正确示例**
 
 ```java
-// ✅ 正确：配置连接池和超时
-@Configuration
-public class HttpClientConfig {
+// ✅ 正确：使用有限制的缓存
+@Component
+public class UserCache {
+    private final Cache<String, User> cache = Caffeine.newBuilder()
+        .maximumSize(1000)
+        .expireAfterWrite(30, TimeUnit.MINUTES)
+        .build();
     
-    @Bean
-    public RestTemplate restTemplate() throws Exception {
-        HttpComponentsClientHttpRequestFactory factory = 
-            new HttpComponentsClientHttpRequestFactory();
-        
-        // 配置连接池
-        PoolingHttpClientConnectionManager connectionManager = 
-            new PoolingHttpClientConnectionManager();
-        connectionManager.setMaxTotal(100);
-        connectionManager.setDefaultMaxPerRoute(20);
-        
-        CloseableHttpClient httpClient = HttpClients.custom()
-            .setConnectionManager(connectionManager)
-            .build();
-        
-        factory.setHttpClient(httpClient);
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(30000);
-        
-        return new RestTemplate(factory);
+    public User getUser(String id) {
+        return cache.get(id, key -> userService.findById(key));
+    }
+}
+
+// ✅ 正确：使用弱引用避免内存泄漏
+public class EventManager {
+    private final Set<WeakReference<EventListener>> listeners = 
+        Collections.synchronizedSet(new HashSet<>());
+    
+    public void addListener(EventListener listener) {
+        listeners.add(new WeakReference<>(listener));
+        cleanupStaleReferences();
+    }
+    
+    private void cleanupStaleReferences() {
+        listeners.removeIf(ref -> ref.get() == null);
     }
 }
 ```
 
-**第三十一条** 资源释放检查 🔴：
-
-##### 4.31.1 资源及时释放检查
+##### 4.7.2 文件资源管理检查
 
 **1. 检测目标**
 
-a. 必须使用 try-with-resources 处理 AutoCloseable 资源
-b. 自定义资源必须实现 AutoCloseable 接口
-c. 禁止在 finally 块中手动关闭资源（除非必要）
-d. 集合和缓存必须有大小限制和清理机制
+a. 必须使用 try-with-resources 处理文件资源
+b. 确保文件流、Reader、Writer 正确关闭
+c. 避免文件句柄泄漏
+d. 正确处理文件操作异常
 
 **2. 检测方法**
 
-a. 静态分析：使用 SpotBugs 检测资源泄漏
-b. 代码审查：检查所有 I/O 操作和资源使用
-c. 内存分析：使用 JProfiler、MAT 分析内存泄漏
+a. 静态分析：检查资源是否正确关闭
+b. 代码审查：检查所有文件 I/O 操作
+c. 运行时监控：监控文件句柄数量
 d. 单元测试：验证资源正确释放
 
 **3. 错误示例**
 
 ```java
-// ❌ 错误：手动管理资源，容易泄漏
+// ❌ 错误：手动管理文件资源，容易泄漏
 public class FileProcessor {
     public String readFile(String path) {
         FileInputStream fis = null;
@@ -4679,13 +5088,125 @@ public class FileProcessor {
                     // 忽略异常
                 }
             }
-            if (fis != null) {
-                try {
-                    fis.close();
-                } catch (IOException e) {
-                    // 忽略异常
-                }
-            }
+        }
+    }
+}
+```
+
+**4. 正确示例**
+
+```java
+// ✅ 正确：使用 try-with-resources 自动管理资源
+public class FileProcessor {
+    public String readFile(String path) throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(path))) {
+            return reader.readLine();
+        }
+    }
+    
+    public void writeFile(String path, String content) throws IOException {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(path))) {
+            writer.write(content);
+        }
+    }
+    
+    // 处理多个资源
+    public void copyFile(String source, String target) throws IOException {
+        try (InputStream in = Files.newInputStream(Paths.get(source));
+             OutputStream out = Files.newOutputStream(Paths.get(target))) {
+            in.transferTo(out);
+        }
+    }
+}
+```
+
+##### 4.7.3 网络资源管理检查
+
+**1. 检测目标**
+
+a. 正确配置和管理连接池
+b. 设置合理的超时时间
+c. 及时释放网络连接
+d. 避免连接泄漏和资源耗尽
+e. 实现重试和熔断机制
+
+**2. 检测方法**
+
+a. 配置审查：检查连接池和超时配置
+b. 网络监控：监控连接数和响应时间
+c. 压力测试：验证高并发下的稳定性
+d. 日志分析：检查连接异常和超时日志
+
+**3. 错误示例**
+
+```java
+// ❌ 错误：每次创建新连接，没有连接池
+@Service
+public class ApiService {
+    public String callApi(String url) {
+        RestTemplate restTemplate = new RestTemplate(); // 每次新建
+        return restTemplate.getForObject(url, String.class);
+    }
+}
+
+// ❌ 错误：没有设置超时和异常处理
+public class HttpClient {
+    public String get(String url) throws IOException {
+        URL urlObj = new URL(url);
+        HttpURLConnection conn = (HttpURLConnection) urlObj.openConnection();
+        // 没有设置超时
+        try (InputStream in = conn.getInputStream()) {
+            return new String(in.readAllBytes());
+        }
+        // 没有关闭连接
+    }
+}
+```
+
+**4. 正确示例**
+
+```java
+// ✅ 正确：配置连接池和超时
+@Configuration
+public class HttpClientConfig {
+    
+    @Bean
+    public RestTemplate restTemplate() {
+        HttpComponentsClientHttpRequestFactory factory = 
+            new HttpComponentsClientHttpRequestFactory();
+        
+        // 配置连接池
+        PoolingHttpClientConnectionManager connectionManager = 
+            new PoolingHttpClientConnectionManager();
+        connectionManager.setMaxTotal(100);
+        connectionManager.setDefaultMaxPerRoute(20);
+        
+        CloseableHttpClient httpClient = HttpClients.custom()
+            .setConnectionManager(connectionManager)
+            .setDefaultRequestConfig(RequestConfig.custom()
+                .setConnectTimeout(5000)
+                .setSocketTimeout(30000)
+                .build())
+            .build();
+        
+        factory.setHttpClient(httpClient);
+        return new RestTemplate(factory);
+    }
+}
+
+// ✅ 正确：使用连接池和异常处理
+@Service
+public class ApiService {
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @Retryable(value = {ResourceAccessException.class}, maxAttempts = 3)
+    public String callApi(String url) {
+        try {
+            return restTemplate.getForObject(url, String.class);
+        } catch (ResourceAccessException e) {
+            log.warn("API调用失败，将重试: {}", e.getMessage());
+            throw e;
         }
     }
 }
@@ -4805,54 +5326,145 @@ public class CacheService {
 
 ### 4.8 异常处理检查
 
-**第三十三条** 异常设计检查 🔴：
-
-##### 4.33.1 异常分类与处理设计合理性
+##### 4.8.1 异常分类与设计检查
 
 **1. 检测目标**
 
 a. 必须区分业务异常和系统异常，使用不同的异常类型
-b. 禁止捕获 Exception 或 Throwable 等过于宽泛的异常
-c. 异常信息必须包含足够的上下文（操作、参数、时间等）
-d. 每个异常只能在一个地方记录日志，避免重复打印
-e. 系统异常必须有监控告警机制
-f. 自定义异常必须继承合适的基类
+b. 自定义异常必须继承合适的基类
+c. 异常信息必须包含足够的上下文信息
+d. 禁止使用通用异常类型（如RuntimeException）
+e. 异常类命名必须清晰表达异常含义
 
 **2. 检测方法**
 
-a. 静态分析：使用 SonarQube 检测异常处理问题
-b. 代码审查：检查所有 try-catch 块和异常定义
-c. 日志分析：检查异常日志的完整性和重复性
-d. 监控验证：确认异常告警机制有效
+a. 静态分析：使用 SonarQube 检测异常设计问题
+b. 代码审查：检查异常类定义和继承关系
+c. 架构审查：验证异常分层设计合理性
+d. 文档检查：确认异常使用规范文档完整
+
+**3. 错误示例**
+
+```java
+// ❌ 错误：使用通用异常类型
+public class UserService {
+    public User createUser(UserRequest request) {
+        if (request.getAge() < 0) {
+            throw new RuntimeException("年龄不能为负数"); // 应该使用业务异常
+        }
+        
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new Exception("邮箱已存在"); // 不应该使用Exception
+        }
+        
+        return userRepository.save(new User(request));
+    }
+}
+
+// ❌ 错误：异常信息不足
+public class OrderService {
+    public void processOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new RuntimeException("订单不存在")); // 缺少订单ID信息
+    }
+}
+```
+
+**4. 正确示例**
+
+```java
+// ✅ 正确：清晰的异常分类设计
+public abstract class BusinessException extends Exception {
+    private final String errorCode;
+    
+    public BusinessException(String errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
+    }
+    
+    public String getErrorCode() {
+        return errorCode;
+    }
+}
+
+public abstract class SystemException extends RuntimeException {
+    private final String errorCode;
+    
+    public SystemException(String errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+    }
+    
+    public String getErrorCode() {
+        return errorCode;
+    }
+}
+
+// ✅ 正确：具体的业务异常
+public class UserValidationException extends BusinessException {
+    public UserValidationException(String field, Object value, String reason) {
+        super("USER_VALIDATION_ERROR", 
+            String.format("用户验证失败: 字段[%s], 值[%s], 原因[%s]", field, value, reason));
+    }
+}
+
+public class UserNotFoundException extends BusinessException {
+    public UserNotFoundException(Long userId) {
+        super("USER_NOT_FOUND", 
+            String.format("用户不存在: userId=%d", userId));
+    }
+}
+
+// ✅ 正确：具体的系统异常
+public class DatabaseConnectionException extends SystemException {
+    public DatabaseConnectionException(String operation, Throwable cause) {
+        super("DATABASE_CONNECTION_ERROR", 
+            String.format("数据库连接异常: 操作[%s]", operation), cause);
+    }
+}
+```
+
+##### 4.8.2 异常捕获与处理检查
+
+**1. 检测目标**
+
+a. 禁止捕获过于宽泛的异常（Exception、Throwable）
+b. 必须正确处理或重新抛出异常
+c. 禁止忽略异常（空catch块）
+d. 异常转换必须保留原始异常信息
+e. 资源清理必须在finally块或try-with-resources中进行
+
+**2. 检测方法**
+
+a. 静态分析：检测catch块的异常类型和处理逻辑
+b. 代码审查：检查所有try-catch-finally结构
+c. 单元测试：验证异常处理的正确性
+d. 集成测试：验证异常在系统中的传播
 
 **3. 错误示例**
 
 ```java
 // ❌ 错误：捕获过于宽泛的异常
 @Service
-public class UserService {
-    public User createUser(UserRequest request) {
+public class PaymentService {
+    public void processPayment(PaymentRequest request) {
         try {
-            // 业务逻辑
-            return userRepository.save(user);
+            // 支付逻辑
+            paymentGateway.charge(request);
         } catch (Exception e) { // 过于宽泛
-            log.error("Error occurred"); // 信息不足
-            throw new RuntimeException("Failed"); // 丢失原始异常
+            log.error("支付失败"); // 丢失异常信息
+            throw new RuntimeException("支付处理失败"); // 丢失原始异常
         }
     }
 }
 
-// ❌ 错误：业务异常和系统异常混淆
-public class OrderService {
-    public void processOrder(Order order) {
-        if (order.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("Invalid amount"); // 应该是业务异常
-        }
-        
+// ❌ 错误：忽略异常
+public class FileService {
+    public void saveFile(String content, String path) {
         try {
-            paymentService.charge(order);
-        } catch (SQLException e) { // 系统异常
-            throw new RuntimeException("Payment failed"); // 异常转换不当
+            Files.write(Paths.get(path), content.getBytes());
+        } catch (IOException e) {
+            // 空catch块，忽略异常
         }
     }
 }
@@ -4861,82 +5473,99 @@ public class OrderService {
 **4. 正确示例**
 
 ```java
-// ✅ 正确：清晰的异常分类和处理
+// ✅ 正确：精确的异常捕获和处理
 @Service
-public class UserService {
-    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+public class PaymentService {
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
     
-    public User createUser(UserRequest request) {
+    public PaymentResult processPayment(PaymentRequest request) throws PaymentException {
         try {
-            validateUserRequest(request);
-            return userRepository.save(convertToUser(request));
-        } catch (UserValidationException e) {
-            // 业务异常，不记录堆栈，只记录关键信息
-            log.warn("User validation failed: userId={}, reason={}", 
-                request.getId(), e.getMessage());
-            throw e; // 重新抛出业务异常
-        } catch (DataAccessException e) {
-            // 系统异常，记录完整堆栈，触发告警
-            log.error("Database error while creating user: userId={}", 
-                request.getId(), e);
-            throw new UserServiceException("Failed to create user", e);
+            validatePaymentRequest(request);
+            return paymentGateway.charge(request);
+        } catch (PaymentValidationException e) {
+            // 业务异常，记录并重新抛出
+            log.warn("支付验证失败: orderId={}, reason={}", 
+                request.getOrderId(), e.getMessage());
+            throw e;
+        } catch (PaymentGatewayException e) {
+            // 第三方异常，转换为系统异常
+            log.error("支付网关异常: orderId={}, gateway={}", 
+                request.getOrderId(), e.getGatewayName(), e);
+            throw new PaymentSystemException("支付网关处理失败", e);
+        } catch (NetworkException e) {
+            // 网络异常，可重试
+            log.error("支付网络异常: orderId={}", request.getOrderId(), e);
+            throw new PaymentRetryableException("网络连接失败，请重试", e);
         }
     }
 }
 
-// ✅ 正确：自定义异常类型
-public class UserValidationException extends BusinessException {
-    public UserValidationException(String message) {
-        super("USER_VALIDATION_ERROR", message);
-    }
-}
-
-public class UserServiceException extends SystemException {
-    public UserServiceException(String message, Throwable cause) {
-        super("USER_SERVICE_ERROR", message, cause);
+// ✅ 正确：使用try-with-resources管理资源
+public class FileService {
+    private static final Logger log = LoggerFactory.getLogger(FileService.class);
+    
+    public void saveFile(String content, String path) throws FileOperationException {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(path))) {
+            writer.write(content);
+        } catch (IOException e) {
+            log.error("文件保存失败: path={}", path, e);
+            throw new FileOperationException("文件保存失败: " + path, e);
+        }
     }
 }
 ```
 
-**第三十四条** 全局异常处理检查 🔴：
-
-##### 4.34.1 全局异常处理机制合理性
+##### 4.8.3 异常日志与监控检查
 
 **1. 检测目标**
 
-a. 必须实现全局异常处理器（@ControllerAdvice）
-b. 异常响应格式必须统一
-c. 禁止向用户暴露技术细节和敏感信息
-d. 必须记录异常的完整堆栈信息
-e. 不同类型异常必须返回不同的HTTP状态码
+a. 每个异常只能在一个地方记录日志，避免重复
+b. 业务异常记录关键信息，系统异常记录完整堆栈
+c. 异常日志必须包含足够的上下文信息
+d. 系统异常必须有监控告警机制
+e. 敏感信息不能出现在异常日志中
 
 **2. 检测方法**
 
-a. 代码审查：检查全局异常处理器的实现
-b. 接口测试：验证异常响应格式和状态码
-c. 安全测试：确认不会泄露敏感信息
-d. 日志检查：验证异常日志记录完整
+a. 日志分析：检查异常日志的完整性和重复性
+b. 代码审查：检查异常记录的位置和内容
+c. 监控验证：确认异常告警机制有效
+d. 安全审查：确认敏感信息不会泄露
 
 **3. 错误示例**
 
 ```java
-// ❌ 错误：没有全局异常处理，异常信息暴露
-@RestController
-public class UserController {
-    @PostMapping("/users")
-    public User createUser(@RequestBody UserRequest request) {
-        // 异常直接抛出，暴露技术细节
-        return userService.createUser(request);
+// ❌ 错误：重复记录异常日志
+@Service
+public class OrderService {
+    public void createOrder(OrderRequest request) {
+        try {
+            Order order = buildOrder(request);
+            orderRepository.save(order);
+        } catch (DataAccessException e) {
+            log.error("保存订单失败", e); // 第一次记录
+            throw new OrderException("订单创建失败", e);
+        }
     }
 }
 
-// ❌ 错误：异常处理不统一
 @ControllerAdvice
 public class GlobalExceptionHandler {
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<String> handleException(Exception e) {
-        // 直接返回异常信息，可能泄露敏感信息
-        return ResponseEntity.status(500).body(e.getMessage());
+    @ExceptionHandler(OrderException.class)
+    public ResponseEntity<String> handleOrderException(OrderException e) {
+        log.error("订单异常", e); // 重复记录
+        return ResponseEntity.status(500).body("订单处理失败");
+    }
+}
+
+// ❌ 错误：日志信息不足，包含敏感信息
+public class UserService {
+    public void login(String username, String password) {
+        try {
+            authService.authenticate(username, password);
+        } catch (AuthenticationException e) {
+            log.error("登录失败: username={}, password={}", username, password); // 泄露密码
+        }
     }
 }
 ```
@@ -4944,64 +5573,70 @@ public class GlobalExceptionHandler {
 **4. 正确示例**
 
 ```java
-// ✅ 正确：统一的异常响应格式
-public class ErrorResponse {
-    private String code;
-    private String message;
-    private String traceId;
-    private LocalDateTime timestamp;
+// ✅ 正确：合理的异常日志记录
+@Service
+public class OrderService {
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
     
-    // 构造函数和getter/setter
+    public Order createOrder(OrderRequest request) throws OrderException {
+        try {
+            Order order = buildOrder(request);
+            return orderRepository.save(order);
+        } catch (DataAccessException e) {
+            // 只在这里记录系统异常，包含完整上下文
+            log.error("订单保存失败: userId={}, productId={}, amount={}, traceId={}", 
+                request.getUserId(), request.getProductId(), 
+                request.getAmount(), MDC.get("traceId"), e);
+            throw new OrderException("订单创建失败", e);
+        }
+    }
 }
 
-// ✅ 正确：完善的全局异常处理
 @ControllerAdvice
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException e) {
-        // 业务异常，返回用户友好信息
-        ErrorResponse response = new ErrorResponse(
-            e.getCode(),
-            e.getMessage(),
-            MDC.get("traceId"),
-            LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        // 业务异常只记录关键信息，不记录堆栈
+        log.warn("业务异常: code={}, message={}, traceId={}", 
+            e.getErrorCode(), e.getMessage(), MDC.get("traceId"));
+        
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse(e.getErrorCode(), e.getMessage()));
     }
     
     @ExceptionHandler(SystemException.class)
     public ResponseEntity<ErrorResponse> handleSystemException(SystemException e) {
-        // 系统异常，记录详细日志，返回通用错误信息
-        log.error("System error occurred: code={}, traceId={}", 
-            e.getCode(), MDC.get("traceId"), e);
+        // 系统异常不重复记录，只记录处理信息
+        log.info("系统异常已处理: code={}, traceId={}", 
+            e.getErrorCode(), MDC.get("traceId"));
         
-        ErrorResponse response = new ErrorResponse(
-            "SYSTEM_ERROR",
-            "系统繁忙，请稍后重试",
-            MDC.get("traceId"),
-            LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-    }
-    
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException e) {
-        String message = e.getBindingResult().getFieldErrors().stream()
-            .map(error -> error.getField() + ": " + error.getDefaultMessage())
-            .collect(Collectors.joining(", "));
+        // 触发监控告警
+        alertService.sendAlert("SYSTEM_EXCEPTION", e.getErrorCode(), e.getMessage());
         
-        ErrorResponse response = new ErrorResponse(
-            "VALIDATION_ERROR",
-            message,
-            MDC.get("traceId"),
-            LocalDateTime.now()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("SYSTEM_ERROR", "系统繁忙，请稍后重试"));
     }
 }
-```
+
+// ✅ 正确：安全的日志记录
+public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+    
+    public void login(String username, String password) throws AuthenticationException {
+        try {
+            authService.authenticate(username, password);
+            log.info("用户登录成功: username={}, ip={}, traceId={}", 
+                username, getClientIp(), MDC.get("traceId"));
+        } catch (AuthenticationException e) {
+            // 不记录密码，只记录必要信息
+            log.warn("用户登录失败: username={}, reason={}, ip={}, traceId={}", 
+                username, e.getMessage(), getClientIp(), MDC.get("traceId"));
+            throw e;
+        }
+    }
+}
 
 **第三十五条** 重试和熔断检查 🟡：
 
@@ -5084,38 +5719,37 @@ public class PaymentService {
 
 ### 4.9 日志和监控检查
 
-**第三十六条** 日志规范检查 🔴：
+##### 4.9.1 日志规范检查
 
-**检查目标：** 确保日志记录规范，信息完整，性能友好
+**1. 检测目标**
 
-**检测标准：**
-- 必须合理使用日志级别：ERROR（系统错误）、WARN（业务异常）、INFO（关键操作）、DEBUG（调试信息）
-- 日志必须包含完整上下文：traceId、userId、操作类型、关键参数
-- 禁止记录敏感信息：密码、身份证、银行卡号、API密钥等
-- 必须使用统一的日志格式和结构化日志
-- 生产环境禁止使用 System.out.println 和 e.printStackTrace()
-- 必须使用异步日志输出，避免阻塞主线程
-- 生产环境必须关闭控制台日志输出
+a. 必须合理使用日志级别（ERROR、WARN、INFO、DEBUG）
+b. 日志必须包含完整上下文信息
+c. 禁止记录敏感信息
+d. 必须使用统一的日志格式和结构化日志
+e. 生产环境禁止使用System.out.println和e.printStackTrace()
 
-**检测方法：**
-- 静态分析：使用 SonarQube 检测日志使用问题
-- 代码审查：检查所有日志输出语句
-- 敏感信息扫描：使用正则表达式检测敏感信息
-- 配置检查：验证 logback 配置文件正确性
+**2. 检测方法**
 
-**错误示例：**
+a. 静态分析：使用SonarQube检测日志使用问题
+b. 代码审查：检查所有日志输出语句
+c. 敏感信息扫描：使用正则表达式检测敏感信息
+d. 配置检查：验证logback配置文件正确性
+
+**3. 错误示例**
+
 ```java
-// ❌ 错误：使用 System.out.println 和记录敏感信息
+// ❌ 错误：使用System.out.println和记录敏感信息
 @Service
 public class UserService {
     public void login(String username, String password) {
-        // 错误：使用 System.out.println
+        // 错误：使用System.out.println
         System.out.println("User login: " + username);
         
         // 错误：记录敏感信息
         log.info("Login attempt: username={}, password={}", username, password);
         
-        // 错误：使用 printStackTrace
+        // 错误：使用printStackTrace
         try {
             authenticate(username, password);
         } catch (Exception e) {
@@ -5123,9 +5757,23 @@ public class UserService {
         }
     }
 }
+
+// ❌ 错误：日志级别使用不当
+public class OrderService {
+    public void processOrder(Order order) {
+        log.error("Processing order: {}", order.getId()); // 应该用INFO
+        
+        if (order.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            log.info("Invalid order amount"); // 应该用WARN
+        }
+        
+        log.debug("Critical system error occurred"); // 应该用ERROR
+    }
+}
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：规范的日志使用
 @Service
@@ -5136,7 +5784,8 @@ public class UserService {
         String traceId = MDC.get("traceId");
         
         // 正确：记录关键操作，不包含敏感信息
-        log.info("User login attempt: username={}, traceId={}", username, traceId);
+        log.info("User login attempt: username={}, ip={}, traceId={}", 
+            username, getClientIp(), traceId);
         
         try {
             User user = authenticate(username, password);
@@ -5148,13 +5797,13 @@ public class UserService {
             return LoginResult.success(user);
             
         } catch (AuthenticationException e) {
-            // 正确：业务异常使用 WARN 级别
+            // 正确：业务异常使用WARN级别
             log.warn("User login failed: username={}, reason={}, traceId={}", 
                 username, e.getMessage(), traceId);
             throw e;
             
         } catch (Exception e) {
-            // 正确：系统异常使用 ERROR 级别，记录完整堆栈
+            // 正确：系统异常使用ERROR级别，记录完整堆栈
             log.error("System error during login: username={}, traceId={}", 
                 username, traceId, e);
             throw new SystemException("Login system error", e);
@@ -5162,12 +5811,11 @@ public class UserService {
     }
 }
 
-// ✅ 正确：logback 配置示例
+// ✅ 正确：结构化日志配置
 // logback-spring.xml
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <springProfile name="prod">
-        <!-- 生产环境：异步日志，不输出到控制台 -->
         <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
             <file>logs/application.log</file>
             <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
@@ -5200,25 +5848,25 @@ public class UserService {
 </configuration>
 ```
 
-**第三十七条** 监控集成检查 🟡：
+##### 4.9.2 监控集成检查
 
-**检查目标：** 确保系统可观测性，及时发现和定位问题
+**1. 检测目标**
 
-**检测标准：**
-- 必须集成 APM 工具（如 SkyWalking、Zipkin）进行链路追踪
-- 必须收集关键业务指标：QPS、响应时间、错误率、业务成功率
-- 必须收集技术指标：CPU、内存、GC、数据库连接池等
-- 外部依赖调用必须有监控埋点
-- 关键接口必须有性能监控
-- 必须配置合理的告警规则和阈值
+a. 必须集成APM工具进行链路追踪
+b. 必须收集关键业务指标和技术指标
+c. 外部依赖调用必须有监控埋点
+d. 关键接口必须有性能监控
+e. 必须配置合理的告警规则和阈值
 
-**检测方法：**
-- 配置检查：验证监控组件配置正确
-- 指标验证：确认关键指标正常收集
-- 链路追踪：检查分布式调用链完整性
-- 告警测试：验证告警规则有效性
+**2. 检测方法**
 
-**错误示例：**
+a. 配置检查：验证监控组件配置正确
+b. 指标验证：确认关键指标正常收集
+c. 链路追踪：检查分布式调用链完整性
+d. 告警测试：验证告警规则有效性
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：没有监控集成
 @RestController
@@ -5229,9 +5877,19 @@ public class OrderController {
         return orderService.createOrder(request);
     }
 }
+
+// ❌ 错误：外部调用没有监控
+@Service
+public class PaymentService {
+    public PaymentResult processPayment(PaymentRequest request) {
+        // 没有监控埋点
+        return paymentGateway.charge(request);
+    }
+}
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：完整的监控集成
 @RestController
@@ -5276,7 +5934,234 @@ public class OrderController {
             });
     }
 }
+
+// ✅ 正确：外部调用监控
+@Service
+public class PaymentService {
+    private final MeterRegistry meterRegistry;
+    private final Timer paymentTimer;
+    private final Counter paymentCounter;
+    
+    public PaymentService(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        this.paymentTimer = Timer.builder("payment.gateway.duration")
+            .description("Payment gateway call duration")
+            .register(meterRegistry);
+        this.paymentCounter = Counter.builder("payment.gateway.total")
+            .description("Payment gateway call total")
+            .register(meterRegistry);
+    }
+    
+    @NewSpan("payment-process")
+    public PaymentResult processPayment(PaymentRequest request) {
+        return Timer.Sample.start(meterRegistry)
+            .stop(paymentTimer)
+            .recordCallable(() -> {
+                try {
+                    PaymentResult result = paymentGateway.charge(request);
+                    
+                    paymentCounter.increment(Tags.of(
+                        "status", "success",
+                        "gateway", request.getGateway()
+                    ));
+                    
+                    return result;
+                    
+                } catch (Exception e) {
+                    paymentCounter.increment(Tags.of(
+                        "status", "error",
+                        "gateway", request.getGateway(),
+                        "error_type", e.getClass().getSimpleName()
+                    ));
+                    throw e;
+                }
+            });
+    }
+}
 ```
+
+##### 4.9.3 性能监控检查
+
+**1. 检测目标**
+
+a. 必须监控关键性能指标（响应时间、吞吐量、错误率）
+b. 必须监控系统资源使用情况
+c. 必须监控数据库连接池和缓存性能
+d. 必须设置合理的性能阈值和告警
+e. 必须支持性能数据的可视化展示
+
+**2. 检测方法**
+
+a. 性能测试：验证监控指标准确性
+b. 压力测试：验证高负载下监控有效性
+c. 告警测试：验证性能告警及时性
+d. 可视化检查：确认监控数据可视化完整
+
+**3. 错误示例**
+
+```java
+// ❌ 错误：没有性能监控
+@Service
+public class DataService {
+    public List<Data> queryData(QueryRequest request) {
+        // 没有性能监控
+        return dataRepository.findByConditions(request);
+    }
+    
+    public void batchProcess(List<Data> dataList) {
+        // 批处理没有监控
+        for (Data data : dataList) {
+            processData(data);
+        }
+    }
+}
+
+// ❌ 错误：缺少资源监控
+@Component
+public class CacheManager {
+    private final Map<String, Object> cache = new ConcurrentHashMap<>();
+    
+    public void put(String key, Object value) {
+        cache.put(key, value); // 没有监控缓存大小
+    }
+}
+```
+
+**4. 正确示例**
+
+```java
+// ✅ 正确：完整的性能监控
+@Service
+public class DataService {
+    private final MeterRegistry meterRegistry;
+    private final Timer queryTimer;
+    private final Counter queryCounter;
+    private final Gauge cacheHitRatio;
+    
+    public DataService(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        this.queryTimer = Timer.builder("data.query.duration")
+            .description("Data query duration")
+            .register(meterRegistry);
+        this.queryCounter = Counter.builder("data.query.total")
+            .description("Data query total count")
+            .register(meterRegistry);
+    }
+    
+    @Timed(value = "data.query", description = "Data query time")
+    public List<Data> queryData(QueryRequest request) {
+        return Timer.Sample.start(meterRegistry)
+            .stop(queryTimer)
+            .recordCallable(() -> {
+                try {
+                    List<Data> result = dataRepository.findByConditions(request);
+                    
+                    // 记录查询指标
+                    queryCounter.increment(Tags.of(
+                        "status", "success",
+                        "type", request.getType(),
+                        "size", String.valueOf(result.size())
+                    ));
+                    
+                    // 监控查询结果大小
+                    meterRegistry.gauge("data.query.result.size", result.size());
+                    
+                    return result;
+                    
+                } catch (Exception e) {
+                    queryCounter.increment(Tags.of(
+                        "status", "error",
+                        "type", request.getType(),
+                        "error", e.getClass().getSimpleName()
+                    ));
+                    throw e;
+                }
+            });
+    }
+    
+    @Async
+    @Timed(value = "data.batch.process", description = "Batch process time")
+    public CompletableFuture<Void> batchProcess(List<Data> dataList) {
+        Timer.Sample sample = Timer.Sample.start(meterRegistry);
+        
+        try {
+            int totalCount = dataList.size();
+            int processedCount = 0;
+            
+            for (Data data : dataList) {
+                processData(data);
+                processedCount++;
+                
+                // 更新处理进度
+                meterRegistry.gauge("data.batch.progress", 
+                    (double) processedCount / totalCount * 100);
+            }
+            
+            // 记录批处理成功
+            meterRegistry.counter("data.batch.total", 
+                "status", "success").increment();
+            
+            return CompletableFuture.completedFuture(null);
+            
+        } catch (Exception e) {
+            meterRegistry.counter("data.batch.total", 
+                "status", "error", 
+                "error", e.getClass().getSimpleName()).increment();
+            throw e;
+            
+        } finally {
+            sample.stop(Timer.builder("data.batch.duration")
+                .register(meterRegistry));
+        }
+    }
+}
+
+// ✅ 正确：资源监控
+@Component
+public class CacheManager {
+    private final Map<String, Object> cache = new ConcurrentHashMap<>();
+    private final MeterRegistry meterRegistry;
+    private final AtomicLong hitCount = new AtomicLong(0);
+    private final AtomicLong missCount = new AtomicLong(0);
+    
+    public CacheManager(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        
+        // 注册缓存监控指标
+        Gauge.builder("cache.size")
+            .description("Cache size")
+            .register(meterRegistry, this, c -> c.cache.size());
+            
+        Gauge.builder("cache.hit.ratio")
+            .description("Cache hit ratio")
+            .register(meterRegistry, this, c -> {
+                long total = c.hitCount.get() + c.missCount.get();
+                return total > 0 ? (double) c.hitCount.get() / total : 0.0;
+            });
+    }
+    
+    public Object get(String key) {
+        Object value = cache.get(key);
+        if (value != null) {
+            hitCount.incrementAndGet();
+            meterRegistry.counter("cache.access", "result", "hit").increment();
+        } else {
+            missCount.incrementAndGet();
+            meterRegistry.counter("cache.access", "result", "miss").increment();
+        }
+        return value;
+    }
+    
+    public void put(String key, Object value) {
+        cache.put(key, value);
+        meterRegistry.counter("cache.operations", "type", "put").increment();
+        
+        // 监控缓存大小，超过阈值告警
+        if (cache.size() > 10000) {
+            meterRegistry.counter("cache.size.warning").increment();
+        }
+    }
+}
 
 **第三十八条** 健康检查检查 🟡：
 
@@ -5362,26 +6247,24 @@ management:
 
 ### 4.10 安全性检查
 
-**第三十九条** 输入验证检查 🔴：
+#### 4.10.1 输入验证检查
 
-**检查目标：** 确保所有外部输入得到严格验证，防止注入攻击
+**1. 检测目标**
 
-**检测标准：**
-- 所有外部输入必须进行验证：请求参数、文件上传、HTTP头等
-- 禁止SQL注入：必须使用预编译语句，禁止字符串拼接SQL
-- 防止XSS攻击：输出到客户端的数据必须进行HTML编码
-- 输入长度限制：所有字符串输入必须有长度限制
-- 数据类型验证：严格验证数据类型和格式
-- 特殊字符过滤：对特殊字符进行转义或过滤
-- 文件上传安全：验证文件类型、大小、内容
+a. 确保所有外部输入得到严格验证，防止注入攻击。
+b. 禁止SQL注入，必须使用预编译语句。
+c. 防止XSS攻击，输出数据必须进行HTML编码。
+d. 实现输入长度限制和数据类型验证。
 
-**检测方法：**
-- 静态分析：使用 SAST 工具检测潜在的注入漏洞
-- 代码审查：检查所有外部输入处理逻辑
-- 安全测试：使用 OWASP ZAP 等工具进行渗透测试
-- 参数验证：确认所有接口参数都有验证注解
+**2. 检测方法**
 
-**错误示例：**
+1. 静态分析：使用SAST工具检测潜在的注入漏洞。
+2. 代码审查：检查所有外部输入处理逻辑。
+3. 安全测试：使用OWASP ZAP等工具进行渗透测试。
+4. 参数验证：确认所有接口参数都有验证注解。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：SQL注入风险
 @Service
@@ -5413,7 +6296,8 @@ public class MessageController {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：使用预编译语句防止SQL注入
 @Service
@@ -5475,26 +6359,24 @@ public class MessageRequest {
 }
 ```
 
-**第四十条** 认证和授权检查 🔴：
+#### 4.10.2 认证授权检查
 
-**检查目标：** 确保身份认证和权限控制机制完善
+**1. 检测目标**
 
-**检测标准：**
-- 所有需要保护的接口必须进行身份认证
-- 必须实现基于角色的访问控制（RBAC）
-- 敏感操作必须进行权限验证
-- 密码必须进行安全存储（BCrypt等）
-- 会话管理安全：超时、注销、并发控制
-- JWT令牌必须设置合理的过期时间
-- 敏感信息传输必须加密
+a. 确保身份认证和权限控制机制完善。
+b. 实现基于角色的访问控制（RBAC）。
+c. 敏感操作必须进行权限验证。
+d. 密码必须进行安全存储和传输。
 
-**检测方法：**
-- 权限测试：验证不同角色的访问权限
-- 会话测试：检查会话管理机制
-- 认证绕过测试：尝试绕过认证机制
-- 密码安全检查：验证密码存储和传输安全
+**2. 检测方法**
 
-**错误示例：**
+1. 权限测试：验证不同角色的访问权限。
+2. 会话测试：检查会话管理机制。
+3. 认证绕过测试：尝试绕过认证机制。
+4. 密码安全检查：验证密码存储和传输安全。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：明文存储密码，缺少权限控制
 @RestController
@@ -5518,7 +6400,8 @@ public class UserController {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：完善的认证和授权机制
 @RestController
@@ -5972,26 +6855,28 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 
 ### 4.11 性能优化检查
 
-**第四十三条** 数据库性能检查 🟡：
+#### 4.11.1 数据库性能检查
 
-**检查目标：** 确保数据库操作高效，避免性能瓶颈
+**1. 检测目标**
 
-**检测标准：**
-- 查询时间超过100ms的SQL必须优化
-- 必须使用合适的索引，避免全表扫描
-- 批量操作必须使用批处理，单次处理记录数不超过1000条
-- 大数据量查询必须分页，单页记录数不超过100条
-- 事务时间不超过5秒，避免长事务
-- 必须避免N+1查询问题
-- 连接池配置合理：最小连接数5，最大连接数20
+a. 确保数据库操作高效，避免性能瓶颈。
+b. 查询时间超过100ms的SQL必须优化。
+c. 必须使用合适的索引，避免全表扫描。
+d. 批量操作必须使用批处理，单次处理记录数不超过1000条。
+e. 大数据量查询必须分页，单页记录数不超过100条。
+f. 事务时间不超过5秒，避免长事务。
+g. 必须避免N+1查询问题。
+h. 连接池配置合理：最小连接数5，最大连接数20。
 
-**检测方法：**
-- 慢查询日志分析：监控执行时间超过阈值的SQL
-- 执行计划分析：检查SQL执行计划，确认索引使用
-- 性能测试：使用JMeter等工具进行压力测试
-- 数据库监控：使用APM工具监控数据库性能指标
+**2. 检测方法**
 
-**错误示例：**
+1. 慢查询日志分析：监控执行时间超过阈值的SQL。
+2. 执行计划分析：检查SQL执行计划，确认索引使用。
+3. 性能测试：使用JMeter等工具进行压力测试。
+4. 数据库监控：使用APM工具监控数据库性能指标。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：N+1查询问题
 @Service
@@ -6029,7 +6914,8 @@ public class OrderService {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：优化的数据库操作
 @Service
@@ -6084,25 +6970,27 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 }
 ```
 
-**第四十四条** 缓存策略检查 🟡：
+#### 4.11.2 缓存策略检查
 
-**检查目标：** 合理使用缓存提升系统性能
+**1. 检测目标**
 
-**检测标准：**
-- 热点数据必须使用缓存，缓存命中率不低于80%
-- 缓存过期时间设置合理：热点数据1小时，一般数据30分钟
-- 必须防止缓存穿透、击穿、雪崩
-- 缓存与数据库一致性策略明确
-- 缓存大小配置合理，内存使用率不超过80%
-- 必须有缓存监控和告警机制
+a. 合理使用缓存提升系统性能。
+b. 热点数据必须使用缓存，缓存命中率不低于80%。
+c. 缓存过期时间设置合理：热点数据1小时，一般数据30分钟。
+d. 必须防止缓存穿透、击穿、雪崩。
+e. 缓存与数据库一致性策略明确。
+f. 缓存大小配置合理，内存使用率不超过80%。
+g. 必须有缓存监控和告警机制。
 
-**检测方法：**
-- 缓存命中率监控：统计缓存命中率指标
-- 性能对比测试：对比使用缓存前后的性能差异
-- 一致性测试：验证缓存与数据库数据一致性
-- 压力测试：验证缓存在高并发下的表现
+**2. 检测方法**
 
-**错误示例：**
+1. 缓存命中率监控：统计缓存命中率指标。
+2. 性能对比测试：对比使用缓存前后的性能差异。
+3. 一致性测试：验证缓存与数据库数据一致性。
+4. 压力测试：验证缓存在高并发下的表现。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：缓存使用不当
 @Service
@@ -6140,7 +7028,8 @@ public class ProductService {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：完善的缓存策略
 @Service
@@ -6257,26 +7146,28 @@ public class CacheConfig {
 
 ### 4.12 微服务相关检查
 
-**第五十一条** 服务拆分检查 🟡：
+#### 4.12.1 服务拆分检查
 
-**检查目标：** 确保微服务架构设计合理，服务边界清晰
+**1. 检测目标**
 
-**检测标准：**
-- 单个服务代码量不超过10万行，团队规模不超过8人
-- 服务职责单一，符合单一职责原则
-- 服务间耦合度低，内聚度高
-- 避免分布式事务，优先使用Saga模式或最终一致性
-- 数据库按服务拆分，避免跨服务直接访问数据库
-- API设计遵循RESTful规范
-- 服务间通信延迟不超过100ms
+a. 确保微服务架构设计合理，服务边界清晰。
+b. 单个服务代码量不超过10万行，团队规模不超过8人。
+c. 服务职责单一，符合单一职责原则。
+d. 服务间耦合度低，内聚度高。
+e. 避免分布式事务，优先使用Saga模式或最终一致性。
+f. 数据库按服务拆分，避免跨服务直接访问数据库。
+g. API设计遵循RESTful规范。
+h. 服务间通信延迟不超过100ms。
 
-**检测方法：**
-- 代码量统计：使用SonarQube等工具统计代码行数
-- 依赖关系分析：检查服务间依赖关系图
-- 数据库访问审计：确认数据访问边界
-- 性能测试：测试服务间通信延迟
+**2. 检测方法**
 
-**错误示例：**
+1. 代码量统计：使用SonarQube等工具统计代码行数。
+2. 依赖关系分析：检查服务间依赖关系图。
+3. 数据库访问审计：确认数据访问边界。
+4. 性能测试：测试服务间通信延迟。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：服务职责不清晰，违反单一职责原则
 @RestController
@@ -6327,7 +7218,8 @@ public class MegaServiceController {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：职责单一的订单服务
 @RestController
@@ -6743,25 +7635,27 @@ public class SagaStep {
 
 ### 4.13 容错处理检查
 
-**第五十四条** 故障处理检查 🔴：
+#### 4.13.1 故障处理检查
 
-**检查目标：** 确保系统具备完善的故障处理和恢复能力
+**1. 检测目标**
 
-**检测标准：**
-- 所有外部调用必须有超时设置，超时时间不超过5秒
-- 关键业务流程必须有降级方案
-- 故障恢复时间不超过30秒
-- 故障检测时间不超过10秒
-- 必须有完整的故障监控和告警机制
-- 故障日志必须包含完整的上下文信息
+a. 确保系统具备完善的故障处理和恢复能力。
+b. 所有外部调用必须有超时设置，超时时间不超过5秒。
+c. 关键业务流程必须有降级方案。
+d. 故障恢复时间不超过30秒。
+e. 故障检测时间不超过10秒。
+f. 必须有完整的故障监控和告警机制。
+g. 故障日志必须包含完整的上下文信息。
 
-**检测方法：**
-- 故障注入测试：模拟各种故障场景
-- 超时测试：验证超时设置的有效性
-- 恢复测试：验证故障恢复机制
-- 监控验证：检查监控指标的完整性
+**2. 检测方法**
 
-**错误示例：**
+1. 故障注入测试：模拟各种故障场景。
+2. 超时测试：验证超时设置的有效性。
+3. 恢复测试：验证故障恢复机制。
+4. 监控验证：检查监控指标的完整性。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：缺乏故障处理机制
 @Service
@@ -6800,7 +7694,8 @@ public class NotificationService {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：完善的故障处理机制
 @Service
@@ -7464,25 +8359,27 @@ public class RateLimiterConfig {
 
 ### 4.14 可扩展性检查
 
-**第五十八条** 水平扩展检查 🟡：
+#### 4.14.1 水平扩展检查
 
-**检查目标：** 确保系统支持水平扩展
+**1. 检测目标**
 
-**检测标准：**
-- 服务必须设计为无状态，不依赖本地存储
-- 支持负载均衡，单个实例故障不影响整体服务
-- 数据库支持读写分离和分片策略
-- 缓存支持分布式部署
-- 会话信息存储在外部存储中
-- 文件上传下载使用对象存储服务
+a. 确保系统支持水平扩展。
+b. 服务必须设计为无状态，不依赖本地存储。
+c. 支持负载均衡，单个实例故障不影响整体服务。
+d. 数据库支持读写分离和分片策略。
+e. 缓存支持分布式部署。
+f. 会话信息存储在外部存储中。
+g. 文件上传下载使用对象存储服务。
 
-**检测方法：**
-- 多实例测试：部署多个实例验证负载均衡
-- 故障测试：模拟单个实例故障
-- 压力测试：测试水平扩展的效果
-- 状态检查：验证服务的无状态特性
+**2. 检测方法**
 
-**错误示例：**
+1. 多实例测试：部署多个实例验证负载均衡。
+2. 故障测试：模拟单个实例故障。
+3. 压力测试：测试水平扩展的效果。
+4. 状态检查：验证服务的无状态特性。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：有状态的服务设计
 @RestController
@@ -7534,7 +8431,8 @@ public class FileService {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：无状态的服务设计
 @RestController
@@ -7915,25 +8813,27 @@ public class AsyncConfig implements AsyncConfigurer {
 
 ### 4.15 可维护性检查
 
-**第六十条** 代码可读性检查 🟡：
+#### 4.15.1 代码可读性检查
 
-**检查目标：** 确保代码具有良好的可读性和可维护性
+**1. 检测目标**
 
-**检测标准：**
-- 命名必须具有描述性，避免缩写和无意义名称
-- 方法长度不超过50行，类长度不超过500行
-- 圈复杂度不超过10
-- 注释覆盖率达到关键方法的80%
-- 代码格式统一，遵循团队编码规范
-- 避免深层嵌套（不超过4层）
+a. 确保代码具有良好的可读性和可维护性。
+b. 命名必须具有描述性，避免缩写和无意义名称。
+c. 方法长度不超过50行，类长度不超过500行。
+d. 圈复杂度不超过10。
+e. 注释覆盖率达到关键方法的80%。
+f. 代码格式统一，遵循团队编码规范。
+g. 避免深层嵌套（不超过4层）。
 
-**检测方法：**
-- 静态代码分析：使用SonarQube等工具检测
-- 代码审查：人工审查代码可读性
-- 复杂度分析：检测圈复杂度和认知复杂度
-- 命名检查：验证命名规范的遵循情况
+**2. 检测方法**
 
-**错误示例：**
+1. 静态代码分析：使用SonarQube等工具检测。
+2. 代码审查：人工审查代码可读性。
+3. 复杂度分析：检测圈复杂度和认知复杂度。
+4. 命名检查：验证命名规范的遵循情况。
+
+**3. 错误示例**
+
 ```java
 // ❌ 错误：可读性差的代码
 public class DataProcessor {
@@ -7988,7 +8888,8 @@ public class DataProcessor {
 }
 ```
 
-**正确示例：**
+**4. 正确示例**
+
 ```java
 // ✅ 正确：可读性良好的代码
 public class TextDataProcessor {
@@ -8218,25 +9119,29 @@ public class UserController {
 
 ### 4.16 DevOps检查
 
-**第六十二条** 持续集成检查 🟡：
+#### 4.16.1 持续集成检查
 
-**检查目标：** 确保持续集成流程完整可靠
+**1. 检测目标**
 
-**检测标准：**
-- 构建脚本必须可重复执行，支持多环境
-- 自动化测试覆盖率不低于80%
-- 代码质量门禁设置合理阈值
-- 构建时间控制在10分钟以内
-- 构建失败时有明确的错误信息
-- 支持并行构建和缓存优化
+a. 确保持续集成流程完整可靠。
+b. 构建脚本必须可重复执行，支持多环境。
+c. 自动化测试覆盖率不低于80%。
+d. 代码质量门禁设置合理阈值。
+e. 构建时间控制在10分钟以内。
+f. 构建失败时有明确的错误信息。
+g. 支持并行构建和缓存优化。
 
-**检测方法：**
-- 构建测试：验证构建脚本的可重复性
-- 性能测试：测试构建时间和资源消耗
-- 质量检查：验证代码质量门禁的有效性
-- 失败模拟：测试构建失败时的处理机制
+**2. 检测方法**
 
-**错误示例：**
+1. 构建测试：验证构建脚本的可重复性。
+2. 性能测试：测试构建时间和资源消耗。
+3. 质量检查：验证代码质量门禁的有效性。
+4. 失败模拟：测试构建失败时的处理机制。
+
+**3. 错误示例**
+
+以下是不完整的CI配置示例：
+
 ```yaml
 # ❌ 错误：不完整的CI配置
 name: Build
@@ -8265,7 +9170,17 @@ jobs:
     # 危险：没有构建产物上传
 ```
 
-**正确示例：**
+**问题分析：**
+- 没有指定明确的Java版本和发行版
+- 缺少依赖缓存，导致构建时间过长
+- 没有运行自动化测试
+- 缺少代码质量检查步骤
+- 没有上传构建产物
+
+**4. 正确示例**
+
+以下是完整的CI配置示例：
+
 ```yaml
 # ✅ 正确：完整的CI配置
 name: CI Pipeline
@@ -8364,25 +9279,37 @@ jobs:
         retention-days: 30
 ```
 
-**第六十三条** 部署策略检查 🟡：
+**优势分析：**
+- 明确指定Java版本和发行版
+- 使用依赖缓存提高构建效率
+- 包含完整的测试和代码覆盖率检查
+- 集成SonarQube进行代码质量分析
+- 构建Docker镜像并上传构建产物
+- 支持多分支和Pull Request触发
 
-**检查目标：** 确保部署策略安全可靠
+#### 4.16.2 部署策略检查
 
-**检测标准：**
-- 支持蓝绿部署或滚动更新策略
-- 部署过程中服务可用性不低于99%
-- 具备快速回滚机制（5分钟内完成）
-- 部署后自动进行健康检查
-- 支持金丝雀发布和流量控制
-- 部署过程有详细的日志记录
+**1. 检测目标**
 
-**检测方法：**
-- 部署测试：验证不同部署策略的有效性
-- 可用性测试：测试部署过程中的服务可用性
-- 回滚测试：验证回滚机制的速度和可靠性
-- 健康检查：验证部署后的健康检查机制
+a. 确保部署策略安全可靠。
+b. 支持蓝绿部署或滚动更新策略。
+c. 部署过程中服务可用性不低于99%。
+d. 具备快速回滚机制（5分钟内完成）。
+e. 部署后自动进行健康检查。
+f. 支持金丝雀发布和流量控制。
+g. 部署过程有详细的日志记录。
 
-**错误示例：**
+**2. 检测方法**
+
+1. 部署测试：验证不同部署策略的有效性。
+2. 可用性测试：测试部署过程中的服务可用性。
+3. 回滚测试：验证回滚机制的速度和可靠性。
+4. 健康检查：验证部署后的健康检查机制。
+
+**3. 错误示例**
+
+以下是简单粗暴的部署配置示例：
+
 ```yaml
 # ❌ 错误：简单粗暴的部署配置
 apiVersion: apps/v1
@@ -8410,7 +9337,17 @@ spec:
   # 危险：没有部署策略配置
 ```
 
-**正确示例：**
+**问题分析：**
+- 使用latest标签，无法确保版本一致性
+- 缺少健康检查配置
+- 没有资源限制，可能导致资源争用
+- 缺少优雅关闭配置
+- 没有部署策略，可能导致服务中断
+
+**4. 正确示例**
+
+以下是完整的部署配置示例：
+
 ```yaml
 # ✅ 正确：完整的部署配置
 apiVersion: apps/v1
@@ -8534,23 +9471,25 @@ spec:
         averageUtilization: 80
 ```
 
-**第六十四条** 监控告警检查 🟡：
+**优势分析：**
+- 使用明确的版本标签，确保部署一致性
+- 配置完整的健康检查机制
+- 设置合理的资源限制和请求
+- 支持滚动更新策略，确保服务可用性
+- 包含HPA自动扩缩容配置
+- 配置优雅关闭机制，避免请求丢失
 
-**检查目标：** 确保系统监控和告警机制完善
+#### 4.16.3 监控告警检查
 
-**检测标准：**
-- 业务关键指标监控覆盖率100%
-- 系统资源监控包含CPU、内存、磁盘、网络
-- 告警响应时间不超过5分钟
-- 日志聚合和分析系统完整
-- 监控数据保留期不少于30天
-- 告警规则避免误报和漏报
+**检测目标：**
+确保系统监控和告警机制完善，业务关键指标监控覆盖率达到100%，系统资源监控包含CPU、内存、磁盘、网络等关键指标，告警响应时间不超过5分钟，日志聚合和分析系统完整，监控数据保留期不少于30天，告警规则避免误报和漏报。
 
 **检测方法：**
-- 监控测试：验证监控指标的准确性
-- 告警测试：模拟故障验证告警机制
-- 性能测试：测试监控系统的性能影响
-- 日志分析：验证日志聚合和查询功能
+1. **监控指标检查**：验证业务关键指标和系统资源指标的监控覆盖率
+2. **告警机制测试**：模拟故障场景验证告警触发和通知机制
+3. **性能影响评估**：测试监控系统对应用性能的影响程度
+4. **日志系统验证**：检查日志聚合、存储和查询功能的完整性
+5. **数据保留策略**：确认监控数据和日志的保留期符合要求
 
 **错误示例：**
 ```java
@@ -8578,6 +9517,13 @@ public class OrderController {
     }
 }
 ```
+
+**问题分析：**
+1. **缺少业务监控指标**：无法统计订单创建成功率、响应时间等关键业务指标
+2. **缺少日志记录**：无法追踪请求处理过程，难以排查问题
+3. **缺少性能监控**：无法监控接口响应时间和吞吐量
+4. **缺少错误监控**：异常情况无法及时发现和告警
+5. **缺少链路追踪**：无法跟踪请求在微服务间的调用链路
 
 **正确示例：**
 ```java
@@ -8746,6 +9692,14 @@ public class AlertingRules {
 }
 ```
 
+**优势分析：**
+1. **全面的监控指标**：包含业务指标（订单创建数量、响应时间）和系统指标（CPU、内存使用率）
+2. **完整的链路追踪**：通过traceId实现请求全链路跟踪，便于问题定位
+3. **详细的日志记录**：记录关键操作的成功和失败信息，包含上下文信息
+4. **智能告警机制**：基于业务阈值和系统资源使用率进行分级告警
+5. **标准化配置**：使用Spring Boot Actuator和Micrometer实现标准化监控
+6. **多维度标签**：通过Tags实现监控指标的多维度分析和聚合
+
 **推荐工具：**
 - **CI/CD：** Jenkins、GitLab CI、GitHub Actions
 - **容器化：** Docker、Kubernetes、Helm
@@ -8755,31 +9709,59 @@ public class AlertingRules {
 
 ### 4.17 测试相关检查
 
-**第六十五条** 单元测试检查 🟡：
-（一）测试覆盖率：核心业务逻辑测试覆盖率是否足够
-（二）测试质量：测试用例是否覆盖了边界条件和异常情况
-（三）测试可维护性：测试代码是否易于维护和理解
-（四）测试独立性：测试用例之间是否相互独立
+#### 4.17.1 单元测试检查 🟡
 
-**第六十六条** 集成测试检查 🟡：
-（一）接口测试：外部接口是否有集成测试
-（二）数据库测试：数据库操作是否有测试
-（三）端到端测试：关键业务流程是否有端到端测试
-（四）性能测试：是否有必要的性能测试
+**检测目标**：确保单元测试的质量和覆盖率满足项目要求
 
-**第六十七条** 测试环境检查 🟡：
-（一）环境一致性：测试环境与生产环境是否一致
-（二）数据准备：测试数据是否充分和真实
-（三）测试隔离：测试是否相互隔离
-（四）测试自动化：测试是否自动化执行
+**检测标准**：
+- 核心业务逻辑测试覆盖率应达到80%以上
+- 测试用例应覆盖正常流程、边界条件和异常情况
+- 测试代码应易于维护和理解
+- 测试用例之间应相互独立，不依赖执行顺序
+
+**检测方法**：
+- 使用JaCoCo等工具检查代码覆盖率
+- 审查测试用例的完整性和质量
+- 检查测试代码的可读性和维护性
+- 验证测试的独立性和可重复性
+
+#### 4.17.2 集成测试检查 🟡
+
+**检测目标**：确保系统各组件间的集成测试覆盖关键业务流程
+
+**检测标准**：
+- 外部接口应有完整的集成测试
+- 数据库操作应有相应的测试验证
+- 关键业务流程应有端到端测试
+- 性能敏感模块应有性能测试
+
+**检测方法**：
+- 检查API接口的集成测试覆盖情况
+- 验证数据库操作的测试完整性
+- 审查端到端测试的业务场景覆盖
+- 评估性能测试的必要性和充分性
+
+#### 4.17.3 测试环境检查 🟡
+
+**检测目标**：确保测试环境的一致性和测试数据的有效性
+
+**检测标准**：
+- 测试环境应与生产环境保持一致
+- 测试数据应充分且真实可靠
+- 测试应相互隔离，避免干扰
+- 测试应支持自动化执行
+
+**检测方法**：
+- 对比测试环境与生产环境的配置差异
+- 检查测试数据的完整性和有效性
+- 验证测试隔离机制的有效性
+- 评估测试自动化的实现程度
 
 ### 4.18 影响分析检查
 
-**第六十八条** 影响分析检查 🔴：
+#### 4.18.1 变更影响最小化 🔴
 
-#### 4.18.1 变更影响最小化
-
-**检查目标**：确保代码变更对系统的影响范围可控且最小化
+**检测目标**：确保代码变更对系统的影响范围可控且最小化
 
 **检测标准**：
 - 变更应该遵循单一职责原则，避免大范围修改
@@ -8849,17 +9831,23 @@ public class UserController {
 }
 ```
 
-#### 4.18.2 备份和回滚方案
+**优势分析**：
+- 遵循单一职责原则，变更范围可控且易于测试
+- 向后兼容设计保护现有客户端不受影响
+- 版本化接口提供平滑的迁移路径
+- 明确的废弃标记给用户充分的迁移时间
 
-**检查目标**：确保变更具有完善的备份和回滚机制
+#### 4.18.2 备份和回滚方案 🔴
 
-**检测标准：**
+**检测目标**：确保变更具有完善的备份和回滚机制
+
+**检测标准**：
 - 数据库变更必须有回滚脚本
 - 配置变更必须有备份和恢复方案
 - 部署必须支持快速回滚
 - 关键数据变更前必须备份
 
-**检测方法：**
+**检测方法**：
 - 检查是否提供了回滚脚本
 - 验证回滚方案的可行性
 - 确认备份策略的完整性
@@ -8872,6 +9860,12 @@ ALTER TABLE users DROP COLUMN old_field;
 ALTER TABLE users ADD COLUMN new_field VARCHAR(255);
 -- 缺少回滚脚本
 ```
+
+**问题分析**：
+- 删除字段操作不可逆，数据永久丢失
+- 缺少回滚脚本，出现问题时无法快速恢复
+- 没有数据备份，无法保障数据安全
+- 变更风险高，影响系统稳定性
 
 **正确示例**：
 ```sql
@@ -8912,17 +9906,29 @@ public class ConfigurationManager {
 }
 ```
 
-#### 4.18.3 灰度测试机制
+**优势分析**：
+- 完整的备份和回滚机制保障数据安全
+- 自动回滚功能减少人工干预和错误
+- 版本化脚本管理便于追踪和维护
+- 详细的日志记录便于问题排查和审计
 
-**检查目标**：确保变更通过合理的开关和灰度机制逐步发布
+**优势分析**：
+- 完整的备份和回滚机制保障数据安全
+- 自动回滚功能减少人工干预和错误
+- 版本化脚本管理便于追踪和维护
+- 详细的日志记录便于问题排查和审计
 
-**检测标准：**
+#### 4.18.3 灰度测试机制 🔴
+
+**检测目标**：确保变更通过合理的开关和灰度机制逐步发布
+
+**检测标准**：
 - 新功能应该有功能开关控制
 - 重要变更应该支持灰度发布
 - 应该有监控和快速止损机制
 - 灰度策略应该合理且可控
 
-**检测方法：**
+**检测方法**：
 - 检查是否实现了功能开关
 - 验证灰度发布策略
 - 确认监控和告警机制
@@ -8939,6 +9945,12 @@ public class PaymentService {
     }
 }
 ```
+
+**问题分析**：
+- 缺少功能开关，无法控制新功能的启用和关闭
+- 没有灰度发布机制，风险全量暴露
+- 缺少异常处理和回退机制，容错性差
+- 无法快速止损，影响系统稳定性
 
 **正确示例**：
 ```java
@@ -8978,6 +9990,14 @@ public class PaymentService {
     }
 }
 ```
+
+**优势分析**：
+- 功能开关提供完全的控制能力，可随时启用或关闭新功能
+- 基于百分比的灰度策略实现渐进式发布，降低风险
+- 异常处理和自动回退机制保障系统稳定性
+- 详细的监控指标便于观察新功能的表现和影响
+- 异常处理和自动回退机制保障系统稳定性
+- 详细的监控指标便于观察新功能表现
 
 **推荐工具**：
 - **功能开关**：LaunchDarkly、Unleash、Spring Cloud Config
