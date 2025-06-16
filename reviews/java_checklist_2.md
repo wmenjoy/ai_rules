@@ -1,14 +1,223 @@
 # Java微服务代码评审检查清单
 
-## 概述
-本检查清单基于Java微服务架构特点，从代码规范、安全性、性能、可观测性等多个维度提供系统化的代码评审指导。
+## 前言
 
-## 检查分级说明
+本检查清单基于Java微服务架构特点，从代码规范、安全性、性能、可观测性等多个维度提供系统化的代码评审指导。每个检查点按严重程度分为三个等级：
 - **Critical**: 必须修复，影响系统安全或稳定性
 - **Major**: 建议修复，影响代码质量或性能
 - **Minor**: 可选修复，代码规范或可读性问题
 
+## 目录
+
+- [Java微服务代码评审检查清单](#java微服务代码评审检查清单)
+  - [前言](#前言)
+  - [目录](#目录)
+  - [1. 基础代码规范检查](#1-基础代码规范检查)
+    - [1.1 命名规范 (Minor)](#11-命名规范-minor)
+      - [1.1.1 类名使用大驼峰命名法](#111-类名使用大驼峰命名法)
+      - [1.1.2 方法名和变量名使用小驼峰命名法](#112-方法名和变量名使用小驼峰命名法)
+      - [1.1.3 常量使用全大写下划线分隔](#113-常量使用全大写下划线分隔)
+      - [1.1.4 包名全小写，避免使用关键字](#114-包名全小写避免使用关键字)
+    - [1.2 代码结构 (Major)](#12-代码结构-major)
+      - [1.2.1 单一职责原则，类和方法职责明确](#121-单一职责原则类和方法职责明确)
+      - [1.2.2 避免过长的方法（建议不超过50行）](#122-避免过长的方法建议不超过50行)
+      - [1.2.3 避免过深的嵌套（建议不超过3层）](#123-避免过深的嵌套建议不超过3层)
+      - [1.2.4 合理使用设计模式](#124-合理使用设计模式)
+  - [2. 微服务特有检查](#2-微服务特有检查)
+    - [2.1 线程池配置 (Critical)](#21-线程池配置-critical)
+      - [2.1.1 避免使用 `Executors.newCachedThreadPool()`](#211-避免使用-executorsnewcachedthreadpool)
+      - [2.1.2 自定义线程池参数（核心线程数、最大线程数、队列大小）](#212-自定义线程池参数核心线程数最大线程数队列大小)
+      - [2.1.3 设置有意义的线程名称](#213-设置有意义的线程名称)
+      - [2.1.4 配置合适的拒绝策略](#214-配置合适的拒绝策略)
+    - [2.2 超时设置 (Critical)](#22-超时设置-critical)
+      - [2.2.1 HTTP客户端设置连接超时和读取超时](#221-http客户端设置连接超时和读取超时)
+      - [2.2.2 数据库连接池超时配置](#222-数据库连接池超时配置)
+      - [2.2.3 缓存操作超时设置](#223-缓存操作超时设置)
+      - [2.2.4 消息队列消费超时配置](#224-消息队列消费超时配置)
+  - [3. 并发和线程安全检查](#3-并发和线程安全检查)
+    - [3.1 共享变量线程安全 (Critical)](#31-共享变量线程安全-critical)
+      - [3.1.1 Service类成员变量必须是无状态或线程安全的](#311-service类成员变量必须是无状态或线程安全的)
+      - [3.1.2 Controller类避免使用可变成员变量](#312-controller类避免使用可变成员变量)
+      - [3.1.3 静态变量的线程安全性检查](#313-静态变量的线程安全性检查)
+      - [3.1.4 集合类的线程安全使用](#314-集合类的线程安全使用)
+    - [3.2 锁的使用 (Major)](#32-锁的使用-major)
+      - [3.2.1 避免在循环中获取锁](#321-避免在循环中获取锁)
+      - [3.2.2 锁的粒度要适当](#322-锁的粒度要适当)
+      - [3.2.3 避免死锁的发生](#323-避免死锁的发生)
+      - [3.2.4 使用try-finally确保锁释放](#324-使用try-finally确保锁释放)
+  - [4. 安全性检查](#4-安全性检查)
+    - [4.1 输入验证 (Critical)](#41-输入验证-critical)
+      - [4.1.1 所有外部输入必须进行验证](#411-所有外部输入必须进行验证)
+      - [4.1.2 使用@Valid注解进行参数校验](#412-使用valid注解进行参数校验)
+      - [4.1.3 防止SQL注入攻击](#413-防止sql注入攻击)
+      - [4.1.4 防止XSS攻击](#414-防止xss攻击)
+      - [4.1.5 文件上传安全检查](#415-文件上传安全检查)
+    - [4.2 敏感信息处理 (Critical)](#42-敏感信息处理-critical)
+      - [4.2.1 密码、API密钥不能硬编码](#421-密码api密钥不能硬编码)
+      - [4.2.2 日志中不包含敏感信息](#422-日志中不包含敏感信息)
+      - [4.2.3 数据库密码加密存储](#423-数据库密码加密存储)
+      - [4.2.4 错误信息不泄露系统内部结构](#424-错误信息不泄露系统内部结构)
+    - [4.3 认证授权 (Critical)](#43-认证授权-critical)
+      - [4.3.1 JWT token验证机制](#431-jwt-token验证机制)
+      - [4.3.2 接口权限控制](#432-接口权限控制)
+      - [4.3.3 HTTPS配置](#433-https配置)
+      - [4.3.4 CORS配置安全](#434-cors配置安全)
+  - [5. 性能优化检查](#5-性能优化检查)
+    - [5.1 数据库操作 (Major)](#51-数据库操作-major)
+      - [5.1.1 避免N+1查询问题](#511-避免n1查询问题)
+      - [5.1.2 合理使用索引](#512-合理使用索引)
+      - [5.1.3 批量操作优化](#513-批量操作优化)
+      - [5.1.4 分页查询实现](#514-分页查询实现)
+      - [5.1.5 连接池配置检查](#515-连接池配置检查)
+    - [5.2 缓存使用 (Major)](#52-缓存使用-major)
+      - [5.2.1 缓存策略合理性](#521-缓存策略合理性)
+      - [5.2.2 缓存穿透、击穿、雪崩防护](#522-缓存穿透击穿雪崩防护)
+      - [5.2.3 缓存过期时间设置](#523-缓存过期时间设置)
+      - [5.2.4 本地缓存线程安全性](#524-本地缓存线程安全性)
+    - [5.3 内存管理 (Major)](#53-内存管理-major)
+      - [5.3.1 避免内存泄漏](#531-避免内存泄漏)
+      - [5.3.2 大对象处理优化](#532-大对象处理优化)
+      - [5.3.3 集合使用优化](#533-集合使用优化)
+      - [5.3.4 字符串拼接优化](#534-字符串拼接优化)
+    - [5.4 批处理操作 (Major)](#54-批处理操作-major)
+      - [5.4.1 数据库批处理](#541-数据库批处理)
+      - [5.4.2 集合批处理](#542-集合批处理)
+    - [5.5 异步处理 (Major)](#55-异步处理-major)
+      - [5.5.1 异步方法使用](#551-异步方法使用)
+    - [5.6 内存使用优化 (Major)](#56-内存使用优化-major)
+      - [5.6.1 对象创建优化](#561-对象创建优化)
+    - [5.7 IO操作优化 (Major)](#57-io操作优化-major)
+      - [5.7.1 文件IO优化](#571-文件io优化)
+    - [5.8 算法和数据结构 (Minor)](#58-算法和数据结构-minor)
+      - [5.8.1 选择合适的数据结构](#581-选择合适的数据结构)
+    - [5.9 JVM参数调优 (Major)](#59-jvm参数调优-major)
+      - [5.9.1 堆内存配置](#591-堆内存配置)
+    - [5.10 垃圾回收优化 (Major)](#510-垃圾回收优化-major)
+      - [5.10.1 GC算法选择](#5101-gc算法选择)
+    - [5.11 序列化优化 (Minor)](#511-序列化优化-minor)
+      - [5.11.1 选择高效的序列化方式](#5111-选择高效的序列化方式)
+    - [5.12 网络传输优化 (Minor)](#512-网络传输优化-minor)
+      - [5.12.1 HTTP客户端优化](#5121-http客户端优化)
+    - [5.13 代码层面优化 (Minor)](#513-代码层面优化-minor)
+      - [5.13.1 避免不必要的计算](#5131-避免不必要的计算)
+    - [5.14 资源预加载 (Minor)](#514-资源预加载-minor)
+      - [5.14.1 配置和静态资源预加载](#5141-配置和静态资源预加载)
+    - [5.15 懒加载策略 (Minor)](#515-懒加载策略-minor)
+      - [5.15.1 合理使用懒加载](#5151-合理使用懒加载)
+    - [5.16 对象池使用 (Minor)](#516-对象池使用-minor)
+      - [5.16.1 合理使用对象池](#5161-合理使用对象池)
+  - [6. 可观测性检查](#6-可观测性检查)
+    - [6.1 日志规范 (Major)](#61-日志规范-major)
+      - [6.1.1 禁止使用System.out.println()](#611-禁止使用systemoutprintln)
+      - [6.1.2 使用统一的日志框架](#612-使用统一的日志框架)
+      - [6.1.3 日志级别配置正确](#613-日志级别配置正确)
+      - [6.1.4 包含TraceId进行链路追踪](#614-包含traceid进行链路追踪)
+      - [6.1.5 敏感信息脱敏处理](#615-敏感信息脱敏处理)
+    - [6.2 监控集成 (Major)](#62-监控集成-major)
+      - [6.2.1 Metrics指标暴露](#621-metrics指标暴露)
+      - [6.2.2 健康检查端点实现](#622-健康检查端点实现)
+    - [6.3 告警配置 (Major)](#63-告警配置-major)
+      - [6.3.1 关键指标告警规则](#631-关键指标告警规则)
+  - [7. 容错和稳定性检查](#7-容错和稳定性检查)
+    - [7.1 熔断器配置 (Critical)](#71-熔断器配置-critical)
+      - [7.1.1 熔断器实现和配置](#711-熔断器实现和配置)
+    - [7.2 重试机制 (Major)](#72-重试机制-major)
+      - [7.2.1 重试策略配置](#721-重试策略配置)
+    - [7.3 限流配置 (Major)](#73-限流配置-major)
+      - [7.3.1 接口限流实现](#731-接口限流实现)
+    - [7.4 异常处理 (Critical)](#74-异常处理-critical)
+      - [7.4.1 全局异常处理器](#741-全局异常处理器)
+  - [8. 配置管理检查](#8-配置管理检查)
+    - [8.1 配置外部化 (Major)](#81-配置外部化-major)
+      - [检查方法](#检查方法)
+      - [检查标准](#检查标准)
+      - [错误示例](#错误示例)
+      - [正确示例](#正确示例)
+    - [8.2 环境隔离 (Critical)](#82-环境隔离-critical)
+      - [检查方法](#检查方法-1)
+      - [检查标准](#检查标准-1)
+      - [错误示例](#错误示例-1)
+      - [正确示例](#正确示例-1)
+  - [9. API设计检查](#9-api设计检查)
+    - [9.1 RESTful规范 (Major)](#91-restful规范-major)
+      - [检查方法](#检查方法-2)
+      - [检查标准](#检查标准-2)
+      - [错误示例](#错误示例-2)
+      - [正确示例](#正确示例-2)
+    - [9.2 版本控制 (Major)](#92-版本控制-major)
+      - [检查方法](#检查方法-3)
+      - [检查标准](#检查标准-3)
+      - [错误示例](#错误示例-3)
+      - [正确示例](#正确示例-3)
+    - [9.3 参数验证 (Critical)](#93-参数验证-critical)
+      - [检查方法](#检查方法-4)
+      - [检查标准](#检查标准-4)
+      - [错误示例](#错误示例-4)
+      - [正确示例](#正确示例-4)
+    - [9.4 错误处理 (Critical)](#94-错误处理-critical)
+      - [9.4.1 统一错误响应格式](#941-统一错误响应格式)
+      - [9.4.2 HTTP状态码使用规范](#942-http状态码使用规范)
+    - [9.5 文档规范 (Major)](#95-文档规范-major)
+      - [9.5.1 API文档完整性](#951-api文档完整性)
+      - [9.5.2 接口变更文档](#952-接口变更文档)
+    - [9.6 请求验证 (Major)](#96-请求验证-major)
+      - [9.6.1 输入参数验证](#961-输入参数验证)
+      - [9.6.2 业务规则验证](#962-业务规则验证)
+    - [9.7 响应格式 (Minor)](#97-响应格式-minor)
+      - [9.7.1 统一响应结构](#971-统一响应结构)
+      - [9.7.2 分页响应格式](#972-分页响应格式)
+  - [10. 测试相关检查](#10-测试相关检查)
+    - [10.1 单元测试 (Major)](#101-单元测试-major)
+      - [10.1.1 测试覆盖率达标（建议80%+）](#1011-测试覆盖率达标建议80)
+      - [10.1.2 边界条件测试](#1012-边界条件测试)
+      - [10.1.3 异常情况测试](#1013-异常情况测试)
+      - [10.1.4 Mock使用正确](#1014-mock使用正确)
+    - [10.2 集成测试 (Major)](#102-集成测试-major)
+      - [10.2.1 数据库集成测试](#1021-数据库集成测试)
+      - [ß10.2.2 外部服务集成测试](#ß1022-外部服务集成测试)
+      - [10.2.3 端到端测试](#1023-端到端测试)
+      - [10.2.4 性能测试](#1024-性能测试)
+    - [10.3 测试覆盖率 (Minor)](#103-测试覆盖率-minor)
+      - [10.3.1 代码覆盖率要求](#1031-代码覆盖率要求)
+      - [10.3.2 覆盖率报告分析](#1032-覆盖率报告分析)
+    - [10.4 测试数据管理 (Minor)](#104-测试数据管理-minor)
+      - [10.4.1 测试数据隔离](#1041-测试数据隔离)
+      - [10.4.2 测试数据构建器](#1042-测试数据构建器)
+    - [10.5 性能测试 (Major)](#105-性能测试-major)
+      - [10.5.1 负载测试](#1051-负载测试)
+      - [10.5.2 内存和资源监控](#1052-内存和资源监控)
+  - [11. 部署和运维检查](#11-部署和运维检查)
+    - [11.1 容器化 (Major)](#111-容器化-major)
+      - [11.1.1 Dockerfile最佳实践](#1111-dockerfile最佳实践)
+      - [11.1.4 健康检查状态更新](#1114-健康检查状态更新)
+      - [11.1.2 镜像安全扫描](#1112-镜像安全扫描)
+      - [11.1.3 多阶段构建优化](#1113-多阶段构建优化)
+    - [11.2 优雅关闭 (Critical)](#112-优雅关闭-critical)
+      - [11.2.1 应用停机处理](#1121-应用停机处理)
+      - [11.2.2 资源清理](#1122-资源清理)
+      - [11.2.3 正在处理的请求完成](#1123-正在处理的请求完成)
+  - [12. 依赖管理检查](#12-依赖管理检查)
+    - [12.1 依赖安全 (Critical)](#121-依赖安全-critical)
+      - [12.1.1 第三方库安全漏洞扫描](#1211-第三方库安全漏洞扫描)
+      - [12.1.2 依赖版本管理](#1212-依赖版本管理)
+      - [12.1.3 许可证合规检查](#1213-许可证合规检查)
+      - [12.1.4 依赖冲突解决](#1214-依赖冲突解决)
+    - [12.2 依赖优化 (Minor)](#122-依赖优化-minor)
+      - [12.2.1 移除未使用的依赖](#1221-移除未使用的依赖)
+      - [12.2.2 依赖版本统一管理](#1222-依赖版本统一管理)
+      - [12.2.3 传递依赖控制](#1223-传递依赖控制)
+      - [12.2.4 依赖文档维护](#1224-依赖文档维护)
+  - [检查清单使用说明](#检查清单使用说明)
+  - [常用检查工具](#常用检查工具)
+
 ## 1. 基础代码规范检查
+
+### 检查工具
+- **静态分析工具**: SonarQube, Checkstyle, SpotBugs, PMD
+- **IDE插件**: SonarLint, CheckStyle-IDEA, SpotBugs Plugin
+- **AI辅助工具**: GitHub Copilot, CodeGPT, Tabnine (代码规范建议)
+- **人工检查**: 代码评审(Code Review)，重点关注命名规范、代码结构
+- **自动化检查**: CI/CD流水线集成质量门禁，代码提交前自动检查
 
 ### 1.1 命名规范 (Minor)
 
@@ -197,6 +406,14 @@ public class StringUtils {
 ```
 
 ## 2. 微服务特有检查
+
+### 检查工具
+- **静态分析工具**: SonarQube (线程池配置规则), SpotBugs (并发问题检测)
+- **专业工具**: Arthas (线程池监控), JProfiler (线程分析), VisualVM
+- **AI辅助工具**: DeepCode, Amazon CodeGuru (性能和并发问题检测)
+- **人工检查**: 架构评审，重点关注线程池配置、超时设置、资源管理
+- **监控工具**: Micrometer + Prometheus (线程池指标监控)
+- **测试工具**: JMeter (并发压力测试), Gatling (性能测试)
 
 ### 2.1 线程池配置 (Critical)
 
@@ -2908,6 +3125,1167 @@ public class StringService {
 }
 ```
 
+### 5.4 批处理操作 (Major)
+
+#### 5.4.1 数据库批处理
+- **检查方法**: 检查数据库操作是否使用批处理，查看SQL执行日志
+- **检查标准**: 批量操作必须使用批处理，避免逐条执行
+- **不正确实例**:
+```java
+// 错误示例 - 逐条插入
+@Service
+public class UserService {
+    @Autowired
+    private UserRepository userRepository;
+    
+    public void saveUsers(List<User> users) {
+        for (User user : users) {
+            userRepository.save(user);  // 错误：逐条保存
+        }
+    }
+    
+    // 错误：逐条执行SQL
+    public void updateUserStatus(List<Long> userIds, String status) {
+        for (Long userId : userIds) {
+            jdbcTemplate.update(
+                "UPDATE users SET status = ? WHERE id = ?", 
+                status, userId
+            );
+        }
+    }
+}
+
+// 正确示例
+@Service
+public class UserService {
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
+    @Transactional
+    public void saveUsers(List<User> users) {
+        // 正确：批量保存
+        userRepository.saveAll(users);
+    }
+    
+    @Transactional
+    public void updateUserStatus(List<Long> userIds, String status) {
+        // 正确：批处理更新
+        String sql = "UPDATE users SET status = ? WHERE id = ?";
+        List<Object[]> batchArgs = userIds.stream()
+            .map(id -> new Object[]{status, id})
+            .collect(Collectors.toList());
+        
+        jdbcTemplate.batchUpdate(sql, batchArgs);
+    }
+    
+    // 使用MyBatis批处理
+    public void batchInsertWithMyBatis(List<User> users) {
+        try (SqlSession sqlSession = sqlSessionFactory.openSession(ExecutorType.BATCH)) {
+            UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+            for (User user : users) {
+                mapper.insert(user);
+            }
+            sqlSession.commit();
+        }
+    }
+}
+```
+
+#### 5.4.2 集合批处理
+- **检查方法**: 检查集合操作是否合理使用批处理API
+- **检查标准**: 大量数据处理时使用Stream API和批处理方法
+- **不正确实例**:
+```java
+// 错误示例 - 低效的集合操作
+public class DataProcessor {
+    public List<String> processData(List<String> data) {
+        List<String> result = new ArrayList<>();
+        for (String item : data) {
+            if (item.length() > 5) {
+                result.add(item.toUpperCase());  // 错误：逐个处理
+            }
+        }
+        return result;
+    }
+    
+    // 错误：频繁的字符串拼接
+    public String concatenateStrings(List<String> strings) {
+        String result = "";
+        for (String str : strings) {
+            result += str + ",";  // 错误：每次都创建新字符串
+        }
+        return result;
+    }
+}
+
+// 正确示例
+public class DataProcessor {
+    public List<String> processData(List<String> data) {
+        // 正确：使用Stream API批处理
+        return data.stream()
+            .filter(item -> item.length() > 5)
+            .map(String::toUpperCase)
+            .collect(Collectors.toList());
+    }
+    
+    // 正确：使用StringBuilder
+    public String concatenateStrings(List<String> strings) {
+        return String.join(",", strings);
+    }
+    
+    // 正确：并行处理大数据集
+    public List<ProcessedData> processLargeDataset(List<RawData> rawData) {
+        return rawData.parallelStream()
+            .map(this::processItem)
+            .collect(Collectors.toList());
+    }
+    
+    // 正确：分批处理
+    public void processBatches(List<Data> allData, int batchSize) {
+        for (int i = 0; i < allData.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, allData.size());
+            List<Data> batch = allData.subList(i, end);
+            processBatch(batch);
+        }
+    }
+}
+```
+
+### 5.5 异步处理 (Major)
+
+#### 5.5.1 异步方法使用
+- **检查方法**: 检查是否正确使用@Async注解和CompletableFuture
+- **检查标准**: 耗时操作必须异步执行，避免阻塞主线程
+- **不正确实例**:
+```java
+// 错误示例 - 同步执行耗时操作
+@RestController
+public class OrderController {
+    @Autowired
+    private EmailService emailService;
+    
+    @Autowired
+    private InventoryService inventoryService;
+    
+    @PostMapping("/orders")
+    public ResponseEntity<Order> createOrder(@RequestBody Order order) {
+        // 错误：同步执行耗时操作
+        Order savedOrder = orderService.save(order);
+        emailService.sendConfirmationEmail(order);  // 阻塞
+        inventoryService.updateInventory(order);    // 阻塞
+        
+        return ResponseEntity.ok(savedOrder);
+    }
+}
+
+// 错误示例 - 不正确的异步配置
+@Service
+public class NotificationService {
+    // 错误：没有配置线程池
+    @Async
+    public void sendNotification(String message) {
+        // 耗时操作
+    }
+    
+    // 错误：在同一个类中调用异步方法
+    public void processOrder(Order order) {
+        this.sendNotification("Order processed");  // 不会异步执行
+    }
+}
+
+// 正确示例
+@RestController
+public class OrderController {
+    @Autowired
+    private EmailService emailService;
+    
+    @Autowired
+    private InventoryService inventoryService;
+    
+    @PostMapping("/orders")
+    public ResponseEntity<Order> createOrder(@RequestBody Order order) {
+        // 正确：保存订单（同步）
+        Order savedOrder = orderService.save(order);
+        
+        // 正确：异步执行非关键操作
+        CompletableFuture.allOf(
+            emailService.sendConfirmationEmailAsync(order),
+            inventoryService.updateInventoryAsync(order)
+        ).exceptionally(throwable -> {
+            log.error("Async operations failed", throwable);
+            return null;
+        });
+        
+        return ResponseEntity.ok(savedOrder);
+    }
+}
+
+@Service
+public class EmailService {
+    @Async("taskExecutor")
+    public CompletableFuture<Void> sendConfirmationEmailAsync(Order order) {
+        try {
+            // 发送邮件逻辑
+            sendEmail(order.getCustomerEmail(), "Order Confirmation", buildEmailContent(order));
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+}
+
+// 正确：异步配置
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+    @Bean("taskExecutor")
+    public TaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("async-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+}
+```
+
+### 5.6 内存使用优化 (Major)
+
+#### 5.6.1 对象创建优化
+- **检查方法**: 使用内存分析工具检查对象创建频率和大小
+- **检查标准**: 避免不必要的对象创建，重用对象
+- **不正确实例**:
+```java
+// 错误示例 - 频繁创建对象
+public class StringProcessor {
+    public String processStrings(List<String> strings) {
+        String result = "";
+        for (String str : strings) {
+            result = result + str + ",";  // 错误：每次创建新String对象
+        }
+        return result;
+    }
+    
+    // 错误：在循环中创建对象
+    public List<Date> generateDates(int count) {
+        List<Date> dates = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");  // 错误：重复创建
+            dates.add(sdf.parse("2024-01-" + (i + 1)));
+        }
+        return dates;
+    }
+}
+
+// 正确示例
+public class StringProcessor {
+    // 正确：使用StringBuilder
+    public String processStrings(List<String> strings) {
+        StringBuilder sb = new StringBuilder();
+        for (String str : strings) {
+            sb.append(str).append(",");
+        }
+        return sb.toString();
+    }
+    
+    // 正确：重用对象
+    private static final ThreadLocal<SimpleDateFormat> DATE_FORMAT = 
+        ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd"));
+    
+    public List<Date> generateDates(int count) {
+        List<Date> dates = new ArrayList<>(count);  // 预分配容量
+        SimpleDateFormat sdf = DATE_FORMAT.get();
+        
+        for (int i = 0; i < count; i++) {
+            try {
+                dates.add(sdf.parse("2024-01-" + (i + 1)));
+            } catch (ParseException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return dates;
+    }
+    
+    // 正确：使用对象池
+    private final ObjectPool<StringBuilder> stringBuilderPool = 
+        new GenericObjectPool<>(new StringBuilderFactory());
+    
+    public String buildString(List<String> parts) {
+        StringBuilder sb = null;
+        try {
+            sb = stringBuilderPool.borrowObject();
+            for (String part : parts) {
+                sb.append(part);
+            }
+            return sb.toString();
+        } finally {
+            if (sb != null) {
+                sb.setLength(0);  // 清空内容
+                stringBuilderPool.returnObject(sb);
+            }
+        }
+    }
+}
+```
+
+### 5.7 IO操作优化 (Major)
+
+#### 5.7.1 文件IO优化
+- **检查方法**: 检查文件读写操作是否使用缓冲和NIO
+- **检查标准**: 大文件操作使用NIO，小文件使用缓冲IO
+- **不正确实例**:
+```java
+// 错误示例 - 低效的文件操作
+public class FileProcessor {
+    // 错误：逐字节读取
+    public String readFile(String filePath) throws IOException {
+        FileInputStream fis = new FileInputStream(filePath);
+        StringBuilder content = new StringBuilder();
+        int b;
+        while ((b = fis.read()) != -1) {  // 错误：逐字节读取
+            content.append((char) b);
+        }
+        fis.close();
+        return content.toString();
+    }
+    
+    // 错误：没有使用缓冲
+    public void writeFile(String filePath, String content) throws IOException {
+        FileOutputStream fos = new FileOutputStream(filePath);
+        fos.write(content.getBytes());  // 错误：一次性写入大量数据
+        fos.close();
+    }
+}
+
+// 正确示例
+public class FileProcessor {
+    // 正确：使用缓冲读取
+    public String readFile(String filePath) throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath))) {
+            return reader.lines().collect(Collectors.joining("\n"));
+        }
+    }
+    
+    // 正确：使用NIO处理大文件
+    public void processLargeFile(String inputPath, String outputPath) throws IOException {
+        try (FileChannel inputChannel = FileChannel.open(Paths.get(inputPath), StandardOpenOption.READ);
+             FileChannel outputChannel = FileChannel.open(Paths.get(outputPath), 
+                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
+            
+            long size = inputChannel.size();
+            long position = 0;
+            
+            while (position < size) {
+                long transferred = inputChannel.transferTo(position, size - position, outputChannel);
+                position += transferred;
+            }
+        }
+    }
+    
+    // 正确：使用内存映射处理超大文件
+    public void processHugeFile(String filePath) throws IOException {
+        try (RandomAccessFile file = new RandomAccessFile(filePath, "r");
+             FileChannel channel = file.getChannel()) {
+            
+            long fileSize = channel.size();
+            long mapSize = Math.min(fileSize, 1024 * 1024 * 100); // 100MB chunks
+            
+            for (long position = 0; position < fileSize; position += mapSize) {
+                long size = Math.min(mapSize, fileSize - position);
+                MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, position, size);
+                processBuffer(buffer);
+            }
+        }
+    }
+}
+```
+
+### 5.8 算法和数据结构 (Minor)
+
+#### 5.8.1 选择合适的数据结构
+- **检查方法**: 检查代码中数据结构的选择是否合理
+- **检查标准**: 根据使用场景选择最优的数据结构
+- **不正确实例**:
+```java
+// 错误示例 - 数据结构选择不当
+public class DataManager {
+    // 错误：频繁查找使用List
+    private List<User> users = new ArrayList<>();
+    
+    public User findUserById(String id) {
+        for (User user : users) {  // O(n)时间复杂度
+            if (user.getId().equals(id)) {
+                return user;
+            }
+        }
+        return null;
+    }
+    
+    // 错误：需要去重但使用List
+    public List<String> getUniqueItems(List<String> items) {
+        List<String> unique = new ArrayList<>();
+        for (String item : items) {
+            if (!unique.contains(item)) {  // O(n)查找
+                unique.add(item);
+            }
+        }
+        return unique;
+    }
+    
+    // 错误：频繁插入删除使用ArrayList
+    public void processQueue(List<Task> tasks) {
+        while (!tasks.isEmpty()) {
+            Task task = tasks.remove(0);  // O(n)操作
+            processTask(task);
+        }
+    }
+}
+
+// 正确示例
+public class DataManager {
+    // 正确：频繁查找使用Map
+    private Map<String, User> users = new ConcurrentHashMap<>();
+    
+    public User findUserById(String id) {
+        return users.get(id);  // O(1)时间复杂度
+    }
+    
+    // 正确：去重使用Set
+    public Set<String> getUniqueItems(List<String> items) {
+        return new HashSet<>(items);  // O(n)时间复杂度
+    }
+    
+    // 正确：队列操作使用LinkedList或Queue
+    public void processQueue(Queue<Task> tasks) {
+        while (!tasks.isEmpty()) {
+            Task task = tasks.poll();  // O(1)操作
+            processTask(task);
+        }
+    }
+    
+    // 正确：需要排序的场景使用TreeSet
+    private Set<String> sortedItems = new TreeSet<>();
+    
+    // 正确：LRU缓存使用LinkedHashMap
+    private Map<String, Object> lruCache = new LinkedHashMap<String, Object>(16, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Object> eldest) {
+            return size() > 100;
+        }
+    };
+}
+```
+
+### 5.9 JVM参数调优 (Major)
+
+#### 5.9.1 堆内存配置
+- **检查方法**: 检查JVM启动参数配置
+- **检查标准**: 根据应用特点合理配置堆内存大小
+- **不正确实例**:
+```bash
+# 错误示例 - JVM参数配置不当
+# 错误：堆内存过小
+java -Xms128m -Xmx256m -jar app.jar
+
+# 错误：新生代配置不合理
+java -Xms2g -Xmx2g -Xmn1800m -jar app.jar  # 新生代过大
+
+# 错误：没有配置GC参数
+java -Xms1g -Xmx1g -jar app.jar
+
+# 正确示例
+# 正确：合理的内存配置
+java -Xms2g -Xmx2g \
+     -Xmn800m \
+     -XX:MetaspaceSize=256m \
+     -XX:MaxMetaspaceSize=512m \
+     -XX:+UseG1GC \
+     -XX:MaxGCPauseMillis=200 \
+     -XX:+PrintGCDetails \
+     -XX:+PrintGCTimeStamps \
+     -Xloggc:gc.log \
+     -jar app.jar
+
+# 针对不同场景的配置
+# 高并发低延迟场景
+java -Xms4g -Xmx4g \
+     -XX:+UseZGC \
+     -XX:+UnlockExperimentalVMOptions \
+     -jar app.jar
+
+# 大数据处理场景
+java -Xms8g -Xmx8g \
+     -XX:+UseParallelGC \
+     -XX:ParallelGCThreads=8 \
+     -jar app.jar
+```
+
+### 5.10 垃圾回收优化 (Major)
+
+#### 5.10.1 GC算法选择
+- **检查方法**: 分析GC日志，监控GC性能指标
+- **检查标准**: 根据应用特点选择合适的GC算法
+- **不正确实例**:
+```java
+// 错误示例 - 产生大量垃圾对象
+public class DataProcessor {
+    public String processData(List<String> data) {
+        String result = "";
+        for (String item : data) {
+            result += item + ",";  // 产生大量临时String对象
+        }
+        return result;
+    }
+    
+    // 错误：频繁创建大对象
+    public void processLargeData() {
+        for (int i = 0; i < 1000; i++) {
+            byte[] largeArray = new byte[1024 * 1024];  // 每次创建1MB数组
+            processArray(largeArray);
+        }
+    }
+}
+
+// 正确示例
+public class DataProcessor {
+    // 正确：减少对象创建
+    public String processData(List<String> data) {
+        return String.join(",", data);
+    }
+    
+    // 正确：重用大对象
+    private final byte[] reusableBuffer = new byte[1024 * 1024];
+    
+    public void processLargeData() {
+        for (int i = 0; i < 1000; i++) {
+            Arrays.fill(reusableBuffer, (byte) 0);  // 重用数组
+            processArray(reusableBuffer);
+        }
+    }
+    
+    // 正确：使用对象池
+    private final ObjectPool<StringBuilder> stringBuilderPool = 
+        new GenericObjectPool<>(new StringBuilderFactory());
+    
+    public String buildString(List<String> parts) {
+        StringBuilder sb = null;
+        try {
+            sb = stringBuilderPool.borrowObject();
+            for (String part : parts) {
+                sb.append(part);
+            }
+            return sb.toString();
+        } finally {
+            if (sb != null) {
+                sb.setLength(0);
+                stringBuilderPool.returnObject(sb);
+            }
+        }
+    }
+}
+```
+
+### 5.11 序列化优化 (Minor)
+
+#### 5.11.1 选择高效的序列化方式
+- **检查方法**: 检查序列化方式的选择和配置
+- **检查标准**: 根据性能要求选择合适的序列化框架
+- **不正确实例**:
+```java
+// 错误示例 - 低效的序列化
+public class DataSerializer {
+    // 错误：使用Java原生序列化
+    public byte[] serialize(Object obj) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(obj);  // 效率低，体积大
+        return baos.toByteArray();
+    }
+    
+    // 错误：没有配置Jackson优化
+    private ObjectMapper mapper = new ObjectMapper();
+    
+    public String toJson(Object obj) throws JsonProcessingException {
+        return mapper.writeValueAsString(obj);  // 默认配置，性能不佳
+    }
+}
+
+// 正确示例
+public class DataSerializer {
+    // 正确：使用高效的序列化框架
+    private final ObjectMapper optimizedMapper;
+    
+    public DataSerializer() {
+        this.optimizedMapper = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+            .registerModule(new JavaTimeModule());
+    }
+    
+    public String toJson(Object obj) throws JsonProcessingException {
+        return optimizedMapper.writeValueAsString(obj);
+    }
+    
+    // 正确：使用Protobuf进行高性能序列化
+    public byte[] serializeWithProtobuf(UserProto.User user) {
+        return user.toByteArray();
+    }
+    
+    public UserProto.User deserializeWithProtobuf(byte[] data) throws InvalidProtocolBufferException {
+        return UserProto.User.parseFrom(data);
+    }
+    
+    // 正确：使用Kryo进行快速序列化
+    private final ThreadLocal<Kryo> kryoThreadLocal = ThreadLocal.withInitial(() -> {
+        Kryo kryo = new Kryo();
+        kryo.setReferences(false);
+        kryo.setRegistrationRequired(false);
+        return kryo;
+    });
+    
+    public byte[] serializeWithKryo(Object obj) {
+        Kryo kryo = kryoThreadLocal.get();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Output output = new Output(baos);
+        kryo.writeObject(output, obj);
+        output.close();
+        return baos.toByteArray();
+    }
+}
+```
+
+### 5.12 网络传输优化 (Minor)
+
+#### 5.12.1 HTTP客户端优化
+- **检查方法**: 检查HTTP客户端的配置和使用方式
+- **检查标准**: 使用连接池，配置合理的超时时间
+- **不正确实例**:
+```java
+// 错误示例 - HTTP客户端配置不当
+@Service
+public class ApiClient {
+    // 错误：每次创建新的HTTP客户端
+    public String callApi(String url) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setRequestMethod("GET");
+        // 没有设置超时时间
+        
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(connection.getInputStream()))) {
+            return reader.lines().collect(Collectors.joining("\n"));
+        }
+    }
+    
+    // 错误：使用默认的RestTemplate
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    public String getData(String url) {
+        return restTemplate.getForObject(url, String.class);  // 没有连接池
+    }
+}
+
+// 正确示例
+@Service
+public class ApiClient {
+    private final RestTemplate restTemplate;
+    private final WebClient webClient;
+    
+    public ApiClient() {
+        // 正确：配置连接池和超时
+        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(10000);
+        
+        PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
+        connectionManager.setMaxTotal(100);
+        connectionManager.setDefaultMaxPerRoute(20);
+        
+        CloseableHttpClient httpClient = HttpClients.custom()
+            .setConnectionManager(connectionManager)
+            .build();
+        
+        factory.setHttpClient(httpClient);
+        this.restTemplate = new RestTemplate(factory);
+        
+        // 正确：配置WebClient连接池
+        ConnectionProvider connectionProvider = ConnectionProvider.builder("custom")
+            .maxConnections(100)
+            .maxIdleTime(Duration.ofSeconds(30))
+            .maxLifeTime(Duration.ofMinutes(5))
+            .build();
+        
+        HttpClient httpClientReactive = HttpClient.create(connectionProvider)
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+            .responseTimeout(Duration.ofSeconds(10));
+        
+        this.webClient = WebClient.builder()
+            .clientConnector(new ReactorClientHttpConnector(httpClientReactive))
+            .build();
+    }
+    
+    public String getData(String url) {
+        return restTemplate.getForObject(url, String.class);
+    }
+    
+    public Mono<String> getDataAsync(String url) {
+        return webClient.get()
+            .uri(url)
+            .retrieve()
+            .bodyToMono(String.class);
+    }
+}
+```
+
+### 5.13 代码层面优化 (Minor)
+
+#### 5.13.1 避免不必要的计算
+- **检查方法**: 检查代码中是否有重复计算或可以缓存的计算
+- **检查标准**: 将重复计算提取到循环外，使用缓存存储计算结果
+- **不正确实例**:
+```java
+// 错误示例 - 重复计算
+public class Calculator {
+    public double calculateArea(List<Circle> circles) {
+        double totalArea = 0;
+        for (Circle circle : circles) {
+            // 错误：重复计算PI
+            double area = Math.PI * circle.getRadius() * circle.getRadius();
+            totalArea += area;
+        }
+        return totalArea;
+    }
+    
+    // 错误：在循环中进行复杂计算
+    public List<String> formatNumbers(List<Integer> numbers) {
+        List<String> formatted = new ArrayList<>();
+        for (Integer number : numbers) {
+            // 错误：每次都创建DateFormat
+            DecimalFormat df = new DecimalFormat("#,###.00");
+            formatted.add(df.format(number));
+        }
+        return formatted;
+    }
+    
+    // 错误：重复的字符串操作
+    public String buildQuery(String table, List<String> columns, String condition) {
+        String query = "SELECT ";
+        for (int i = 0; i < columns.size(); i++) {
+            query += columns.get(i);
+            if (i < columns.size() - 1) {
+                query += ", ";  // 重复的字符串拼接
+            }
+        }
+        query += " FROM " + table + " WHERE " + condition;
+        return query;
+    }
+}
+
+// 正确示例
+public class Calculator {
+    private static final double PI = Math.PI;  // 缓存常量
+    
+    public double calculateArea(List<Circle> circles) {
+        double totalArea = 0;
+        for (Circle circle : circles) {
+            // 正确：使用缓存的PI值
+            double radius = circle.getRadius();
+            double area = PI * radius * radius;
+            totalArea += area;
+        }
+        return totalArea;
+    }
+    
+    // 正确：重用对象
+    private static final ThreadLocal<DecimalFormat> DECIMAL_FORMAT = 
+        ThreadLocal.withInitial(() -> new DecimalFormat("#,###.00"));
+    
+    public List<String> formatNumbers(List<Integer> numbers) {
+        DecimalFormat df = DECIMAL_FORMAT.get();
+        return numbers.stream()
+            .map(df::format)
+            .collect(Collectors.toList());
+    }
+    
+    // 正确：使用StringBuilder和预计算
+    public String buildQuery(String table, List<String> columns, String condition) {
+        StringBuilder query = new StringBuilder("SELECT ");
+        query.append(String.join(", ", columns));
+        query.append(" FROM ").append(table);
+        query.append(" WHERE ").append(condition);
+        return query.toString();
+    }
+    
+    // 正确：使用缓存避免重复计算
+    private final Map<String, String> queryCache = new ConcurrentHashMap<>();
+    
+    public String getCachedQuery(String table, List<String> columns, String condition) {
+        String key = table + "|" + String.join(",", columns) + "|" + condition;
+        return queryCache.computeIfAbsent(key, k -> buildQuery(table, columns, condition));
+    }
+}
+```
+
+### 5.14 资源预加载 (Minor)
+
+#### 5.14.1 配置和静态资源预加载
+- **检查方法**: 检查应用启动时是否预加载必要的资源
+- **检查标准**: 在应用启动时预加载配置、缓存等资源
+- **不正确实例**:
+```java
+// 错误示例 - 懒加载导致首次访问慢
+@Service
+public class ConfigService {
+    private Map<String, String> configCache;
+    
+    // 错误：首次调用时才加载配置
+    public String getConfig(String key) {
+        if (configCache == null) {
+            loadConfig();  // 首次访问时加载，导致延迟
+        }
+        return configCache.get(key);
+    }
+    
+    private void loadConfig() {
+        // 加载配置的耗时操作
+        configCache = loadFromDatabase();
+    }
+}
+
+// 错误示例 - 没有预热缓存
+@Service
+public class UserService {
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public User getUser(Long id) {
+        String key = "user:" + id;
+        User user = (User) redisTemplate.opsForValue().get(key);
+        if (user == null) {
+            user = userRepository.findById(id);  // 缓存未命中时查询数据库
+            redisTemplate.opsForValue().set(key, user, 1, TimeUnit.HOURS);
+        }
+        return user;
+    }
+}
+
+// 正确示例
+@Service
+public class ConfigService {
+    private final Map<String, String> configCache = new ConcurrentHashMap<>();
+    
+    // 正确：应用启动时预加载
+    @PostConstruct
+    public void init() {
+        loadConfig();
+        log.info("Configuration loaded: {} items", configCache.size());
+    }
+    
+    private void loadConfig() {
+        Map<String, String> configs = loadFromDatabase();
+        configCache.putAll(configs);
+    }
+    
+    public String getConfig(String key) {
+        return configCache.get(key);
+    }
+    
+    // 正确：定时刷新配置
+    @Scheduled(fixedRate = 300000)  // 5分钟刷新一次
+    public void refreshConfig() {
+        try {
+            loadConfig();
+            log.debug("Configuration refreshed");
+        } catch (Exception e) {
+            log.error("Failed to refresh configuration", e);
+        }
+    }
+}
+
+@Service
+public class UserService {
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    // 正确：应用启动时预热热点数据
+    @PostConstruct
+    public void warmUpCache() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<User> hotUsers = userRepository.findHotUsers(100);
+                for (User user : hotUsers) {
+                    String key = "user:" + user.getId();
+                    redisTemplate.opsForValue().set(key, user, 1, TimeUnit.HOURS);
+                }
+                log.info("Cache warmed up with {} hot users", hotUsers.size());
+            } catch (Exception e) {
+                log.error("Failed to warm up cache", e);
+            }
+        });
+    }
+    
+    public User getUser(Long id) {
+        String key = "user:" + id;
+        User user = (User) redisTemplate.opsForValue().get(key);
+        if (user == null) {
+            user = userRepository.findById(id);
+            if (user != null) {
+                redisTemplate.opsForValue().set(key, user, 1, TimeUnit.HOURS);
+            }
+        }
+        return user;
+    }
+}
+```
+
+### 5.15 懒加载策略 (Minor)
+
+#### 5.15.1 合理使用懒加载
+- **检查方法**: 检查是否在合适的场景使用懒加载
+- **检查标准**: 对于大对象或不常用的资源使用懒加载
+- **不正确实例**:
+```java
+// 错误示例 - 不合理的懒加载
+@Service
+public class ReportService {
+    // 错误：频繁使用的对象使用懒加载
+    private volatile ObjectMapper objectMapper;
+    
+    public String generateReport(Object data) {
+        if (objectMapper == null) {
+            synchronized (this) {
+                if (objectMapper == null) {
+                    objectMapper = new ObjectMapper();  // 每次都要检查
+                }
+            }
+        }
+        return objectMapper.writeValueAsString(data);
+    }
+    
+    // 错误：小对象使用懒加载增加复杂度
+    private volatile List<String> statusList;
+    
+    public List<String> getStatusList() {
+        if (statusList == null) {
+            synchronized (this) {
+                if (statusList == null) {
+                    statusList = Arrays.asList("ACTIVE", "INACTIVE");  // 简单对象不需要懒加载
+                }
+            }
+        }
+        return statusList;
+    }
+}
+
+// 正确示例
+@Service
+public class ReportService {
+    // 正确：频繁使用的对象直接初始化
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    // 正确：简单对象直接初始化
+    private final List<String> statusList = Arrays.asList("ACTIVE", "INACTIVE");
+    
+    // 正确：大对象或昂贵资源使用懒加载
+    private volatile ExpensiveResource expensiveResource;
+    
+    public ExpensiveResource getExpensiveResource() {
+        if (expensiveResource == null) {
+            synchronized (this) {
+                if (expensiveResource == null) {
+                    expensiveResource = createExpensiveResource();
+                }
+            }
+        }
+        return expensiveResource;
+    }
+    
+    // 正确：使用Supplier实现懒加载
+    private final Supplier<List<ComplexData>> complexDataSupplier = 
+        Suppliers.memoize(this::loadComplexData);
+    
+    public List<ComplexData> getComplexData() {
+        return complexDataSupplier.get();
+    }
+    
+    private List<ComplexData> loadComplexData() {
+        // 加载复杂数据的耗时操作
+        return complexDataRepository.findAll();
+    }
+    
+    // 正确：JPA懒加载配置
+    @Entity
+    public class Order {
+        @OneToMany(fetch = FetchType.LAZY, mappedBy = "order")
+        private List<OrderItem> items;  // 大集合使用懒加载
+        
+        @ManyToOne(fetch = FetchType.EAGER)
+        private Customer customer;  // 常用关联使用立即加载
+    }
+}
+```
+
+### 5.16 对象池使用 (Minor)
+
+#### 5.16.1 合理使用对象池
+- **检查方法**: 检查是否在合适的场景使用对象池
+- **检查标准**: 对于创建成本高的对象使用对象池
+- **不正确实例**:
+```java
+// 错误示例 - 不合理的对象池使用
+public class StringProcessor {
+    // 错误：为简单对象创建对象池
+    private final ObjectPool<String> stringPool = new GenericObjectPool<>(new StringFactory());
+    
+    public String processString(String input) {
+        String str = null;
+        try {
+            str = stringPool.borrowObject();  // String对象池没有意义
+            return str + input;
+        } finally {
+            if (str != null) {
+                stringPool.returnObject(str);
+            }
+        }
+    }
+    
+    // 错误：没有正确配置对象池
+    private final ObjectPool<StringBuilder> builderPool = new GenericObjectPool<>(new StringBuilderFactory());
+    
+    public String buildString(List<String> parts) {
+        StringBuilder sb = null;
+        try {
+            sb = builderPool.borrowObject();
+            for (String part : parts) {
+                sb.append(part);
+            }
+            return sb.toString();
+        } finally {
+            if (sb != null) {
+                // 错误：没有清理对象状态
+                builderPool.returnObject(sb);
+            }
+        }
+    }
+}
+
+// 正确示例
+public class StringProcessor {
+    // 正确：为创建成本高的对象使用对象池
+    private final ObjectPool<StringBuilder> stringBuilderPool;
+    private final ObjectPool<MessageDigest> digestPool;
+    
+    public StringProcessor() {
+        // 正确：配置对象池参数
+        GenericObjectPoolConfig<StringBuilder> config = new GenericObjectPoolConfig<>();
+        config.setMaxTotal(10);
+        config.setMaxIdle(5);
+        config.setMinIdle(2);
+        config.setTestOnBorrow(true);
+        config.setTestOnReturn(true);
+        
+        this.stringBuilderPool = new GenericObjectPool<>(new StringBuilderFactory(), config);
+        
+        // 正确：为昂贵对象使用对象池
+        this.digestPool = new GenericObjectPool<>(new MessageDigestFactory());
+    }
+    
+    public String buildString(List<String> parts) {
+        StringBuilder sb = null;
+        try {
+            sb = stringBuilderPool.borrowObject();
+            for (String part : parts) {
+                sb.append(part);
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build string", e);
+        } finally {
+            if (sb != null) {
+                // 正确：清理对象状态后归还
+                sb.setLength(0);
+                try {
+                    stringBuilderPool.returnObject(sb);
+                } catch (Exception e) {
+                    log.warn("Failed to return StringBuilder to pool", e);
+                }
+            }
+        }
+    }
+    
+    public String calculateHash(String input) {
+        MessageDigest digest = null;
+        try {
+            digest = digestPool.borrowObject();
+            byte[] hash = digest.digest(input.getBytes());
+            return bytesToHex(hash);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to calculate hash", e);
+        } finally {
+            if (digest != null) {
+                // 正确：重置对象状态
+                digest.reset();
+                try {
+                    digestPool.returnObject(digest);
+                } catch (Exception e) {
+                    log.warn("Failed to return MessageDigest to pool", e);
+                }
+            }
+        }
+    }
+    
+    // 正确：实现对象工厂
+    private static class StringBuilderFactory extends BasePooledObjectFactory<StringBuilder> {
+        @Override
+        public StringBuilder create() {
+            return new StringBuilder(256);
+        }
+        
+        @Override
+        public PooledObject<StringBuilder> wrap(StringBuilder obj) {
+            return new DefaultPooledObject<>(obj);
+        }
+        
+        @Override
+        public boolean validateObject(PooledObject<StringBuilder> p) {
+            return p.getObject() != null;
+        }
+        
+        @Override
+        public void passivateObject(PooledObject<StringBuilder> p) {
+            p.getObject().setLength(0);  // 清理状态
+        }
+    }
+    
+    private static class MessageDigestFactory extends BasePooledObjectFactory<MessageDigest> {
+        @Override
+        public MessageDigest create() throws Exception {
+            return MessageDigest.getInstance("SHA-256");
+        }
+        
+        @Override
+        public PooledObject<MessageDigest> wrap(MessageDigest obj) {
+            return new DefaultPooledObject<>(obj);
+        }
+        
+        @Override
+        public void passivateObject(PooledObject<MessageDigest> p) {
+            p.getObject().reset();
+        }
+    }
+}
+```
+
 ## 6. 可观测性检查
 
 ### 6.1 日志规范 (Major)
@@ -4843,6 +6221,757 @@ public ResponseEntity<UserDTO> updateUser(
 }
 ```
 
+### 9.4 错误处理 (Critical)
+
+#### 9.4.1 统一错误响应格式
+- **检查方法**: 检查API错误响应是否使用统一格式
+- **检查标准**: 所有API错误响应必须使用统一的格式和状态码
+- **不正确实例**:
+```java
+// 错误示例 - 不统一的错误响应
+@RestController
+public class UserController {
+    
+    @GetMapping("/users/{id}")
+    public ResponseEntity<?> getUser(@PathVariable Long id) {
+        try {
+            User user = userService.findById(id);
+            return ResponseEntity.ok(user);
+        } catch (UserNotFoundException e) {
+            // 错误：不同的错误格式
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            // 错误：直接返回异常信息
+            return ResponseEntity.status(500).body(e.getMessage());
+        }
+    }
+    
+    @PostMapping("/users")
+    public ResponseEntity<?> createUser(@RequestBody User user) {
+        try {
+            User created = userService.create(user);
+            return ResponseEntity.ok(created);
+        } catch (ValidationException e) {
+            // 错误：不同的错误格式
+            Map<String, String> errors = new HashMap<>();
+            errors.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(errors);
+        }
+    }
+}
+
+// 正确示例 - 统一错误响应格式
+@RestController
+public class UserController {
+    
+    @GetMapping("/users/{id}")
+    public ResponseEntity<ApiResponse<User>> getUser(@PathVariable Long id) {
+        User user = userService.findById(id);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+    
+    @PostMapping("/users")
+    public ResponseEntity<ApiResponse<User>> createUser(@Valid @RequestBody CreateUserRequest request) {
+        User created = userService.create(request);
+        return ResponseEntity.ok(ApiResponse.success(created));
+    }
+}
+
+// 统一错误响应格式
+@Data
+@Builder
+public class ApiResponse<T> {
+    private boolean success;
+    private T data;
+    private ErrorInfo error;
+    
+    public static <T> ApiResponse<T> success(T data) {
+        return ApiResponse.<T>builder()
+            .success(true)
+            .data(data)
+            .build();
+    }
+    
+    public static <T> ApiResponse<T> error(String code, String message) {
+        return ApiResponse.<T>builder()
+            .success(false)
+            .error(ErrorInfo.builder()
+                .code(code)
+                .message(message)
+                .timestamp(Instant.now())
+                .build())
+            .build();
+    }
+}
+
+@Data
+@Builder
+public class ErrorInfo {
+    private String code;
+    private String message;
+    private Instant timestamp;
+    private List<FieldError> fieldErrors;
+}
+
+// 全局异常处理器
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+    
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUserNotFound(UserNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.error("USER_NOT_FOUND", e.getMessage()));
+    }
+    
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+        List<FieldError> fieldErrors = e.getBindingResult().getFieldErrors().stream()
+            .map(error -> FieldError.builder()
+                .field(error.getField())
+                .message(error.getDefaultMessage())
+                .rejectedValue(error.getRejectedValue())
+                .build())
+            .collect(Collectors.toList());
+        
+        ErrorInfo errorInfo = ErrorInfo.builder()
+            .code("VALIDATION_FAILED")
+            .message("Request validation failed")
+            .timestamp(Instant.now())
+            .fieldErrors(fieldErrors)
+            .build();
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.<Void>builder()
+                .success(false)
+                .error(errorInfo)
+                .build());
+    }
+    
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception e) {
+        log.error("Unexpected error occurred", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred"));
+    }
+}
+```
+
+#### 9.4.2 HTTP状态码使用规范
+- **检查方法**: 检查API返回的HTTP状态码是否符合RESTful规范
+- **检查标准**: 正确使用2xx、4xx、5xx状态码，避免滥用200状态码
+- **不正确实例**:
+```java
+// 错误示例 - 状态码使用不当
+@RestController
+public class OrderController {
+    
+    @GetMapping("/orders/{id}")
+    public ResponseEntity<ApiResponse<Order>> getOrder(@PathVariable Long id) {
+        try {
+            Order order = orderService.findById(id);
+            return ResponseEntity.ok(ApiResponse.success(order));
+        } catch (OrderNotFoundException e) {
+            // 错误：应该返回404，而不是200
+            return ResponseEntity.ok(ApiResponse.error("ORDER_NOT_FOUND", e.getMessage()));
+        }
+    }
+    
+    @PostMapping("/orders")
+    public ResponseEntity<ApiResponse<Order>> createOrder(@RequestBody CreateOrderRequest request) {
+        try {
+            Order order = orderService.create(request);
+            // 错误：创建成功应该返回201，而不是200
+            return ResponseEntity.ok(ApiResponse.success(order));
+        } catch (InsufficientStockException e) {
+            // 错误：业务逻辑错误应该返回400，而不是500
+            return ResponseEntity.status(500).body(ApiResponse.error("STOCK_ERROR", e.getMessage()));
+        }
+    }
+    
+    @DeleteMapping("/orders/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteOrder(@PathVariable Long id) {
+        orderService.delete(id);
+        // 错误：删除成功应该返回204，而不是200
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+}
+
+// 正确示例 - 正确使用HTTP状态码
+@RestController
+public class OrderController {
+    
+    @GetMapping("/orders/{id}")
+    public ResponseEntity<ApiResponse<Order>> getOrder(@PathVariable Long id) {
+        Order order = orderService.findById(id);
+        return ResponseEntity.ok(ApiResponse.success(order));  // 200 OK
+    }
+    
+    @PostMapping("/orders")
+    public ResponseEntity<ApiResponse<Order>> createOrder(@Valid @RequestBody CreateOrderRequest request) {
+        Order order = orderService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED)  // 201 Created
+            .body(ApiResponse.success(order));
+    }
+    
+    @PutMapping("/orders/{id}")
+    public ResponseEntity<ApiResponse<Order>> updateOrder(
+            @PathVariable Long id, 
+            @Valid @RequestBody UpdateOrderRequest request) {
+        Order order = orderService.update(id, request);
+        return ResponseEntity.ok(ApiResponse.success(order));  // 200 OK
+    }
+    
+    @DeleteMapping("/orders/{id}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable Long id) {
+        orderService.delete(id);
+        return ResponseEntity.noContent().build();  // 204 No Content
+    }
+    
+    @GetMapping("/orders")
+    public ResponseEntity<ApiResponse<PageResult<Order>>> getOrders(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PageResult<Order> orders = orderService.findAll(page, size);
+        return ResponseEntity.ok(ApiResponse.success(orders));  // 200 OK
+    }
+}
+
+// 异常处理器中正确使用状态码
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+    
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(EntityNotFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)  // 404 Not Found
+            .body(ApiResponse.error("RESOURCE_NOT_FOUND", e.getMessage()));
+    }
+    
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)  // 400 Bad Request
+            .body(ApiResponse.error("VALIDATION_FAILED", "Request validation failed"));
+    }
+    
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessLogicError(InsufficientStockException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)  // 400 Bad Request
+            .body(ApiResponse.error("INSUFFICIENT_STOCK", e.getMessage()));
+    }
+    
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)  // 403 Forbidden
+            .body(ApiResponse.error("ACCESS_DENIED", "Access denied"));
+    }
+    
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)  // 401 Unauthorized
+            .body(ApiResponse.error("AUTHENTICATION_FAILED", "Authentication failed"));
+    }
+    
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception e) {
+        log.error("Unexpected error occurred", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)  // 500 Internal Server Error
+            .body(ApiResponse.error("INTERNAL_ERROR", "An unexpected error occurred"));
+    }
+}
+```
+
+### 9.5 文档规范 (Major)
+
+#### 9.5.1 API文档完整性
+- **检查方法**: 检查是否使用Swagger/OpenAPI生成完整的API文档
+- **检查标准**: 所有公开API必须有完整的文档，包括参数、响应、示例
+- **不正确实例**:
+```java
+// 错误示例 - 缺少API文档
+@RestController
+public class ProductController {
+    
+    @GetMapping("/products")
+    public ResponseEntity<List<Product>> getProducts(
+            @RequestParam String category,
+            @RequestParam Integer page,
+            @RequestParam Integer size) {
+        // 缺少文档说明
+        return ResponseEntity.ok(productService.findByCategory(category, page, size));
+    }
+    
+    @PostMapping("/products")
+    public ResponseEntity<Product> createProduct(@RequestBody Product product) {
+        // 缺少参数说明和响应说明
+        return ResponseEntity.ok(productService.create(product));
+    }
+}
+
+// 正确示例 - 完整的API文档
+@RestController
+@RequestMapping("/api/v1/products")
+@Tag(name = "Product", description = "产品管理API")
+public class ProductController {
+    
+    @Operation(
+        summary = "获取产品列表",
+        description = "根据分类和分页参数获取产品列表",
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "获取成功",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = PageResult.class)
+                )
+            ),
+            @ApiResponse(
+                responseCode = "400",
+                description = "参数错误",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ApiResponse.class)
+                )
+            )
+        }
+    )
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResult<Product>>> getProducts(
+            @Parameter(description = "产品分类", required = true, example = "electronics")
+            @RequestParam String category,
+            
+            @Parameter(description = "页码，从0开始", example = "0")
+            @RequestParam(defaultValue = "0") Integer page,
+            
+            @Parameter(description = "每页大小，最大100", example = "20")
+            @RequestParam(defaultValue = "20") @Max(100) Integer size,
+            
+            @Parameter(description = "排序字段", example = "name")
+            @RequestParam(defaultValue = "id") String sortBy,
+            
+            @Parameter(description = "排序方向", example = "asc")
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        
+        PageResult<Product> products = productService.findByCategory(
+            category, page, size, sortBy, sortDir);
+        return ResponseEntity.ok(ApiResponse.success(products));
+    }
+    
+    @Operation(
+        summary = "创建产品",
+        description = "创建新的产品信息",
+        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            description = "产品信息",
+            required = true,
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = CreateProductRequest.class),
+                examples = @ExampleObject(
+                    name = "创建产品示例",
+                    value = """
+                    {
+                        "name": "iPhone 15",
+                        "category": "electronics",
+                        "price": 999.99,
+                        "description": "Latest iPhone model",
+                        "stock": 100
+                    }
+                    """
+                )
+            )
+        ),
+        responses = {
+            @ApiResponse(
+                responseCode = "201",
+                description = "创建成功",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = Product.class)
+                )
+            ),
+            @ApiResponse(
+                responseCode = "400",
+                description = "参数验证失败",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ApiResponse.class)
+                )
+            )
+        }
+    )
+    @PostMapping
+    public ResponseEntity<ApiResponse<Product>> createProduct(
+            @Valid @RequestBody CreateProductRequest request) {
+        Product product = productService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(product));
+    }
+    
+    @Operation(
+        summary = "获取产品详情",
+        description = "根据产品ID获取详细信息"
+    )
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<Product>> getProduct(
+            @Parameter(description = "产品ID", required = true, example = "1")
+            @PathVariable Long id) {
+        Product product = productService.findById(id);
+        return ResponseEntity.ok(ApiResponse.success(product));
+    }
+}
+
+// DTO类也需要完整的文档
+@Schema(description = "创建产品请求")
+@Data
+public class CreateProductRequest {
+    
+    @Schema(description = "产品名称", required = true, example = "iPhone 15")
+    @NotBlank(message = "产品名称不能为空")
+    @Size(max = 100, message = "产品名称长度不能超过100")
+    private String name;
+    
+    @Schema(description = "产品分类", required = true, example = "electronics")
+    @NotBlank(message = "产品分类不能为空")
+    private String category;
+    
+    @Schema(description = "产品价格", required = true, example = "999.99")
+    @NotNull(message = "产品价格不能为空")
+    @DecimalMin(value = "0.01", message = "产品价格必须大于0")
+    private BigDecimal price;
+    
+    @Schema(description = "产品描述", example = "Latest iPhone model")
+    @Size(max = 500, message = "产品描述长度不能超过500")
+    private String description;
+    
+    @Schema(description = "库存数量", required = true, example = "100")
+    @NotNull(message = "库存数量不能为空")
+    @Min(value = 0, message = "库存数量不能为负数")
+    private Integer stock;
+}
+```
+
+#### 9.5.2 接口变更文档
+- **检查方法**: 检查API变更是否有详细的变更日志和迁移指南
+- **检查标准**: 每次API变更必须记录变更内容、影响范围、迁移方案
+- **不正确实例**:
+```java
+// 错误示例 - 直接修改现有API，没有版本控制和文档
+@RestController
+public class UserController {
+    
+    @GetMapping("/users/{id}")
+    public ResponseEntity<User> getUser(@PathVariable Long id) {
+        // 直接修改返回格式，破坏向后兼容性
+        User user = userService.findById(id);
+        // 新增字段但没有文档说明
+        user.setLastLoginTime(userService.getLastLoginTime(id));
+        return ResponseEntity.ok(user);
+    }
+}
+
+// 正确示例 - 版本化API和完整的变更文档
+@RestController
+@RequestMapping("/api/v2/users")
+public class UserV2Controller {
+    
+    @Operation(
+        summary = "获取用户信息 (v2)",
+        description = """
+        获取用户详细信息，v2版本相比v1版本的变更：
+        
+        **新增字段：**
+        - lastLoginTime: 最后登录时间
+        - profileCompleteness: 资料完整度百分比
+        - preferences: 用户偏好设置
+        
+        **字段变更：**
+        - email: 现在总是返回，v1版本中可能为null
+        - createdAt: 格式从timestamp改为ISO 8601字符串
+        
+        **废弃字段：**
+        - isActive: 使用status字段替代
+        
+        **迁移指南：**
+        1. 更新客户端以处理新增字段
+        2. 将isActive字段的使用改为status字段
+        3. 更新日期解析逻辑以支持ISO 8601格式
+        """,
+        responses = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "获取成功",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = UserV2Response.class)
+                )
+            )
+        }
+    )
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserV2Response>> getUser(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable Long id) {
+        UserV2Response user = userService.findByIdV2(id);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+}
+
+// 变更日志文档
+/**
+ * API变更日志
+ * 
+ * ## v2.1.0 (2024-01-15)
+ * 
+ * ### 新增
+ * - POST /api/v2/users/{id}/preferences - 更新用户偏好设置
+ * - GET /api/v2/users/{id}/activity - 获取用户活动记录
+ * 
+ * ### 变更
+ * - GET /api/v2/users/{id} 响应中新增 `preferences` 字段
+ * - PUT /api/v2/users/{id} 请求体中 `email` 字段现在支持验证
+ * 
+ * ### 废弃
+ * - GET /api/v1/users/{id} 将在v3.0.0中移除，请迁移到v2版本
+ * 
+ * ### 修复
+ * - 修复分页查询中总数计算错误的问题
+ * 
+ * ### 迁移指南
+ * 1. 如果使用v1 API，建议尽快迁移到v2
+ * 2. 新的preferences字段为可选，现有客户端可以忽略
+ * 3. 更新邮箱时需要通过邮箱验证流程
+ * 
+ * ## v2.0.0 (2023-12-01)
+ * 
+ * ### 重大变更
+ * - 所有日期字段格式从timestamp改为ISO 8601字符串
+ * - 移除已废弃的isActive字段，使用status字段
+ * - 错误响应格式标准化
+ * 
+ * ### 迁移指南
+ * 详见：https://docs.example.com/api/migration/v1-to-v2
+ */
+```
+
+### 9.6 请求验证 (Major)
+
+#### 9.6.1 输入参数验证
+- **检查方法**: 检查所有API接口是否对输入参数进行充分验证
+- **检查标准**: 使用Bean Validation注解，自定义验证器，验证所有必要字段
+- **不正确实例**:
+```java
+// 错误示例 - 缺少输入验证
+@RestController
+public class UserController {
+    
+    @PostMapping("/users")
+    public ResponseEntity<User> createUser(@RequestBody CreateUserRequest request) {
+        // 错误：没有验证输入参数
+        User user = userService.create(request);
+        return ResponseEntity.ok(user);
+    }
+    
+    @GetMapping("/users/{id}")
+    public ResponseEntity<User> getUser(@PathVariable String id) {
+        // 错误：没有验证ID格式
+        User user = userService.findById(Long.parseLong(id));
+        return ResponseEntity.ok(user);
+    }
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 完整的输入验证
+@RestController
+@RequestMapping("/api/v1/users")
+@Validated
+public class UserController {
+    
+    @PostMapping
+    public ResponseEntity<ApiResponse<User>> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+        User user = userService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(user));
+    }
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<User>> getUser(
+            @PathVariable @Positive(message = "用户ID必须为正数") Long id) {
+        User user = userService.findById(id);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+}
+
+// 完整的请求DTO验证
+public class CreateUserRequest {
+    
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 20, message = "用户名长度必须在3-20个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
+    private String username;
+    
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+    
+    @NotBlank(message = "密码不能为空")
+    @Size(min = 8, max = 20, message = "密码长度必须在8-20个字符之间")
+    private String password;
+    
+    @NotNull(message = "年龄不能为空")
+    @Min(value = 18, message = "年龄不能小于18岁")
+    @Max(value = 120, message = "年龄不能大于120岁")
+    private Integer age;
+    
+    // getters and setters
+}
+```
+
+#### 9.6.2 业务规则验证
+- **检查方法**: 检查是否实现了复杂的业务规则验证
+- **检查标准**: 使用分组验证、自定义验证器实现业务逻辑验证
+- **正确实例**:
+```java
+// 自定义验证注解
+@Target({ElementType.FIELD})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = UniqueEmailValidator.class)
+public @interface UniqueEmail {
+    String message() default "邮箱已存在";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+@Component
+public class UniqueEmailValidator implements ConstraintValidator<UniqueEmail, String> {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Override
+    public boolean isValid(String email, ConstraintValidatorContext context) {
+        if (email == null) {
+            return true;
+        }
+        return !userRepository.existsByEmail(email);
+    }
+}
+```
+
+### 9.7 响应格式 (Minor)
+
+#### 9.7.1 统一响应结构
+- **检查方法**: 检查所有API是否使用统一的响应格式
+- **检查标准**: 定义标准响应结构，包含状态、数据、错误信息等字段
+- **不正确实例**:
+```java
+// 错误示例 - 响应格式不统一
+@RestController
+public class ProductController {
+    
+    @GetMapping("/products/{id}")
+    public ResponseEntity<Product> getProduct(@PathVariable Long id) {
+        // 错误：直接返回实体对象
+        Product product = productService.findById(id);
+        return ResponseEntity.ok(product);
+    }
+    
+    @PostMapping("/products")
+    public ResponseEntity<String> createProduct(@RequestBody Product product) {
+        // 错误：返回字符串，格式不统一
+        productService.create(product);
+        return ResponseEntity.ok("Product created successfully");
+    }
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 统一的响应格式
+@RestController
+@RequestMapping("/api/v1/products")
+public class ProductController {
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<Product>> getProduct(@PathVariable Long id) {
+        Product product = productService.findById(id);
+        return ResponseEntity.ok(ApiResponse.success(product));
+    }
+    
+    @PostMapping
+    public ResponseEntity<ApiResponse<Product>> createProduct(@Valid @RequestBody CreateProductRequest request) {
+        Product product = productService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(product));
+    }
+}
+
+// 统一响应结构
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ApiResponse<T> {
+    private boolean success;
+    private T data;
+    private ErrorInfo error;
+    private String message;
+    private long timestamp;
+    private String requestId;
+    
+    public static <T> ApiResponse<T> success(T data) {
+        return ApiResponse.<T>builder()
+            .success(true)
+            .data(data)
+            .timestamp(System.currentTimeMillis())
+            .build();
+    }
+    
+    public static <T> ApiResponse<T> error(String code, String message) {
+        return ApiResponse.<T>builder()
+            .success(false)
+            .error(ErrorInfo.builder()
+                .code(code)
+                .message(message)
+                .build())
+            .timestamp(System.currentTimeMillis())
+            .build();
+    }
+}
+```
+
+#### 9.7.2 分页响应格式
+- **检查方法**: 检查分页接口是否使用统一的分页响应格式
+- **检查标准**: 包含分页元数据，如总数、页码、页大小等信息
+- **正确实例**:
+```java
+// 完整的分页结果类
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PageResult<T> {
+    private List<T> content;
+    private PageInfo pageInfo;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PageInfo {
+        private int page;
+        private int size;
+        private long totalElements;
+        private int totalPages;
+        private boolean first;
+        private boolean last;
+        private boolean hasNext;
+        private boolean hasPrevious;
+    }
+}
+```
+
 ## 10. 测试相关检查
 
 ### 10.1 单元测试 (Major)
@@ -5777,6 +7906,697 @@ class UserServicePerformanceTest {
 }
 ```
 
+### 10.3 测试覆盖率 (Minor)
+
+#### 10.3.1 代码覆盖率要求
+- **检查方法**: 使用JaCoCo等工具检查代码覆盖率
+- **检查标准**: 单元测试覆盖率≥80%，集成测试覆盖率≥70%，关键业务逻辑覆盖率≥90%
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 覆盖率要求过低 -->
+<plugin>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <configuration>
+        <rules>
+            <rule>
+                <element>BUNDLE</element>
+                <limits>
+                    <limit>
+                        <counter>LINE</counter>
+                        <value>COVEREDRATIO</value>
+                        <minimum>0.50</minimum> <!-- 覆盖率要求过低 -->
+                    </limit>
+                </limits>
+            </rule>
+        </rules>
+    </configuration>
+</plugin>
+```
+
+- **正确实例**:
+```xml
+<!-- 正确示例 - 合理的覆盖率配置 -->
+<plugin>
+    <groupId>org.jacoco</groupId>
+    <artifactId>jacoco-maven-plugin</artifactId>
+    <version>0.8.7</version>
+    <executions>
+        <execution>
+            <goals>
+                <goal>prepare-agent</goal>
+            </goals>
+        </execution>
+        <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+                <goal>report</goal>
+            </goals>
+        </execution>
+        <execution>
+            <id>check</id>
+            <goals>
+                <goal>check</goal>
+            </goals>
+            <configuration>
+                <rules>
+                    <rule>
+                        <element>BUNDLE</element>
+                        <limits>
+                            <limit>
+                                <counter>LINE</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.80</minimum>
+                            </limit>
+                            <limit>
+                                <counter>BRANCH</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.75</minimum>
+                            </limit>
+                        </limits>
+                    </rule>
+                    <rule>
+                        <element>CLASS</element>
+                        <excludes>
+                            <exclude>*.*Application</exclude>
+                            <exclude>*.config.*</exclude>
+                            <exclude>*.dto.*</exclude>
+                            <exclude>*.entity.*</exclude>
+                        </excludes>
+                        <limits>
+                            <limit>
+                                <counter>LINE</counter>
+                                <value>COVEREDRATIO</value>
+                                <minimum>0.85</minimum>
+                            </limit>
+                        </limits>
+                    </rule>
+                </rules>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+```
+
+#### 10.3.2 覆盖率报告分析
+- **检查方法**: 定期分析覆盖率报告，识别未覆盖的关键代码
+- **检查标准**: 关注分支覆盖率、异常处理覆盖率、边界条件覆盖率
+- **不正确实例**:
+```java
+// 错误示例 - 缺少边界条件测试
+@Test
+void testCalculateDiscount() {
+    // 只测试正常情况，缺少边界条件
+    BigDecimal result = discountService.calculateDiscount(
+        new BigDecimal("100"), CustomerType.VIP);
+    assertEquals(new BigDecimal("90.00"), result);
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 全面的边界条件测试
+@ParameterizedTest
+@CsvSource({
+    "0, REGULAR, 0.00",           // 边界：金额为0
+    "0.01, REGULAR, 0.01",       // 边界：最小金额
+    "99.99, REGULAR, 99.99",     // 边界：折扣临界点
+    "100.00, REGULAR, 95.00",    // 边界：折扣起始点
+    "1000.00, VIP, 850.00",      // 正常：VIP折扣
+    "10000.00, PREMIUM, 8000.00" // 边界：最大折扣
+})
+void testCalculateDiscount_AllScenarios(String amount, CustomerType type, String expected) {
+    BigDecimal result = discountService.calculateDiscount(
+        new BigDecimal(amount), type);
+    assertEquals(new BigDecimal(expected), result);
+}
+
+@Test
+void testCalculateDiscount_NullAmount_ThrowsException() {
+    // 测试异常情况
+    assertThrows(IllegalArgumentException.class, () -> 
+        discountService.calculateDiscount(null, CustomerType.REGULAR));
+}
+
+@Test
+void testCalculateDiscount_NegativeAmount_ThrowsException() {
+    // 测试负数边界
+    assertThrows(IllegalArgumentException.class, () -> 
+        discountService.calculateDiscount(new BigDecimal("-1"), CustomerType.REGULAR));
+}
+
+@Test
+void testCalculateDiscount_ExtremelyLargeAmount_HandledCorrectly() {
+    // 测试极大值边界
+    BigDecimal largeAmount = new BigDecimal("999999999.99");
+    BigDecimal result = discountService.calculateDiscount(largeAmount, CustomerType.VIP);
+    
+    assertThat(result).isPositive();
+    assertThat(result).isLessThanOrEqualTo(largeAmount);
+}
+```
+
+### 10.4 测试数据管理 (Minor)
+
+#### 10.4.1 测试数据隔离
+- **检查方法**: 确保测试之间数据隔离，避免测试相互影响
+- **检查标准**: 每个测试使用独立的数据集，测试后清理数据
+- **不正确实例**:
+```java
+// 错误示例 - 测试数据污染
+@SpringBootTest
+class UserServiceTest {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Test
+    void testCreateUser() {
+        User user = new User("john@example.com", "John", 25);
+        userService.createUser(user);
+        // 没有清理数据，影响后续测试
+    }
+    
+    @Test
+    void testFindUserByEmail() {
+        // 依赖前一个测试的数据，测试不独立
+        User user = userService.findByEmail("john@example.com");
+        assertNotNull(user);
+    }
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 测试数据隔离
+@SpringBootTest
+@Transactional
+@Rollback
+class UserServiceTest {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private TestEntityManager entityManager;
+    
+    @BeforeEach
+    void setUp() {
+        // 每个测试前清理数据
+        userRepository.deleteAll();
+        entityManager.flush();
+        entityManager.clear();
+    }
+    
+    @Test
+    void testCreateUser() {
+        // 使用独立的测试数据
+        User user = createTestUser("john@example.com", "John", 25);
+        User savedUser = userService.createUser(user);
+        
+        assertThat(savedUser.getId()).isNotNull();
+        assertThat(savedUser.getEmail()).isEqualTo("john@example.com");
+    }
+    
+    @Test
+    void testFindUserByEmail() {
+        // 创建测试专用数据
+        User testUser = createTestUser("jane@example.com", "Jane", 30);
+        userService.createUser(testUser);
+        
+        User foundUser = userService.findByEmail("jane@example.com");
+        assertThat(foundUser).isNotNull();
+        assertThat(foundUser.getName()).isEqualTo("Jane");
+    }
+    
+    @Test
+    void testFindUserByEmail_NotFound() {
+        // 测试不存在的数据
+        User user = userService.findByEmail("nonexistent@example.com");
+        assertThat(user).isNull();
+    }
+    
+    private User createTestUser(String email, String name, int age) {
+        return User.builder()
+                .email(email)
+                .name(name)
+                .age(age)
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+}
+```
+
+#### 10.4.2 测试数据构建器
+- **检查方法**: 使用Builder模式或工厂方法创建测试数据
+- **检查标准**: 测试数据创建简洁、可读性强、易于维护
+- **不正确实例**:
+```java
+// 错误示例 - 硬编码测试数据
+@Test
+void testOrderProcessing() {
+    User user = new User();
+    user.setId(1L);
+    user.setEmail("test@example.com");
+    user.setName("Test User");
+    user.setAge(25);
+    user.setCreatedAt(LocalDateTime.now());
+    
+    Product product = new Product();
+    product.setId(1L);
+    product.setName("Test Product");
+    product.setPrice(new BigDecimal("99.99"));
+    product.setStock(10);
+    
+    Order order = new Order();
+    order.setUser(user);
+    order.addItem(product, 2);
+    // 大量重复的数据设置代码
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 使用测试数据构建器
+public class TestDataBuilder {
+    
+    public static UserBuilder aUser() {
+        return new UserBuilder();
+    }
+    
+    public static ProductBuilder aProduct() {
+        return new ProductBuilder();
+    }
+    
+    public static OrderBuilder anOrder() {
+        return new OrderBuilder();
+    }
+    
+    public static class UserBuilder {
+        private String email = "test@example.com";
+        private String name = "Test User";
+        private int age = 25;
+        private LocalDateTime createdAt = LocalDateTime.now();
+        
+        public UserBuilder withEmail(String email) {
+            this.email = email;
+            return this;
+        }
+        
+        public UserBuilder withName(String name) {
+            this.name = name;
+            return this;
+        }
+        
+        public UserBuilder withAge(int age) {
+            this.age = age;
+            return this;
+        }
+        
+        public UserBuilder createdAt(LocalDateTime createdAt) {
+            this.createdAt = createdAt;
+            return this;
+        }
+        
+        public User build() {
+            return User.builder()
+                    .email(email)
+                    .name(name)
+                    .age(age)
+                    .createdAt(createdAt)
+                    .build();
+        }
+    }
+    
+    public static class ProductBuilder {
+        private String name = "Test Product";
+        private BigDecimal price = new BigDecimal("99.99");
+        private int stock = 10;
+        private String category = "Electronics";
+        
+        public ProductBuilder withName(String name) {
+            this.name = name;
+            return this;
+        }
+        
+        public ProductBuilder withPrice(BigDecimal price) {
+            this.price = price;
+            return this;
+        }
+        
+        public ProductBuilder withStock(int stock) {
+            this.stock = stock;
+            return this;
+        }
+        
+        public ProductBuilder inCategory(String category) {
+            this.category = category;
+            return this;
+        }
+        
+        public Product build() {
+            return Product.builder()
+                    .name(name)
+                    .price(price)
+                    .stock(stock)
+                    .category(category)
+                    .build();
+        }
+    }
+    
+    public static class OrderBuilder {
+        private User user = aUser().build();
+        private List<OrderItem> items = new ArrayList<>();
+        private OrderStatus status = OrderStatus.PENDING;
+        private LocalDateTime orderDate = LocalDateTime.now();
+        
+        public OrderBuilder forUser(User user) {
+            this.user = user;
+            return this;
+        }
+        
+        public OrderBuilder withItem(Product product, int quantity) {
+            items.add(new OrderItem(product, quantity));
+            return this;
+        }
+        
+        public OrderBuilder withStatus(OrderStatus status) {
+            this.status = status;
+            return this;
+        }
+        
+        public OrderBuilder orderedAt(LocalDateTime orderDate) {
+            this.orderDate = orderDate;
+            return this;
+        }
+        
+        public Order build() {
+            Order order = Order.builder()
+                    .user(user)
+                    .status(status)
+                    .orderDate(orderDate)
+                    .build();
+            items.forEach(item -> order.addItem(item.getProduct(), item.getQuantity()));
+            return order;
+        }
+    }
+}
+
+// 使用测试数据构建器的测试
+@Test
+void testOrderProcessing() {
+    User user = aUser()
+            .withEmail("customer@example.com")
+            .withName("John Doe")
+            .build();
+    
+    Product product = aProduct()
+            .withName("Laptop")
+            .withPrice(new BigDecimal("1299.99"))
+            .withStock(5)
+            .build();
+    
+    Order order = anOrder()
+            .forUser(user)
+            .withItem(product, 1)
+            .withStatus(OrderStatus.PENDING)
+            .build();
+    
+    Order processedOrder = orderService.processOrder(order);
+    
+    assertThat(processedOrder.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    assertThat(processedOrder.getTotalAmount()).isEqualTo(new BigDecimal("1299.99"));
+}
+```
+
+### 10.5 性能测试 (Major)
+
+#### 10.5.1 负载测试
+- **检查方法**: 使用JMeter、Gatling或自定义负载测试
+- **检查标准**: 验证系统在预期负载下的性能表现
+- **不正确实例**:
+```java
+// 错误示例 - 简单的性能测试
+@Test
+void testPerformance() {
+    long start = System.currentTimeMillis();
+    userService.createUser(new User("test@example.com", "Test", 25));
+    long duration = System.currentTimeMillis() - start;
+    assertTrue(duration < 1000); // 过于简单
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 完整的负载测试
+@SpringBootTest
+@Testcontainers
+class UserServiceLoadTest {
+    
+    @Container
+    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test");
+    
+    @Autowired
+    private UserService userService;
+    
+    @Test
+    void loadTest_CreateUsers_HandlesExpectedLoad() throws InterruptedException {
+        // 负载测试参数
+        int threadCount = 20;
+        int requestsPerThread = 100;
+        int totalRequests = threadCount * requestsPerThread;
+        
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+        List<Long> responseTimes = Collections.synchronizedList(new ArrayList<>());
+        
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        
+        // 启动负载测试线程
+        for (int t = 0; t < threadCount; t++) {
+            final int threadId = t;
+            executor.submit(() -> {
+                try {
+                    startLatch.await(); // 等待统一开始
+                    
+                    for (int i = 0; i < requestsPerThread; i++) {
+                        long start = System.nanoTime();
+                        try {
+                            User user = User.builder()
+                                    .email(String.format("load_test_%d_%d@example.com", threadId, i))
+                                    .name(String.format("Load Test User %d_%d", threadId, i))
+                                    .age(25 + (i % 50))
+                                    .build();
+                            
+                            userService.createUser(user);
+                            successCount.incrementAndGet();
+                            
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                        } finally {
+                            long responseTime = System.nanoTime() - start;
+                            responseTimes.add(responseTime);
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+        
+        // 开始测试
+        long testStart = System.currentTimeMillis();
+        startLatch.countDown();
+        
+        // 等待测试完成
+        boolean completed = endLatch.await(60, TimeUnit.SECONDS);
+        long testDuration = System.currentTimeMillis() - testStart;
+        
+        executor.shutdown();
+        
+        // 验证测试结果
+        assertThat(completed).isTrue();
+        
+        // 计算性能指标
+        double throughput = (double) successCount.get() / (testDuration / 1000.0);
+        double errorRate = (double) errorCount.get() / totalRequests;
+        
+        LongSummaryStatistics stats = responseTimes.stream()
+                .mapToLong(Long::longValue)
+                .summaryStatistics();
+        
+        double avgResponseTimeMs = stats.getAverage() / 1_000_000.0;
+        double maxResponseTimeMs = stats.getMax() / 1_000_000.0;
+        
+        // 性能断言
+        assertThat(throughput).isGreaterThan(50.0); // 吞吐量 > 50 TPS
+        assertThat(errorRate).isLessThan(0.01);     // 错误率 < 1%
+        assertThat(avgResponseTimeMs).isLessThan(100.0); // 平均响应时间 < 100ms
+        assertThat(maxResponseTimeMs).isLessThan(500.0); // 最大响应时间 < 500ms
+        
+        // 输出性能报告
+        System.out.printf("负载测试结果:\n");
+        System.out.printf("总请求数: %d\n", totalRequests);
+        System.out.printf("成功请求数: %d\n", successCount.get());
+        System.out.printf("失败请求数: %d\n", errorCount.get());
+        System.out.printf("吞吐量: %.2f TPS\n", throughput);
+        System.out.printf("错误率: %.2f%%\n", errorRate * 100);
+        System.out.printf("平均响应时间: %.2f ms\n", avgResponseTimeMs);
+        System.out.printf("最大响应时间: %.2f ms\n", maxResponseTimeMs);
+    }
+    
+    @Test
+    void stressTest_FindUsers_HandlesHighConcurrency() throws InterruptedException {
+        // 先创建测试数据
+        List<User> testUsers = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            User user = User.builder()
+                    .email(String.format("stress_test_%d@example.com", i))
+                    .name(String.format("Stress Test User %d", i))
+                    .age(20 + (i % 60))
+                    .build();
+            testUsers.add(userService.createUser(user));
+        }
+        
+        // 压力测试参数
+        int threadCount = 50;
+        int requestsPerThread = 200;
+        
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+        
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        Random random = new Random();
+        
+        for (int t = 0; t < threadCount; t++) {
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    
+                    for (int i = 0; i < requestsPerThread; i++) {
+                        try {
+                            // 随机查询用户
+                            User randomUser = testUsers.get(random.nextInt(testUsers.size()));
+                            User foundUser = userService.findByEmail(randomUser.getEmail());
+                            
+                            if (foundUser != null) {
+                                successCount.incrementAndGet();
+                            } else {
+                                errorCount.incrementAndGet();
+                            }
+                        } catch (Exception e) {
+                            errorCount.incrementAndGet();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+        
+        long testStart = System.currentTimeMillis();
+        startLatch.countDown();
+        
+        boolean completed = endLatch.await(120, TimeUnit.SECONDS);
+        long testDuration = System.currentTimeMillis() - testStart;
+        
+        executor.shutdown();
+        
+        assertThat(completed).isTrue();
+        
+        int totalRequests = threadCount * requestsPerThread;
+        double throughput = (double) successCount.get() / (testDuration / 1000.0);
+        double errorRate = (double) errorCount.get() / totalRequests;
+        
+        // 压力测试断言
+        assertThat(throughput).isGreaterThan(200.0); // 查询吞吐量 > 200 TPS
+        assertThat(errorRate).isLessThan(0.005);     // 错误率 < 0.5%
+        
+        System.out.printf("压力测试结果:\n");
+        System.out.printf("查询吞吐量: %.2f TPS\n", throughput);
+        System.out.printf("错误率: %.2f%%\n", errorRate * 100);
+    }
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+    }
+}
+```
+
+#### 10.5.2 内存和资源监控
+- **检查方法**: 监控测试过程中的内存使用、CPU使用率、数据库连接等
+- **检查标准**: 资源使用在合理范围内，无内存泄漏
+- **正确实例**:
+```java
+@Test
+void memoryLeakTest_RepeatedOperations_NoMemoryLeak() {
+    MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+    Runtime runtime = Runtime.getRuntime();
+    
+    // 记录初始内存状态
+    runtime.gc();
+    long initialMemory = memoryBean.getHeapMemoryUsage().getUsed();
+    
+    // 执行重复操作
+    for (int cycle = 0; cycle < 10; cycle++) {
+        List<User> users = new ArrayList<>();
+        
+        // 创建大量对象
+        for (int i = 0; i < 1000; i++) {
+            User user = User.builder()
+                    .email(String.format("memory_test_%d_%d@example.com", cycle, i))
+                    .name(String.format("Memory Test User %d_%d", cycle, i))
+                    .age(25)
+                    .build();
+            users.add(userService.createUser(user));
+        }
+        
+        // 处理数据
+        users.forEach(user -> {
+            userService.findByEmail(user.getEmail());
+            userService.updateUser(user.getId(), user);
+        });
+        
+        // 清理数据
+        users.forEach(user -> userService.deleteUser(user.getId()));
+        
+        // 强制垃圾回收
+        runtime.gc();
+        
+        // 检查内存使用
+        long currentMemory = memoryBean.getHeapMemoryUsage().getUsed();
+        long memoryIncrease = currentMemory - initialMemory;
+        
+        // 内存增长不应超过50MB
+        assertThat(memoryIncrease).isLessThan(50 * 1024 * 1024);
+        
+        System.out.printf("Cycle %d: Memory increase: %d MB\n", 
+                cycle, memoryIncrease / (1024 * 1024));
+    }
+}
+```
+
 ## 11. 部署和运维检查
 
 ### 11.1 容器化 (Major)
@@ -5836,6 +8656,166 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
 
 EXPOSE 8080
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+```
+
+#### 11.1.4 健康检查状态更新
+- **检查方法**: 检查容器健康检查的实现和状态更新机制
+- **检查标准**: 实现准确的健康检查，及时更新容器状态
+- **不正确实例**:
+```dockerfile
+# 错误示例 - 简单的健康检查
+FROM openjdk:11-jre-slim
+COPY app.jar /app.jar
+EXPOSE 8080
+
+# 简单的端口检查，不能反映应用真实状态
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:8080 || exit 1
+
+CMD ["java", "-jar", "/app.jar"]
+
+# 正确示例 - 完整的健康检查机制
+FROM openjdk:11-jre-slim
+
+# 安装健康检查工具
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY app.jar app.jar
+COPY healthcheck.sh healthcheck.sh
+RUN chmod +x healthcheck.sh
+
+# 设置健康检查环境变量
+ENV HEALTH_CHECK_URL=http://localhost:8080/actuator/health
+ENV HEALTH_CHECK_TIMEOUT=10
+ENV HEALTH_CHECK_RETRIES=3
+
+# 详细的健康检查脚本
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ./healthcheck.sh
+
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]
+```
+
+```bash
+#!/bin/bash
+# healthcheck.sh - 详细的健康检查脚本
+
+set -e
+
+# 配置参数
+HEALTH_URL=${HEALTH_CHECK_URL:-"http://localhost:8080/actuator/health"}
+TIMEOUT=${HEALTH_CHECK_TIMEOUT:-10}
+RETRIES=${HEALTH_CHECK_RETRIES:-3}
+LOG_FILE="/tmp/healthcheck.log"
+
+# 日志函数
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [HEALTHCHECK] $1" | tee -a "$LOG_FILE"
+}
+
+# 检查应用端口
+check_port() {
+    local port=8080
+    if ! nc -z localhost $port; then
+        log "ERROR: Port $port is not accessible"
+        return 1
+    fi
+    log "INFO: Port $port is accessible"
+    return 0
+}
+
+# 检查健康端点
+check_health_endpoint() {
+    local response
+    local http_code
+    local health_status
+    
+    # 发送健康检查请求
+    response=$(curl -s -w "%{http_code}" --max-time "$TIMEOUT" "$HEALTH_URL" 2>/dev/null || echo "000")
+    http_code=${response: -3}
+    
+    if [ "$http_code" != "200" ]; then
+        log "ERROR: Health endpoint returned HTTP $http_code"
+        return 1
+    fi
+    
+    # 解析健康状态
+    health_status=$(echo "${response%???}" | jq -r '.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
+    
+    if [ "$health_status" != "UP" ]; then
+        log "ERROR: Application health status is $health_status"
+        log "INFO: Health response: ${response%???}"
+        return 1
+    fi
+    
+    log "INFO: Application health status is UP"
+    return 0
+}
+
+# 检查关键依赖
+check_dependencies() {
+    local deps_url="${HEALTH_URL}/components"
+    local response
+    local http_code
+    
+    response=$(curl -s -w "%{http_code}" --max-time "$TIMEOUT" "$deps_url" 2>/dev/null || echo "000")
+    http_code=${response: -3}
+    
+    if [ "$http_code" = "200" ]; then
+        # 检查数据库状态
+        local db_status=$(echo "${response%???}" | jq -r '.components.db.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
+        if [ "$db_status" != "UP" ]; then
+            log "WARNING: Database health status is $db_status"
+        fi
+        
+        # 检查Redis状态
+        local redis_status=$(echo "${response%???}" | jq -r '.components.redis.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
+        if [ "$redis_status" != "UP" ]; then
+            log "WARNING: Redis health status is $redis_status"
+        fi
+    fi
+}
+
+# 主健康检查逻辑
+main() {
+    log "Starting health check..."
+    
+    # 1. 检查端口
+    if ! check_port; then
+        exit 1
+    fi
+    
+    # 2. 检查健康端点（带重试）
+    local attempt=1
+    while [ $attempt -le $RETRIES ]; do
+        if check_health_endpoint; then
+            break
+        fi
+        
+        if [ $attempt -eq $RETRIES ]; then
+            log "ERROR: Health check failed after $RETRIES attempts"
+            exit 1
+        fi
+        
+        log "WARNING: Health check attempt $attempt failed, retrying..."
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+    
+    # 3. 检查依赖状态（非阻塞）
+    check_dependencies
+    
+    log "Health check passed"
+    exit 0
+}
+
+# 执行健康检查
+main "$@"
 ```
 
 #### 11.1.2 镜像安全扫描
@@ -6233,16 +9213,2424 @@ public class GracefulShutdownInterceptor implements HandlerInterceptor {
     @EventListener
     public void handleShutdown(ContextClosedEvent event) {
         shutdownRequested = true;
-        // 等待逻辑同上
-    }
-    
-    public int getActiveRequestCount() {
-        return activeRequests.get();
+        
+        logger.info("Shutdown requested, waiting for {} active requests to complete", 
+                   activeRequests.get());
+        
+        // 等待活跃请求完成
+        long startTime = System.currentTimeMillis();
+        while (activeRequests.get() > 0) {
+            try {
+                Thread.sleep(100);
+                if (System.currentTimeMillis() - startTime > 30000) {
+                    logger.warn("Timeout waiting for requests to complete, {} requests still active", 
+                               activeRequests.get());
+                    break;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        logger.info("All requests completed or timeout reached");
     }
 }
 ```
 
-## 12. 依赖管理检查
+### 11.3 资源限制 (Major)
+
+#### 11.3.1 容器资源限制
+- **检查方法**: 检查Docker容器的CPU和内存限制配置
+- **检查标准**: 合理设置资源限制，防止资源耗尽影响其他服务
+- **不正确实例**:
+```yaml
+# 错误示例 - 没有资源限制的Docker Compose
+version: '3.8'
+services:
+  app:
+    image: myapp:latest
+    ports:
+      - "8080:8080"
+    # 没有设置资源限制，可能消耗所有系统资源
+```
+
+- **正确实例**:
+```yaml
+# 正确示例 - 合理的资源限制配置
+version: '3.8'
+services:
+  app:
+    image: myapp:latest
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'        # 限制CPU使用
+          memory: 1G         # 限制内存使用
+        reservations:
+          cpus: '0.5'        # 保留CPU资源
+          memory: 512M       # 保留内存资源
+    environment:
+      - JAVA_OPTS=-Xms512m -Xmx768m -XX:+UseContainerSupport
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Kubernetes资源限制示例
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp
+        image: myapp:latest
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        env:
+        - name: JAVA_OPTS
+          value: "-Xms512m -Xmx768m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+```
+
+#### 11.3.2 JVM内存配置
+- **检查方法**: 检查JVM堆内存和非堆内存的配置
+- **检查标准**: 根据容器资源限制合理配置JVM参数
+- **不正确实例**:
+```dockerfile
+# 错误示例 - JVM内存配置不当
+FROM openjdk:11-jre-slim
+COPY app.jar /app.jar
+
+# 固定的内存配置，不考虑容器限制
+ENV JAVA_OPTS="-Xms2g -Xmx4g"
+
+CMD ["sh", "-c", "java $JAVA_OPTS -jar /app.jar"]
+```
+
+- **正确实例**:
+```dockerfile
+# 正确示例 - 自适应的JVM内存配置
+FROM openjdk:11-jre-slim
+
+# 安装内存分析工具
+RUN apt-get update && apt-get install -y \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY app.jar /app.jar
+COPY jvm-config.sh /jvm-config.sh
+RUN chmod +x /jvm-config.sh
+
+# 动态JVM配置
+ENV JAVA_OPTS_BASE="-XX:+UseContainerSupport -XX:+UseG1GC -XX:+PrintGCDetails -XX:+PrintGCTimeStamps"
+ENV JAVA_OPTS_MEMORY="-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0"
+ENV JAVA_OPTS_GC="-XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=16m"
+ENV JAVA_OPTS_MONITORING="-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/heapdump.hprof"
+
+CMD ["sh", "-c", "./jvm-config.sh && java $JAVA_OPTS -jar /app.jar"]
+```
+
+```bash
+#!/bin/bash
+# jvm-config.sh - 动态JVM配置脚本
+
+# 获取容器内存限制
+MEMORY_LIMIT=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "0")
+if [ "$MEMORY_LIMIT" = "9223372036854775807" ] || [ "$MEMORY_LIMIT" = "0" ]; then
+    # 如果没有内存限制，使用系统内存
+    MEMORY_LIMIT=$(free -b | awk '/^Mem:/{print $2}')
+fi
+
+# 转换为MB
+MEMORY_LIMIT_MB=$((MEMORY_LIMIT / 1024 / 1024))
+
+echo "Container memory limit: ${MEMORY_LIMIT_MB}MB"
+
+# 根据内存大小动态配置JVM参数
+if [ $MEMORY_LIMIT_MB -le 512 ]; then
+    # 小内存容器
+    HEAP_SIZE="-Xms128m -Xmx384m"
+    GC_OPTS="-XX:+UseSerialGC"
+elif [ $MEMORY_LIMIT_MB -le 1024 ]; then
+    # 中等内存容器
+    HEAP_SIZE="-Xms256m -Xmx768m"
+    GC_OPTS="-XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+else
+    # 大内存容器
+    HEAP_SIZE="-XX:InitialRAMPercentage=50.0 -XX:MaxRAMPercentage=75.0"
+    GC_OPTS="-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:G1HeapRegionSize=16m"
+fi
+
+# 组合所有JVM参数
+export JAVA_OPTS="$JAVA_OPTS_BASE $HEAP_SIZE $GC_OPTS $JAVA_OPTS_MONITORING"
+
+echo "JVM Options: $JAVA_OPTS"
+
+# 输出内存信息
+echo "System Memory Info:"
+free -h
+echo "Container Limits:"
+cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo "No memory limit"
+cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null || echo "No CPU quota"
+```
+
+#### 11.3.3 数据库连接池配置
+- **检查方法**: 检查数据库连接池的大小和超时配置
+- **检查标准**: 根据应用负载和数据库容量合理配置连接池
+- **不正确实例**:
+```yaml
+# 错误示例 - 连接池配置不当
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 100  # 连接池过大
+      minimum-idle: 50        # 最小空闲连接过多
+      connection-timeout: 60000  # 超时时间过长
+      # 缺少其他重要配置
+```
+
+- **正确实例**:
+```yaml
+# 正确示例 - 合理的连接池配置
+spring:
+  datasource:
+    hikari:
+      # 连接池大小配置
+      maximum-pool-size: 20           # 最大连接数
+      minimum-idle: 5                 # 最小空闲连接
+      
+      # 超时配置
+      connection-timeout: 20000       # 连接超时 20秒
+      idle-timeout: 300000           # 空闲超时 5分钟
+      max-lifetime: 1200000          # 连接最大生命周期 20分钟
+      
+      # 连接验证
+      validation-timeout: 5000        # 验证超时 5秒
+      connection-test-query: SELECT 1 # 连接测试查询
+      
+      # 连接池名称和JMX
+      pool-name: HikariCP-Pool
+      register-mbeans: true
+      
+      # 泄漏检测
+      leak-detection-threshold: 60000 # 连接泄漏检测阈值 60秒
+      
+      # 数据源属性
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+
+# 监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,hikaricp
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+```
+
+```java
+// 连接池监控配置
+@Configuration
+@EnableConfigurationProperties(DataSourceProperties.class)
+public class DataSourceConfig {
+    
+    private static final Logger logger = LoggerFactory.getLogger(DataSourceConfig.class);
+    
+    @Bean
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig hikariConfig() {
+        HikariConfig config = new HikariConfig();
+        
+        // 动态调整连接池大小
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        int maxPoolSize = Math.max(10, availableProcessors * 2);
+        config.setMaximumPoolSize(maxPoolSize);
+        config.setMinimumIdle(Math.max(2, maxPoolSize / 4));
+        
+        logger.info("Configured HikariCP with max pool size: {}, min idle: {}", 
+                   maxPoolSize, config.getMinimumIdle());
+        
+        return config;
+    }
+    
+    @Bean
+    public DataSource dataSource(HikariConfig hikariConfig) {
+        return new HikariDataSource(hikariConfig);
+    }
+    
+    // 连接池健康检查
+    @Component
+    public static class HikariHealthIndicator implements HealthIndicator {
+        
+        @Autowired
+        private DataSource dataSource;
+        
+        @Override
+        public Health health() {
+            try {
+                if (dataSource instanceof HikariDataSource) {
+                    HikariDataSource hikariDataSource = (HikariDataSource) dataSource;
+                    HikariPoolMXBean poolMXBean = hikariDataSource.getHikariPoolMXBean();
+                    
+                    int activeConnections = poolMXBean.getActiveConnections();
+                    int idleConnections = poolMXBean.getIdleConnections();
+                    int totalConnections = poolMXBean.getTotalConnections();
+                    int threadsAwaitingConnection = poolMXBean.getThreadsAwaitingConnection();
+                    
+                    Health.Builder builder = Health.up()
+                            .withDetail("active", activeConnections)
+                            .withDetail("idle", idleConnections)
+                            .withDetail("total", totalConnections)
+                            .withDetail("awaiting", threadsAwaitingConnection)
+                            .withDetail("max", hikariDataSource.getMaximumPoolSize());
+                    
+                    // 检查连接池状态
+                    if (threadsAwaitingConnection > 0) {
+                        builder.status("WARN")
+                               .withDetail("warning", "Threads waiting for connections");
+                    }
+                    
+                    if (activeConnections >= hikariDataSource.getMaximumPoolSize() * 0.9) {
+                        builder.status("WARN")
+                               .withDetail("warning", "Connection pool nearly exhausted");
+                    }
+                    
+                    return builder.build();
+                }
+                
+                return Health.up().build();
+            } catch (Exception e) {
+                return Health.down(e).build();
+            }
+        }
+    }
+    
+    // 连接池监控指标
+    @Component
+    public static class HikariMetrics {
+        
+        private final MeterRegistry meterRegistry;
+        private final HikariDataSource dataSource;
+        
+        public HikariMetrics(MeterRegistry meterRegistry, DataSource dataSource) {
+            this.meterRegistry = meterRegistry;
+            this.dataSource = (HikariDataSource) dataSource;
+            registerMetrics();
+        }
+        
+        private void registerMetrics() {
+            HikariPoolMXBean poolMXBean = dataSource.getHikariPoolMXBean();
+            
+            Gauge.builder("hikari.connections.active")
+                 .description("Active connections")
+                 .register(meterRegistry, poolMXBean, HikariPoolMXBean::getActiveConnections);
+                 
+            Gauge.builder("hikari.connections.idle")
+                 .description("Idle connections")
+                 .register(meterRegistry, poolMXBean, HikariPoolMXBean::getIdleConnections);
+                 
+            Gauge.builder("hikari.connections.total")
+                 .description("Total connections")
+                 .register(meterRegistry, poolMXBean, HikariPoolMXBean::getTotalConnections);
+                 
+            Gauge.builder("hikari.connections.awaiting")
+                 .description("Threads awaiting connections")
+                 .register(meterRegistry, poolMXBean, HikariPoolMXBean::getThreadsAwaitingConnection);
+        }
+    }
+}
+
+// 连接池动态调整
+@Component
+public class ConnectionPoolManager {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ConnectionPoolManager.class);
+    
+    @Autowired
+    private HikariDataSource dataSource;
+    
+    @Scheduled(fixedRate = 60000) // 每分钟检查一次
+    public void adjustPoolSize() {
+        try {
+            HikariPoolMXBean poolMXBean = dataSource.getHikariPoolMXBean();
+            
+            int activeConnections = poolMXBean.getActiveConnections();
+            int totalConnections = poolMXBean.getTotalConnections();
+            int maxPoolSize = dataSource.getMaximumPoolSize();
+            
+            // 如果活跃连接数超过总连接数的80%，考虑增加连接池大小
+            if (activeConnections > totalConnections * 0.8 && maxPoolSize < 50) {
+                int newMaxSize = Math.min(maxPoolSize + 5, 50);
+                dataSource.setMaximumPoolSize(newMaxSize);
+                logger.info("Increased connection pool size to: {}", newMaxSize);
+            }
+            
+            // 如果活跃连接数长期低于总连接数的30%，考虑减少连接池大小
+            if (activeConnections < totalConnections * 0.3 && maxPoolSize > 10) {
+                int newMaxSize = Math.max(maxPoolSize - 2, 10);
+                dataSource.setMaximumPoolSize(newMaxSize);
+                logger.info("Decreased connection pool size to: {}", newMaxSize);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error adjusting connection pool size", e);
+        }
+    }
+}
+```
+
+### 11.4 健康检查状态更新
+- **检查方法**: 验证健康检查端点能正确反映应用状态
+- **检查标准**: 健康检查应包含关键组件状态，响应时间<1秒
+- **实现示例**: 参考前面章节的健康检查配置
+```
+
+## 12. 中间件技术检查点
+
+### 12.1 Tomcat配置检查
+
+#### 12.1.1 线程池配置 (Critical)
+- **检查方法**: 检查Tomcat线程池的核心线程数、最大线程数、队列容量配置
+- **检查标准**: 根据应用负载合理配置线程池参数，避免资源浪费或性能瓶颈
+- **不正确实例**:
+```java
+// 错误示例 - 线程池配置不当
+@Bean
+public ServletWebServerFactory servletContainer() {
+    TomcatServletWebServerFactory tomcat = new TomcatServletWebServerFactory();
+    tomcat.addConnectorCustomizers(connector -> {
+        // 配置过小，可能导致性能瓶颈
+        connector.setProperty("maxThreads", "10");
+        connector.setProperty("minSpareThreads", "1");
+        // 缺少队列配置
+    });
+    return tomcat;
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 合理的线程池配置
+@Configuration
+public class TomcatConfig {
+    
+    @Bean
+    public ServletWebServerFactory servletContainer() {
+        TomcatServletWebServerFactory tomcat = new TomcatServletWebServerFactory();
+        tomcat.addConnectorCustomizers(this::customizeConnector);
+        return tomcat;
+    }
+    
+    private void customizeConnector(Connector connector) {
+        Http11NioProtocol protocol = (Http11NioProtocol) connector.getProtocolHandler();
+        
+        // 线程池配置
+        protocol.setMaxThreads(200);           // 最大线程数
+        protocol.setMinSpareThreads(10);       // 最小空闲线程数
+        protocol.setMaxConnections(8192);      // 最大连接数
+        protocol.setAcceptCount(100);          // 等待队列长度
+        
+        // 连接超时配置
+        protocol.setConnectionTimeout(20000);   // 连接超时 20秒
+        protocol.setKeepAliveTimeout(60000);    // Keep-Alive超时 60秒
+        protocol.setMaxKeepAliveRequests(100);  // 最大Keep-Alive请求数
+        
+        // 性能优化
+        protocol.setTcpNoDelay(true);
+        protocol.setCompression("on");
+        protocol.setCompressionMinSize(2048);
+        protocol.setCompressibleMimeType("text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json");
+    }
+    
+    // 线程池监控
+    @Bean
+    public ThreadPoolTaskExecutor tomcatExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(10);
+        executor.setMaxPoolSize(200);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("tomcat-exec-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+    
+    // 优雅停机配置
+    @Bean
+    public GracefulShutdown gracefulShutdown() {
+        return new GracefulShutdown();
+    }
+    
+    @Bean
+    public WebServerFactoryCustomizer<TomcatServletWebServerFactory> tomcatCustomizer(GracefulShutdown gracefulShutdown) {
+        return factory -> factory.addConnectorCustomizers(gracefulShutdown);
+    }
+    
+    private static class GracefulShutdown implements TomcatConnectorCustomizer, ApplicationListener<ContextClosedEvent> {
+        
+        private static final Logger logger = LoggerFactory.getLogger(GracefulShutdown.class);
+        private volatile Connector connector;
+        
+        @Override
+        public void customize(Connector connector) {
+            this.connector = connector;
+        }
+        
+        @Override
+        public void onApplicationEvent(ContextClosedEvent event) {
+            if (connector != null) {
+                connector.pause();
+                Executor executor = connector.getProtocolHandler().getExecutor();
+                if (executor instanceof ThreadPoolExecutor) {
+                    try {
+                        ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;
+                        threadPoolExecutor.shutdown();
+                        if (!threadPoolExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                            logger.warn("Tomcat线程池未在30秒内关闭，强制关闭");
+                            threadPoolExecutor.shutdownNow();
+                        }
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+#### 12.1.2 安全配置 (Critical)
+- **检查方法**: 检查Tomcat安全相关配置
+- **检查标准**: 禁用不必要的HTTP方法，删除默认应用，配置安全头
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 不安全的server.xml配置 -->
+<Connector port="8080" protocol="HTTP/1.1"
+           connectionTimeout="20000"
+           redirectPort="8443" />
+<!-- 缺少安全配置，允许所有HTTP方法 -->
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 安全配置
+@Configuration
+public class TomcatSecurityConfig {
+    
+    @Bean
+    public WebServerFactoryCustomizer<TomcatServletWebServerFactory> tomcatSecurityCustomizer() {
+        return factory -> {
+            factory.addContextCustomizers(context -> {
+                // 禁用不安全的HTTP方法
+                SecurityConstraint securityConstraint = new SecurityConstraint();
+                securityConstraint.setUserConstraint("CONFIDENTIAL");
+                SecurityCollection collection = new SecurityCollection();
+                collection.addPattern("/*");
+                collection.addMethod("TRACE");
+                collection.addMethod("OPTIONS");
+                securityConstraint.addCollection(collection);
+                context.addConstraint(securityConstraint);
+                
+                // 配置安全头
+                context.addFilterDef(createSecurityHeadersFilter());
+                FilterMap filterMap = new FilterMap();
+                filterMap.setFilterName("securityHeaders");
+                filterMap.addURLPattern("/*");
+                context.addFilterMap(filterMap);
+            });
+        };
+    }
+    
+    private FilterDef createSecurityHeadersFilter() {
+        FilterDef filterDef = new FilterDef();
+        filterDef.setFilterName("securityHeaders");
+        filterDef.setFilterClass(SecurityHeadersFilter.class.getName());
+        return filterDef;
+    }
+    
+    // 安全头过滤器
+    public static class SecurityHeadersFilter implements Filter {
+        
+        @Override
+        public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+                throws IOException, ServletException {
+            
+            HttpServletResponse httpResponse = (HttpServletResponse) response;
+            
+            // 添加安全头
+            httpResponse.setHeader("X-Content-Type-Options", "nosniff");
+            httpResponse.setHeader("X-Frame-Options", "DENY");
+            httpResponse.setHeader("X-XSS-Protection", "1; mode=block");
+            httpResponse.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+            httpResponse.setHeader("Content-Security-Policy", "default-src 'self'");
+            httpResponse.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+            
+            chain.doFilter(request, response);
+        }
+    }
+}
+```
+
+### 12.2 Spring Boot配置检查
+
+#### 12.2.1 自动配置机制 (Critical)
+- **检查方法**: 检查自动配置的使用和自定义配置
+- **检查标准**: 正确理解和使用Spring Boot自动配置，避免配置冲突
+- **不正确实例**:
+```java
+// 错误示例 - 不当的自动配置覆盖
+@Configuration
+public class BadConfig {
+    
+    // 错误：完全覆盖自动配置，丢失默认配置
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/test");
+        // 缺少其他重要配置
+        return dataSource;
+    }
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 合理使用自动配置
+@Configuration
+@EnableConfigurationProperties({DatabaseProperties.class})
+public class DataSourceConfig {
+    
+    // 使用@ConditionalOnMissingBean避免冲突
+    @Bean
+    @ConditionalOnMissingBean
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig hikariConfig() {
+        return new HikariConfig();
+    }
+    
+    @Bean
+    @ConditionalOnMissingBean
+    public DataSource dataSource(HikariConfig hikariConfig, DatabaseProperties properties) {
+        // 基于自动配置进行定制
+        hikariConfig.setJdbcUrl(properties.getUrl());
+        hikariConfig.setUsername(properties.getUsername());
+        hikariConfig.setPassword(properties.getPassword());
+        
+        // 添加自定义配置
+        hikariConfig.setConnectionTestQuery("SELECT 1");
+        hikariConfig.setMaximumPoolSize(properties.getMaxPoolSize());
+        
+        return new HikariDataSource(hikariConfig);
+    }
+    
+    // 自定义配置属性
+    @ConfigurationProperties(prefix = "app.database")
+    @Data
+    public static class DatabaseProperties {
+        private String url;
+        private String username;
+        private String password;
+        private int maxPoolSize = 20;
+        private boolean enableMetrics = true;
+    }
+}
+```
+
+#### 12.2.2 Profile配置 (Important)
+- **检查方法**: 检查环境配置的隔离和管理
+- **检查标准**: 不同环境使用不同Profile，配置外部化
+- **不正确实例**:
+```yaml
+# 错误示例 - 所有环境混在一起
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test  # 硬编码本地环境
+    username: root
+    password: password123  # 密码硬编码
+  redis:
+    host: localhost  # 所有环境都用localhost
+    port: 6379
+```
+
+- **正确实例**:
+```yaml
+# application.yml - 通用配置
+spring:
+  application:
+    name: my-application
+  profiles:
+    active: @spring.profiles.active@  # 通过Maven/Gradle注入
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+---
+# application-dev.yml - 开发环境
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  h2:
+    console:
+      enabled: true
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+
+logging:
+  level:
+    com.example: DEBUG
+
+---
+# application-prod.yml - 生产环境
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT}
+    password: ${REDIS_PASSWORD}
+    ssl: true
+
+logging:
+  level:
+    root: INFO
+    com.example: INFO
+  file:
+    name: /var/log/app/application.log
+```
+
+```java
+// Profile特定的配置类
+@Configuration
+@Profile("prod")
+public class ProductionConfig {
+    
+    @Bean
+    public HealthIndicator customHealthIndicator() {
+        return new CustomHealthIndicator();
+    }
+    
+    @Bean
+    public MeterRegistryCustomizer<MeterRegistry> metricsCommonTags() {
+        return registry -> registry.config().commonTags("environment", "production");
+    }
+}
+
+@Configuration
+@Profile("dev")
+public class DevelopmentConfig {
+    
+    @Bean
+    @Primary
+    public Clock testClock() {
+        return Clock.fixed(Instant.parse("2023-01-01T00:00:00Z"), ZoneOffset.UTC);
+    }
+}
+```
+
+#### 12.2.3 Actuator安全配置 (Important)
+- **检查方法**: 检查Actuator端点的安全配置
+- **检查标准**: 敏感端点需要认证，生产环境限制暴露的端点
+- **不正确实例**:
+```yaml
+# 错误示例 - 暴露所有端点且无安全控制
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"  # 暴露所有端点，包括敏感信息
+  endpoint:
+    health:
+      show-details: always  # 总是显示详细信息
+```
+
+- **正确实例**:
+```yaml
+# 正确示例 - 安全的Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+    info:
+      enabled: true
+  security:
+    enabled: true
+  server:
+    port: 8081  # 使用不同端口
+```
+
+```java
+// Actuator安全配置
+@Configuration
+@EnableWebSecurity
+public class ActuatorSecurityConfig {
+    
+    @Bean
+    @Order(1)
+    public SecurityFilterChain actuatorSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+            .securityMatcher(EndpointRequest.toAnyEndpoint())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(EndpointRequest.to("health", "info")).permitAll()
+                .requestMatchers(EndpointRequest.to("metrics", "prometheus")).hasRole("MONITOR")
+                .anyRequest().hasRole("ACTUATOR_ADMIN")
+            )
+            .httpBasic(Customizer.withDefaults())
+            .build();
+    }
+    
+    @Bean
+    public UserDetailsService actuatorUserDetailsService() {
+        UserDetails monitor = User.builder()
+            .username("monitor")
+            .password("{noop}monitor-password")
+            .roles("MONITOR")
+            .build();
+            
+        UserDetails admin = User.builder()
+            .username("admin")
+            .password("{noop}admin-password")
+            .roles("ACTUATOR_ADMIN", "MONITOR")
+            .build();
+            
+        return new InMemoryUserDetailsManager(monitor, admin);
+    }
+    
+    // 自定义健康检查指标
+    @Component
+    public class CustomHealthIndicator implements HealthIndicator {
+        
+        @Override
+        public Health health() {
+            // 检查外部依赖
+            boolean databaseUp = checkDatabase();
+            boolean redisUp = checkRedis();
+            boolean externalServiceUp = checkExternalService();
+            
+            if (databaseUp && redisUp && externalServiceUp) {
+                return Health.up()
+                    .withDetail("database", "UP")
+                    .withDetail("redis", "UP")
+                    .withDetail("external-service", "UP")
+                    .build();
+            } else {
+                return Health.down()
+                    .withDetail("database", databaseUp ? "UP" : "DOWN")
+                    .withDetail("redis", redisUp ? "UP" : "DOWN")
+                    .withDetail("external-service", externalServiceUp ? "UP" : "DOWN")
+                    .build();
+            }
+        }
+        
+        private boolean checkDatabase() {
+            // 实现数据库健康检查逻辑
+            return true;
+        }
+        
+        private boolean checkRedis() {
+            // 实现Redis健康检查逻辑
+            return true;
+        }
+        
+        private boolean checkExternalService() {
+            // 实现外部服务健康检查逻辑
+            return true;
+        }
+    }
+}
+```
+
+### 12.3 Redis配置检查
+
+#### 12.3.1 连接池配置 (Critical)
+- **检查方法**: 检查Redis连接池的配置参数
+- **检查标准**: 根据应用负载合理配置连接池大小和超时参数
+- **不正确实例**:
+```yaml
+# 错误示例 - Redis连接池配置不当
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    lettuce:
+      pool:
+        max-active: 1000  # 连接池过大
+        max-idle: 500     # 空闲连接过多
+        min-idle: 100     # 最小空闲连接过多
+        # 缺少超时配置
+```
+
+- **正确实例**:
+```yaml
+# 正确示例 - 合理的Redis配置
+spring:
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+    timeout: 2000ms
+    
+    lettuce:
+      pool:
+        max-active: 20      # 最大连接数
+        max-idle: 10        # 最大空闲连接
+        min-idle: 2         # 最小空闲连接
+        max-wait: 2000ms    # 最大等待时间
+      shutdown-timeout: 100ms
+      
+    # 集群配置（如果使用集群）
+    cluster:
+      nodes: ${REDIS_CLUSTER_NODES:}
+      max-redirects: 3
+      
+    # 哨兵配置（如果使用哨兵）
+    sentinel:
+      master: ${REDIS_SENTINEL_MASTER:}
+      nodes: ${REDIS_SENTINEL_NODES:}
+```
+
+```java
+// Redis配置类
+@Configuration
+@EnableCaching
+public class RedisConfig {
+    
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+            .commandTimeout(Duration.ofSeconds(2))
+            .shutdownTimeout(Duration.ofMillis(100))
+            .build();
+            
+        return new LettuceConnectionFactory(
+            new RedisStandaloneConfiguration("localhost", 6379), 
+            clientConfig
+        );
+    }
+    
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        
+        // 使用Jackson2JsonRedisSerializer进行序列化
+        Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = 
+            new Jackson2JsonRedisSerializer<>(Object.class);
+        ObjectMapper om = new ObjectMapper();
+        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        om.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
+        jackson2JsonRedisSerializer.setObjectMapper(om);
+        
+        // 设置序列化器
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(jackson2JsonRedisSerializer);
+        template.setHashValueSerializer(jackson2JsonRedisSerializer);
+        
+        template.afterPropertiesSet();
+        return template;
+    }
+    
+    @Bean
+    public CacheManager cacheManager(LettuceConnectionFactory connectionFactory) {
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(10))  // 默认过期时间
+            .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()))
+            .disableCachingNullValues();
+            
+        return RedisCacheManager.builder(connectionFactory)
+            .cacheDefaults(config)
+            .build();
+    }
+    
+    // Redis健康检查
+    @Component
+    public static class RedisHealthIndicator implements HealthIndicator {
+        
+        @Autowired
+        private RedisTemplate<String, Object> redisTemplate;
+        
+        @Override
+        public Health health() {
+            try {
+                String result = redisTemplate.execute((RedisCallback<String>) connection -> {
+                    return connection.ping();
+                });
+                
+                if ("PONG".equals(result)) {
+                    return Health.up()
+                        .withDetail("redis", "Available")
+                        .withDetail("ping", result)
+                        .build();
+                } else {
+                    return Health.down()
+                        .withDetail("redis", "Ping failed")
+                        .withDetail("ping", result)
+                        .build();
+                }
+            } catch (Exception e) {
+                return Health.down(e)
+                    .withDetail("redis", "Connection failed")
+                    .build();
+            }
+        }
+    }
+}
+```
+
+#### 12.3.2 缓存策略配置 (Important)
+- **检查方法**: 检查缓存的过期策略、淘汰策略和一致性保证
+- **检查标准**: 合理设置TTL，实现缓存穿透、击穿、雪崩防护
+- **不正确实例**:
+```java
+// 错误示例 - 缺乏缓存保护机制
+@Service
+public class BadCacheService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    public Object getData(String key) {
+        Object data = redisTemplate.opsForValue().get(key);
+        if (data == null) {
+            // 直接查询数据库，可能导致缓存击穿
+            data = queryFromDatabase(key);
+            redisTemplate.opsForValue().set(key, data); // 没有设置过期时间
+        }
+        return data;
+    }
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 完善的缓存策略
+@Service
+public class CacheService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
+    private static final String LOCK_PREFIX = "lock:";
+    private static final String NULL_VALUE = "NULL";
+    private static final Duration DEFAULT_TTL = Duration.ofMinutes(30);
+    private static final Duration NULL_TTL = Duration.ofMinutes(5);
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private RedissonClient redissonClient;
+    
+    // 防止缓存穿透、击穿、雪崩的缓存方法
+    public Object getDataWithProtection(String key) {
+        // 1. 先从缓存获取
+        Object data = redisTemplate.opsForValue().get(key);
+        
+        if (data != null) {
+            // 缓存命中，检查是否为空值标记
+            if (NULL_VALUE.equals(data)) {
+                return null; // 防止缓存穿透
+            }
+            return data;
+        }
+        
+        // 2. 缓存未命中，使用分布式锁防止缓存击穿
+        String lockKey = LOCK_PREFIX + key;
+        RLock lock = redissonClient.getLock(lockKey);
+        
+        try {
+            // 尝试获取锁，最多等待1秒，锁定10秒
+            if (lock.tryLock(1, 10, TimeUnit.SECONDS)) {
+                try {
+                    // 双重检查，防止重复查询
+                    data = redisTemplate.opsForValue().get(key);
+                    if (data != null) {
+                        return NULL_VALUE.equals(data) ? null : data;
+                    }
+                    
+                    // 查询数据库
+                    data = queryFromDatabase(key);
+                    
+                    if (data != null) {
+                        // 设置随机过期时间，防止缓存雪崩
+                        Duration ttl = DEFAULT_TTL.plus(Duration.ofMinutes(ThreadLocalRandom.current().nextInt(10)));
+                        redisTemplate.opsForValue().set(key, data, ttl);
+                    } else {
+                        // 缓存空值，防止缓存穿透
+                        redisTemplate.opsForValue().set(key, NULL_VALUE, NULL_TTL);
+                    }
+                    
+                    return data;
+                } finally {
+                    lock.unlock();
+                }
+            } else {
+                // 获取锁失败，等待一段时间后重试
+                Thread.sleep(50);
+                return getDataWithProtection(key);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("获取分布式锁被中断", e);
+            return queryFromDatabase(key); // 降级到直接查询数据库
+        }
+    }
+    
+    // 批量预热缓存，防止缓存雪崩
+    @PostConstruct
+    public void warmUpCache() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                List<String> hotKeys = getHotKeys();
+                for (String key : hotKeys) {
+                    Object data = queryFromDatabase(key);
+                    if (data != null) {
+                        Duration ttl = DEFAULT_TTL.plus(Duration.ofMinutes(ThreadLocalRandom.current().nextInt(10)));
+                        redisTemplate.opsForValue().set(key, data, ttl);
+                    }
+                    Thread.sleep(10); // 避免对数据库造成压力
+                }
+                logger.info("缓存预热完成，预热了{}个热点数据", hotKeys.size());
+            } catch (Exception e) {
+                logger.error("缓存预热失败", e);
+            }
+        });
+    }
+    
+    // 缓存更新策略
+    public void updateCache(String key, Object newData) {
+        try {
+            // 先更新数据库
+            updateDatabase(key, newData);
+            
+            // 再删除缓存（Cache Aside模式）
+            redisTemplate.delete(key);
+            
+            logger.info("更新缓存: key={}", key);
+        } catch (Exception e) {
+            logger.error("更新缓存失败: key={}", key, e);
+            // 可以考虑重试机制或者发送到消息队列
+        }
+    }
+    
+    private Object queryFromDatabase(String key) {
+        // 模拟数据库查询
+        logger.info("从数据库查询数据: key={}", key);
+        return "data_" + key;
+    }
+    
+    private void updateDatabase(String key, Object data) {
+        // 模拟数据库更新
+        logger.info("更新数据库: key={}, data={}", key, data);
+    }
+    
+    private List<String> getHotKeys() {
+        // 获取热点数据的key列表
+        return Arrays.asList("hot_key_1", "hot_key_2", "hot_key_3");
+    }
+}
+```
+
+### 12.4 Kafka配置检查
+
+#### 12.4.1 生产者可靠性配置 (Critical)
+- **检查方法**: 检查Kafka生产者的可靠性配置参数
+- **检查标准**: 确保消息不丢失，配置合适的重试和确认机制
+- **不正确实例**:
+```java
+// 错误示例 - 生产者配置不当
+@Bean
+public ProducerFactory<String, Object> producerFactory() {
+    Map<String, Object> props = new HashMap<>();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "kafka:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+    // 缺少可靠性配置，可能导致消息丢失
+    return new DefaultKafkaProducerFactory<>(props);
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 可靠的生产者配置
+@Configuration
+public class KafkaProducerConfig {
+    
+    @Bean
+    public ProducerFactory<String, Object> producerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        
+        // 基本配置
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "${kafka.bootstrap-servers}");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        
+        // 可靠性配置
+        props.put(ProducerConfig.ACKS_CONFIG, "all");                    // 等待所有副本确认
+        props.put(ProducerConfig.RETRIES_CONFIG, 3);                     // 重试次数
+        props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 1000);          // 重试间隔
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);        // 启用幂等性
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1); // 限制未确认请求数
+        
+        // 性能配置
+        props.put(ProducerConfig.BATCH_SIZE_CONFIG, 16384);               // 批次大小
+        props.put(ProducerConfig.LINGER_MS_CONFIG, 10);                   // 等待时间
+        props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 33554432);         // 缓冲区大小
+        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "snappy");       // 压缩类型
+        
+        // 超时配置
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 30000);       // 请求超时
+        props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 120000);     // 投递超时
+        
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+    
+    @Bean
+    public KafkaTemplate<String, Object> kafkaTemplate(ProducerFactory<String, Object> producerFactory) {
+        KafkaTemplate<String, Object> template = new KafkaTemplate<>(producerFactory);
+        
+        // 设置默认主题
+        template.setDefaultTopic("default-topic");
+        
+        // 设置生产者监听器
+        template.setProducerListener(new ProducerListener<String, Object>() {
+            @Override
+            public void onSuccess(ProducerRecord<String, Object> producerRecord, RecordMetadata recordMetadata) {
+                logger.debug("消息发送成功: topic={}, partition={}, offset={}", 
+                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset());
+            }
+            
+            @Override
+            public void onError(ProducerRecord<String, Object> producerRecord, RecordMetadata recordMetadata, Exception exception) {
+                logger.error("消息发送失败: topic={}, key={}", 
+                    producerRecord.topic(), producerRecord.key(), exception);
+            }
+        });
+        
+        return template;
+    }
+    
+    // 消息发送服务
+    @Service
+    public static class MessageProducer {
+        
+        private static final Logger logger = LoggerFactory.getLogger(MessageProducer.class);
+        
+        @Autowired
+        private KafkaTemplate<String, Object> kafkaTemplate;
+        
+        public void sendMessage(String topic, String key, Object message) {
+            try {
+                ListenableFuture<SendResult<String, Object>> future = 
+                    kafkaTemplate.send(topic, key, message);
+                    
+                future.addCallback(
+                    result -> logger.info("消息发送成功: topic={}, key={}, offset={}", 
+                        topic, key, result.getRecordMetadata().offset()),
+                    failure -> logger.error("消息发送失败: topic={}, key={}", 
+                        topic, key, failure)
+                );
+            } catch (Exception e) {
+                logger.error("发送消息异常: topic={}, key={}", topic, key, e);
+                throw new MessageSendException("Failed to send message", e);
+            }
+        }
+        
+        // 同步发送（用于关键消息）
+        public void sendMessageSync(String topic, String key, Object message) {
+            try {
+                SendResult<String, Object> result = kafkaTemplate.send(topic, key, message).get(10, TimeUnit.SECONDS);
+                logger.info("同步发送成功: topic={}, key={}, offset={}", 
+                    topic, key, result.getRecordMetadata().offset());
+            } catch (Exception e) {
+                logger.error("同步发送失败: topic={}, key={}", topic, key, e);
+                throw new MessageSendException("Failed to send message synchronously", e);
+            }
+        }
+    }
+}
+```
+
+#### 12.4.2 消费者配置与错误处理 (Critical)
+- **检查方法**: 检查Kafka消费者的配置和错误处理机制
+- **检查标准**: 确保消息不重复处理，实现死信队列和重试机制
+- **不正确实例**:
+```java
+// 错误示例 - 消费者配置不当
+@KafkaListener(topics = "my-topic")
+public void handleMessage(String message) {
+    // 直接处理消息，没有错误处理
+    processMessage(message);
+    // 没有手动提交offset，可能导致消息重复或丢失
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 完善的消费者配置
+@Configuration
+public class KafkaConsumerConfig {
+    
+    @Bean
+    public ConsumerFactory<String, Object> consumerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        
+        // 基本配置
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "${kafka.bootstrap-servers}");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "${kafka.consumer.group-id}");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
+        
+        // 可靠性配置
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");   // 从最早的消息开始消费
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);       // 禁用自动提交
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"); // 只读取已提交的消息
+        
+        // 性能配置
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 500);           // 每次拉取的最大记录数
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000);    // 最大轮询间隔
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);       // 会话超时
+        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);    // 心跳间隔
+        
+        // 反序列化配置
+        props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.example.model");
+        props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, "com.example.model.Message");
+        
+        return new DefaultKafkaConsumerFactory<>(props);
+    }
+    
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory(
+            ConsumerFactory<String, Object> consumerFactory) {
+        
+        ConcurrentKafkaListenerContainerFactory<String, Object> factory = 
+            new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory);
+        
+        // 并发配置
+        factory.setConcurrency(3);
+        factory.getContainerProperties().setAckMode(AckMode.MANUAL_IMMEDIATE);
+        
+        // 错误处理配置
+        factory.setCommonErrorHandler(createErrorHandler());
+        
+        // 重试配置
+        factory.setRetryTemplate(createRetryTemplate());
+        factory.setRecoveryCallback(createRecoveryCallback());
+        
+        return factory;
+    }
+    
+    private CommonErrorHandler createErrorHandler() {
+        // 创建死信队列发布器
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+            kafkaTemplate(),
+            (record, exception) -> {
+                // 根据异常类型决定死信队列主题
+                if (exception instanceof DeserializationException) {
+                    return new TopicPartition(record.topic() + ".DLT.deserialization", record.partition());
+                } else {
+                    return new TopicPartition(record.topic() + ".DLT", record.partition());
+                }
+            }
+        );
+        
+        // 配置重试策略
+        FixedBackOff backOff = new FixedBackOff(1000L, 3); // 重试3次，间隔1秒
+        
+        return new DefaultErrorHandler(recoverer, backOff);
+    }
+    
+    private RetryTemplate createRetryTemplate() {
+        RetryTemplate retryTemplate = new RetryTemplate();
+        
+        // 重试策略
+        FixedBackOffPolicy backOffPolicy = new FixedBackOffPolicy();
+        backOffPolicy.setBackOffPeriod(1000L);
+        retryTemplate.setBackOffPolicy(backOffPolicy);
+        
+        // 重试次数
+        SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
+        retryPolicy.setMaxAttempts(3);
+        retryTemplate.setRetryPolicy(retryPolicy);
+        
+        return retryTemplate;
+    }
+    
+    private RecoveryCallback<Void> createRecoveryCallback() {
+        return context -> {
+            ConsumerRecord<String, Object> record = 
+                (ConsumerRecord<String, Object>) context.getAttribute("record");
+            Exception exception = (Exception) context.getLastThrowable();
+            
+            logger.error("消息处理最终失败，发送到死信队列: topic={}, key={}, offset={}", 
+                record.topic(), record.key(), record.offset(), exception);
+            
+            // 发送到死信队列或进行其他处理
+            sendToDeadLetterQueue(record, exception);
+            
+            return null;
+        };
+    }
+    
+    @Bean
+    public KafkaTemplate<String, Object> kafkaTemplate() {
+        return new KafkaTemplate<>(producerFactory());
+    }
+    
+    @Bean
+    public ProducerFactory<String, Object> producerFactory() {
+        // 复用生产者配置
+        return new KafkaProducerConfig().producerFactory();
+    }
+    
+    private void sendToDeadLetterQueue(ConsumerRecord<String, Object> record, Exception exception) {
+        // 实现死信队列逻辑
+        String dltTopic = record.topic() + ".DLT";
+        kafkaTemplate().send(dltTopic, record.key(), record.value());
+    }
+}
+
+// 消息消费者服务
+@Component
+public class MessageConsumer {
+    
+    private static final Logger logger = LoggerFactory.getLogger(MessageConsumer.class);
+    
+    @KafkaListener(
+        topics = "${kafka.topics.user-events}",
+        groupId = "${kafka.consumer.group-id}",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void handleUserEvent(
+            @Payload UserEvent event,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION_ID) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            Acknowledgment acknowledgment) {
+        
+        try {
+            logger.info("接收到用户事件: topic={}, partition={}, offset={}, event={}", 
+                topic, partition, offset, event);
+            
+            // 处理业务逻辑
+            processUserEvent(event);
+            
+            // 手动提交offset
+            acknowledgment.acknowledge();
+            
+            logger.debug("用户事件处理完成: topic={}, partition={}, offset={}", 
+                topic, partition, offset);
+                
+        } catch (Exception e) {
+            logger.error("处理用户事件失败: topic={}, partition={}, offset={}, event={}", 
+                topic, partition, offset, event, e);
+            
+            // 不提交offset，让重试机制处理
+            throw new MessageProcessingException("Failed to process user event", e);
+        }
+    }
+    
+    @Retryable(
+        value = {TransientException.class},
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    private void processUserEvent(UserEvent event) {
+        // 实现具体的业务逻辑
+        if (event.getType() == UserEventType.REGISTRATION) {
+            handleUserRegistration(event);
+        } else if (event.getType() == UserEventType.LOGIN) {
+            handleUserLogin(event);
+        }
+    }
+    
+    @Recover
+    private void recover(TransientException ex, UserEvent event) {
+        logger.error("用户事件处理最终失败，需要人工介入: event={}", event, ex);
+        // 发送告警或记录到特殊表中
+        alertService.sendAlert("User event processing failed", ex);
+    }
+    
+    private void handleUserRegistration(UserEvent event) {
+        // 处理用户注册事件
+    }
+    
+    private void handleUserLogin(UserEvent event) {
+        // 处理用户登录事件
+    }
+}
+```
+
+### 12.5 Elasticsearch配置检查
+
+#### 12.5.1 索引设计与映射配置 (Critical)
+- **检查方法**: 检查Elasticsearch索引的映射设计和分析器配置
+- **检查标准**: 合理设计字段类型、分析器和索引策略
+- **不正确实例**:
+```java
+// 错误示例 - 索引设计不当
+public void createIndex() {
+    CreateIndexRequest request = new CreateIndexRequest("products");
+    // 没有设置映射，使用默认映射
+    // 没有配置分片和副本
+    elasticsearchClient.indices().create(request, RequestOptions.DEFAULT);
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 完善的索引设计
+@Configuration
+public class ElasticsearchConfig {
+    
+    @Bean
+    public RestHighLevelClient elasticsearchClient() {
+        ClientConfiguration clientConfiguration = ClientConfiguration.builder()
+            .connectedTo("${elasticsearch.hosts}")
+            .withConnectTimeout(Duration.ofSeconds(5))
+            .withSocketTimeout(Duration.ofSeconds(30))
+            .withBasicAuth("${elasticsearch.username}", "${elasticsearch.password}")
+            .build();
+        
+        return RestClients.create(clientConfiguration).rest();
+    }
+    
+    @Component
+    public static class IndexManager {
+        
+        private static final Logger logger = LoggerFactory.getLogger(IndexManager.class);
+        
+        @Autowired
+        private RestHighLevelClient elasticsearchClient;
+        
+        @PostConstruct
+        public void initializeIndices() {
+            createProductIndex();
+            createUserIndex();
+        }
+        
+        public void createProductIndex() {
+            String indexName = "products";
+            
+            try {
+                if (indexExists(indexName)) {
+                    logger.info("索引已存在: {}", indexName);
+                    return;
+                }
+                
+                CreateIndexRequest request = new CreateIndexRequest(indexName);
+                
+                // 设置分片和副本
+                request.settings(Settings.builder()
+                    .put("index.number_of_shards", 3)
+                    .put("index.number_of_replicas", 1)
+                    .put("index.refresh_interval", "1s")
+                    .put("index.max_result_window", 50000)
+                    // 自定义分析器
+                    .put("analysis.analyzer.product_analyzer.type", "custom")
+                    .put("analysis.analyzer.product_analyzer.tokenizer", "ik_max_word")
+                    .putList("analysis.analyzer.product_analyzer.filter", 
+                        Arrays.asList("lowercase", "stop"))
+                );
+                
+                // 定义映射
+                Map<String, Object> properties = new HashMap<>();
+                
+                // 产品名称 - 支持全文搜索
+                Map<String, Object> nameField = new HashMap<>();
+                nameField.put("type", "text");
+                nameField.put("analyzer", "product_analyzer");
+                nameField.put("search_analyzer", "ik_smart");
+                // 添加keyword子字段用于聚合和排序
+                Map<String, Object> nameKeyword = new HashMap<>();
+                nameKeyword.put("type", "keyword");
+                nameKeyword.put("ignore_above", 256);
+                nameField.put("fields", Map.of("keyword", nameKeyword));
+                
+                // 产品描述
+                Map<String, Object> descriptionField = new HashMap<>();
+                descriptionField.put("type", "text");
+                descriptionField.put("analyzer", "product_analyzer");
+                
+                // 价格 - 数值类型
+                Map<String, Object> priceField = new HashMap<>();
+                priceField.put("type", "double");
+                priceField.put("index", true);
+                
+                // 分类 - 关键词类型
+                Map<String, Object> categoryField = new HashMap<>();
+                categoryField.put("type", "keyword");
+                
+                // 标签 - 关键词数组
+                Map<String, Object> tagsField = new HashMap<>();
+                tagsField.put("type", "keyword");
+                
+                // 创建时间
+                Map<String, Object> createTimeField = new HashMap<>();
+                createTimeField.put("type", "date");
+                createTimeField.put("format", "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis");
+                
+                // 地理位置
+                Map<String, Object> locationField = new HashMap<>();
+                locationField.put("type", "geo_point");
+                
+                // 嵌套对象 - 产品属性
+                Map<String, Object> attributesField = new HashMap<>();
+                attributesField.put("type", "nested");
+                Map<String, Object> attributeProperties = new HashMap<>();
+                attributeProperties.put("name", Map.of("type", "keyword"));
+                attributeProperties.put("value", Map.of("type", "text", "analyzer", "keyword"));
+                attributesField.put("properties", attributeProperties);
+                
+                properties.put("name", nameField);
+                properties.put("description", descriptionField);
+                properties.put("price", priceField);
+                properties.put("category", categoryField);
+                properties.put("tags", tagsField);
+                properties.put("createTime", createTimeField);
+                properties.put("location", locationField);
+                properties.put("attributes", attributesField);
+                
+                Map<String, Object> mapping = new HashMap<>();
+                mapping.put("properties", properties);
+                
+                request.mapping(mapping);
+                
+                CreateIndexResponse response = elasticsearchClient.indices().create(request, RequestOptions.DEFAULT);
+                logger.info("索引创建成功: {}, acknowledged: {}", indexName, response.isAcknowledged());
+                
+            } catch (IOException e) {
+                logger.error("创建索引失败: {}", indexName, e);
+                throw new RuntimeException("Failed to create product index", e);
+            }
+        }
+        
+        private boolean indexExists(String indexName) throws IOException {
+            GetIndexRequest request = new GetIndexRequest(indexName);
+            return elasticsearchClient.indices().exists(request, RequestOptions.DEFAULT);
+        }
+    }
+}
+```
+
+#### 12.5.2 查询优化与批量操作 (Important)
+- **检查方法**: 检查Elasticsearch查询的性能和批量操作的实现
+- **检查标准**: 使用过滤器而非查询、合理分页、批量操作提升性能
+- **不正确实例**:
+```java
+// 错误示例 - 查询性能差
+public List<Product> searchProducts(String keyword, int page, int size) {
+    SearchRequest request = new SearchRequest("products");
+    SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+    
+    // 错误：使用match查询进行精确匹配
+    sourceBuilder.query(QueryBuilders.matchQuery("category", "electronics"));
+    // 错误：深度分页性能差
+    sourceBuilder.from(page * size).size(size);
+    
+    // 没有使用批量操作
+    return executeSearch(request);
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 优化的查询和批量操作
+@Service
+public class ProductSearchService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ProductSearchService.class);
+    private static final int BULK_SIZE = 1000;
+    
+    @Autowired
+    private RestHighLevelClient elasticsearchClient;
+    
+    // 优化的搜索方法
+    public SearchResult<Product> searchProducts(ProductSearchRequest searchRequest) {
+        try {
+            SearchRequest request = new SearchRequest("products");
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+            
+            // 构建复合查询
+            BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+            
+            // 全文搜索
+            if (StringUtils.hasText(searchRequest.getKeyword())) {
+                boolQuery.must(QueryBuilders.multiMatchQuery(searchRequest.getKeyword())
+                    .field("name", 2.0f)  // 提升name字段权重
+                    .field("description")
+                    .type(MultiMatchQueryBuilder.Type.BEST_FIELDS)
+                    .fuzziness(Fuzziness.AUTO));
+            }
+            
+            // 使用过滤器进行精确匹配（性能更好）
+            if (StringUtils.hasText(searchRequest.getCategory())) {
+                boolQuery.filter(QueryBuilders.termQuery("category", searchRequest.getCategory()));
+            }
+            
+            // 价格范围过滤
+            if (searchRequest.getMinPrice() != null || searchRequest.getMaxPrice() != null) {
+                RangeQueryBuilder priceRange = QueryBuilders.rangeQuery("price");
+                if (searchRequest.getMinPrice() != null) {
+                    priceRange.gte(searchRequest.getMinPrice());
+                }
+                if (searchRequest.getMaxPrice() != null) {
+                    priceRange.lte(searchRequest.getMaxPrice());
+                }
+                boolQuery.filter(priceRange);
+            }
+            
+            // 标签过滤
+            if (searchRequest.getTags() != null && !searchRequest.getTags().isEmpty()) {
+                boolQuery.filter(QueryBuilders.termsQuery("tags", searchRequest.getTags()));
+            }
+            
+            // 地理位置过滤
+            if (searchRequest.getLocation() != null && searchRequest.getDistance() != null) {
+                boolQuery.filter(QueryBuilders.geoDistanceQuery("location")
+                    .point(searchRequest.getLocation().getLat(), searchRequest.getLocation().getLon())
+                    .distance(searchRequest.getDistance(), DistanceUnit.KILOMETERS));
+            }
+            
+            sourceBuilder.query(boolQuery);
+            
+            // 排序
+            if (searchRequest.getSortField() != null) {
+                SortOrder sortOrder = searchRequest.getSortDirection() == SortDirection.DESC ? 
+                    SortOrder.DESC : SortOrder.ASC;
+                sourceBuilder.sort(searchRequest.getSortField(), sortOrder);
+            } else {
+                // 默认按相关性排序
+                sourceBuilder.sort("_score", SortOrder.DESC);
+            }
+            
+            // 分页 - 使用search_after避免深度分页问题
+            if (searchRequest.getSearchAfter() != null) {
+                sourceBuilder.searchAfter(searchRequest.getSearchAfter());
+            } else {
+                sourceBuilder.from(searchRequest.getFrom());
+            }
+            sourceBuilder.size(Math.min(searchRequest.getSize(), 1000)); // 限制最大返回数量
+            
+            // 高亮
+            if (StringUtils.hasText(searchRequest.getKeyword())) {
+                HighlightBuilder highlightBuilder = new HighlightBuilder()
+                    .field("name")
+                    .field("description")
+                    .preTags("<mark>")
+                    .postTags("</mark>");
+                sourceBuilder.highlighter(highlightBuilder);
+            }
+            
+            // 聚合
+            if (searchRequest.isIncludeAggregations()) {
+                // 分类聚合
+                sourceBuilder.aggregation(
+                    AggregationBuilders.terms("categories")
+                        .field("category")
+                        .size(10)
+                );
+                
+                // 价格范围聚合
+                sourceBuilder.aggregation(
+                    AggregationBuilders.range("price_ranges")
+                        .field("price")
+                        .addRange("0-100", 0, 100)
+                        .addRange("100-500", 100, 500)
+                        .addRange("500+", 500, Double.MAX_VALUE)
+                );
+            }
+            
+            request.source(sourceBuilder);
+            
+            SearchResponse response = elasticsearchClient.search(request, RequestOptions.DEFAULT);
+            
+            return buildSearchResult(response);
+            
+        } catch (IOException e) {
+            logger.error("搜索产品失败", e);
+            throw new SearchException("Failed to search products", e);
+        }
+    }
+    
+    // 批量索引产品
+    public void bulkIndexProducts(List<Product> products) {
+        if (products.isEmpty()) {
+            return;
+        }
+        
+        // 分批处理
+        List<List<Product>> batches = Lists.partition(products, BULK_SIZE);
+        
+        for (List<Product> batch : batches) {
+            try {
+                BulkRequest bulkRequest = new BulkRequest();
+                
+                for (Product product : batch) {
+                    IndexRequest indexRequest = new IndexRequest("products")
+                        .id(product.getId().toString())
+                        .source(convertProductToMap(product), XContentType.JSON);
+                    bulkRequest.add(indexRequest);
+                }
+                
+                BulkResponse bulkResponse = elasticsearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                
+                if (bulkResponse.hasFailures()) {
+                    logger.error("批量索引部分失败: {}", bulkResponse.buildFailureMessage());
+                    
+                    // 处理失败的文档
+                    for (BulkItemResponse itemResponse : bulkResponse) {
+                        if (itemResponse.isFailed()) {
+                            logger.error("文档索引失败: id={}, error={}", 
+                                itemResponse.getId(), itemResponse.getFailureMessage());
+                        }
+                    }
+                } else {
+                    logger.info("批量索引成功: {} 个文档", batch.size());
+                }
+                
+            } catch (IOException e) {
+                logger.error("批量索引异常", e);
+                throw new IndexException("Failed to bulk index products", e);
+            }
+        }
+    }
+    
+    // 批量更新产品
+    public void bulkUpdateProducts(List<ProductUpdate> updates) {
+        if (updates.isEmpty()) {
+            return;
+        }
+        
+        List<List<ProductUpdate>> batches = Lists.partition(updates, BULK_SIZE);
+        
+        for (List<ProductUpdate> batch : batches) {
+            try {
+                BulkRequest bulkRequest = new BulkRequest();
+                
+                for (ProductUpdate update : batch) {
+                    UpdateRequest updateRequest = new UpdateRequest("products", update.getId())
+                        .doc(convertUpdateToMap(update), XContentType.JSON)
+                        .docAsUpsert(false)
+                        .retryOnConflict(3);
+                    bulkRequest.add(updateRequest);
+                }
+                
+                BulkResponse bulkResponse = elasticsearchClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+                
+                if (bulkResponse.hasFailures()) {
+                    logger.error("批量更新部分失败: {}", bulkResponse.buildFailureMessage());
+                } else {
+                    logger.info("批量更新成功: {} 个文档", batch.size());
+                }
+                
+            } catch (IOException e) {
+                logger.error("批量更新异常", e);
+                throw new UpdateException("Failed to bulk update products", e);
+            }
+        }
+    }
+    
+    private SearchResult<Product> buildSearchResult(SearchResponse response) {
+        List<Product> products = new ArrayList<>();
+        Map<String, List<String>> highlights = new HashMap<>();
+        
+        for (SearchHit hit : response.getHits()) {
+            Product product = convertMapToProduct(hit.getSourceAsMap());
+            products.add(product);
+            
+            // 处理高亮
+            if (hit.getHighlightFields() != null && !hit.getHighlightFields().isEmpty()) {
+                Map<String, HighlightField> highlightFields = hit.getHighlightFields();
+                List<String> highlightTexts = new ArrayList<>();
+                for (HighlightField field : highlightFields.values()) {
+                    for (Text fragment : field.getFragments()) {
+                        highlightTexts.add(fragment.string());
+                    }
+                }
+                highlights.put(product.getId().toString(), highlightTexts);
+            }
+        }
+        
+        // 处理聚合结果
+        Map<String, Object> aggregations = new HashMap<>();
+        if (response.getAggregations() != null) {
+            for (Aggregation aggregation : response.getAggregations()) {
+                aggregations.put(aggregation.getName(), parseAggregation(aggregation));
+            }
+        }
+        
+        return SearchResult.<Product>builder()
+            .items(products)
+            .total(response.getHits().getTotalHits().value)
+            .highlights(highlights)
+            .aggregations(aggregations)
+            .took(response.getTook().millis())
+            .build();
+    }
+    
+    private Map<String, Object> convertProductToMap(Product product) {
+        // 实现Product到Map的转换
+        return new HashMap<>();
+    }
+    
+    private Product convertMapToProduct(Map<String, Object> map) {
+        // 实现Map到Product的转换
+        return new Product();
+    }
+    
+    private Map<String, Object> convertUpdateToMap(ProductUpdate update) {
+        // 实现ProductUpdate到Map的转换
+        return new HashMap<>();
+    }
+    
+    private Object parseAggregation(Aggregation aggregation) {
+        // 解析聚合结果
+        return null;
+    }
+}
+```
+
+### 12.6 MySQL配置检查
+
+#### 12.6.1 连接池与事务管理 (Critical)
+- **检查方法**: 检查MySQL连接池配置和事务管理策略
+- **检查标准**: 合理配置连接池参数，正确使用事务传播和隔离级别
+- **不正确实例**:
+```yaml
+# 错误示例 - 连接池配置不当
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/mydb
+    username: root
+    password: password
+    # 使用默认连接池配置，可能导致性能问题
+```
+
+- **正确实例**:
+```yaml
+# 正确示例 - 优化的数据源配置
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:mydb}?useSSL=${DB_SSL:false}&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    
+    # HikariCP连接池配置
+    hikari:
+      pool-name: HikariCP-Pool
+      minimum-idle: 10                    # 最小空闲连接数
+      maximum-pool-size: 50               # 最大连接数
+      idle-timeout: 600000                # 连接最大空闲时间（毫秒）
+      max-lifetime: 1800000               # 连接最大生命周期（毫秒）
+      connection-timeout: 30000           # 获取连接超时时间（毫秒）
+      validation-timeout: 5000            # 验证超时时间（毫秒）
+      connection-test-query: SELECT 1     # 连接测试查询
+      leak-detection-threshold: 60000     # 连接泄漏检测阈值（毫秒）
+      
+      # 连接属性
+      data-source-properties:
+        cachePrepStmts: true              # 启用预编译语句缓存
+        prepStmtCacheSize: 250            # 预编译语句缓存大小
+        prepStmtCacheSqlLimit: 2048       # 预编译语句最大长度
+        useServerPrepStmts: true          # 使用服务器端预编译语句
+        useLocalSessionState: true        # 使用本地会话状态
+        rewriteBatchedStatements: true    # 重写批量语句
+        cacheResultSetMetadata: true      # 缓存结果集元数据
+        cacheServerConfiguration: true    # 缓存服务器配置
+        elideSetAutoCommits: true         # 省略自动提交设置
+        maintainTimeStats: false          # 不维护时间统计
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: validate                  # 生产环境使用validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: false                 # 生产环境关闭SQL格式化
+        show_sql: false                   # 生产环境关闭SQL显示
+        use_sql_comments: false           # 生产环境关闭SQL注释
+        jdbc:
+          batch_size: 50                  # 批量操作大小
+          fetch_size: 50                  # 获取大小
+          time_zone: UTC                  # 时区设置
+        connection:
+          provider_disables_autocommit: true # 禁用自动提交
+        cache:
+          use_second_level_cache: true    # 启用二级缓存
+          use_query_cache: true           # 启用查询缓存
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+```
+
+```java
+// 数据源配置类
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(basePackages = "com.example.repository")
+public class DatabaseConfig {
+    
+    private static final Logger logger = LoggerFactory.getLogger(DatabaseConfig.class);
+    
+    @Bean
+    @Primary
+    @ConfigurationProperties("spring.datasource.hikari")
+    public HikariConfig hikariConfig() {
+        return new HikariConfig();
+    }
+    
+    @Bean
+    @Primary
+    public DataSource dataSource(HikariConfig hikariConfig) {
+        // 添加连接池监控
+        hikariConfig.setMetricRegistry(new MetricRegistry());
+        hikariConfig.setHealthCheckRegistry(new HealthCheckRegistry());
+        
+        // 添加连接池事件监听器
+        hikariConfig.addDataSourceProperty("connectionInitSql", "SET NAMES utf8mb4");
+        
+        HikariDataSource dataSource = new HikariDataSource(hikariConfig);
+        
+        // 添加连接池监控
+        dataSource.setMetricRegistry(meterRegistry());
+        
+        return dataSource;
+    }
+    
+    @Bean
+    public PlatformTransactionManager transactionManager(DataSource dataSource) {
+        DataSourceTransactionManager txManager = new DataSourceTransactionManager(dataSource);
+        
+        // 设置默认超时（秒）
+        txManager.setDefaultTimeout(30);
+        
+        // 设置事务同步
+        txManager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+        
+        return txManager;
+    }
+    
+    @Bean
+    public MeterRegistry meterRegistry() {
+        return new SimpleMeterRegistry();
+    }
+    
+    // 数据库健康检查
+    @Component
+    public static class DatabaseHealthIndicator implements HealthIndicator {
+        
+        @Autowired
+        private DataSource dataSource;
+        
+        @Override
+        public Health health() {
+            try (Connection connection = dataSource.getConnection()) {
+                if (connection.isValid(5)) {
+                    return Health.up()
+                        .withDetail("database", "MySQL")
+                        .withDetail("validationQuery", "SELECT 1")
+                        .build();
+                } else {
+                    return Health.down()
+                        .withDetail("database", "MySQL")
+                        .withDetail("error", "Connection validation failed")
+                        .build();
+                }
+            } catch (SQLException e) {
+                return Health.down(e)
+                    .withDetail("database", "MySQL")
+                    .withDetail("error", e.getMessage())
+                    .build();
+            }
+        }
+    }
+    
+    // 连接池监控
+    @Component
+    public static class HikariMetrics {
+        
+        @Autowired
+        private DataSource dataSource;
+        
+        @Autowired
+        private MeterRegistry meterRegistry;
+        
+        @PostConstruct
+        public void bindMetrics() {
+            if (dataSource instanceof HikariDataSource) {
+                HikariDataSource hikariDataSource = (HikariDataSource) dataSource;
+                HikariConfigMXBean hikariConfigMXBean = hikariDataSource.getHikariConfigMXBean();
+                HikariPoolMXBean hikariPoolMXBean = hikariDataSource.getHikariPoolMXBean();
+                
+                // 注册连接池指标
+                Gauge.builder("hikari.connections.active")
+                    .description("Active connections")
+                    .register(meterRegistry, hikariPoolMXBean, HikariPoolMXBean::getActiveConnections);
+                    
+                Gauge.builder("hikari.connections.idle")
+                    .description("Idle connections")
+                    .register(meterRegistry, hikariPoolMXBean, HikariPoolMXBean::getIdleConnections);
+                    
+                Gauge.builder("hikari.connections.pending")
+                    .description("Pending connections")
+                    .register(meterRegistry, hikariPoolMXBean, HikariPoolMXBean::getThreadsAwaitingConnection);
+                    
+                Gauge.builder("hikari.connections.total")
+                    .description("Total connections")
+                    .register(meterRegistry, hikariPoolMXBean, HikariPoolMXBean::getTotalConnections);
+            }
+        }
+    }
+}
+```
+
+#### 12.6.2 查询优化与批量操作 (Important)
+- **检查方法**: 检查SQL查询的性能和批量操作的实现
+- **检查标准**: 合理使用索引、避免N+1查询、使用批量操作
+- **不正确实例**:
+```java
+// 错误示例 - 查询性能差
+@Service
+public class BadUserService {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    // N+1查询问题
+    public List<UserDto> getUsersWithOrders() {
+        List<User> users = userRepository.findAll();
+        return users.stream()
+            .map(user -> {
+                List<Order> orders = orderRepository.findByUserId(user.getId()); // N+1查询
+                return new UserDto(user, orders);
+            })
+            .collect(Collectors.toList());
+    }
+    
+    // 逐条插入，性能差
+    public void createUsers(List<UserDto> userDtos) {
+        for (UserDto dto : userDtos) {
+            User user = new User(dto);
+            userRepository.save(user); // 逐条保存
+        }
+    }
+}
+```
+
+- **正确实例**:
+```java
+// 正确示例 - 优化的查询和批量操作
+@Service
+@Transactional(readOnly = true)
+public class UserService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+    private static final int BATCH_SIZE = 1000;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    @Autowired
+    private EntityManager entityManager;
+    
+    // 使用JOIN FETCH避免N+1查询
+    public List<UserDto> getUsersWithOrders() {
+        List<User> users = userRepository.findAllWithOrders();
+        return users.stream()
+            .map(user -> new UserDto(user, user.getOrders()))
+            .collect(Collectors.toList());
+    }
+    
+    // 分页查询避免内存溢出
+    public Page<UserDto> getUsersWithOrdersPaged(Pageable pageable) {
+        Page<User> users = userRepository.findAllWithOrders(pageable);
+        return users.map(user -> new UserDto(user, user.getOrders()));
+    }
+    
+    // 使用Specification进行动态查询
+    public Page<User> searchUsers(UserSearchCriteria criteria, Pageable pageable) {
+        Specification<User> spec = Specification.where(null);
+        
+        if (StringUtils.hasText(criteria.getName())) {
+            spec = spec.and((root, query, cb) -> 
+                cb.like(cb.lower(root.get("name")), "%" + criteria.getName().toLowerCase() + "%"));
+        }
+        
+        if (StringUtils.hasText(criteria.getEmail())) {
+            spec = spec.and((root, query, cb) -> 
+                cb.like(cb.lower(root.get("email")), "%" + criteria.getEmail().toLowerCase() + "%"));
+        }
+        
+        if (criteria.getStatus() != null) {
+            spec = spec.and((root, query, cb) -> 
+                cb.equal(root.get("status"), criteria.getStatus()));
+        }
+        
+        if (criteria.getCreateTimeFrom() != null) {
+            spec = spec.and((root, query, cb) -> 
+                cb.greaterThanOrEqualTo(root.get("createTime"), criteria.getCreateTimeFrom()));
+        }
+        
+        if (criteria.getCreateTimeTo() != null) {
+            spec = spec.and((root, query, cb) -> 
+                cb.lessThanOrEqualTo(root.get("createTime"), criteria.getCreateTimeTo()));
+        }
+        
+        return userRepository.findAll(spec, pageable);
+    }
+    
+    // 批量创建用户
+    @Transactional
+    public void batchCreateUsers(List<UserDto> userDtos) {
+        if (userDtos.isEmpty()) {
+            return;
+        }
+        
+        List<User> users = userDtos.stream()
+            .map(User::new)
+            .collect(Collectors.toList());
+        
+        // 分批处理，避免内存溢出
+        List<List<User>> batches = Lists.partition(users, BATCH_SIZE);
+        
+        for (List<User> batch : batches) {
+            batchInsertUsers(batch);
+            entityManager.flush();
+            entityManager.clear(); // 清理一级缓存
+        }
+        
+        logger.info("批量创建用户完成: {} 个用户", users.size());
+    }
+    
+    private void batchInsertUsers(List<User> users) {
+        // 使用JPA批量保存
+        userRepository.saveAll(users);
+    }
+    
+    // 使用原生SQL进行批量更新
+    @Transactional
+    public int batchUpdateUserStatus(List<Long> userIds, UserStatus newStatus) {
+        if (userIds.isEmpty()) {
+            return 0;
+        }
+        
+        String sql = "UPDATE users SET status = :status, update_time = :updateTime WHERE id IN (:userIds)";
+        
+        Query query = entityManager.createNativeQuery(sql)
+            .setParameter("status", newStatus.name())
+            .setParameter("updateTime", LocalDateTime.now())
+            .setParameter("userIds", userIds);
+        
+        int updatedCount = query.executeUpdate();
+        logger.info("批量更新用户状态: {} 个用户更新为 {}", updatedCount, newStatus);
+        
+        return updatedCount;
+    }
+    
+    // 使用JPQL进行复杂查询
+    public List<UserStatistics> getUserStatistics(LocalDate startDate, LocalDate endDate) {
+        String jpql = """
+            SELECT new com.example.dto.UserStatistics(
+                u.status,
+                COUNT(u),
+                AVG(SIZE(u.orders)),
+                SUM(o.amount)
+            )
+            FROM User u
+            LEFT JOIN u.orders o
+            WHERE u.createTime BETWEEN :startDate AND :endDate
+            GROUP BY u.status
+            ORDER BY COUNT(u) DESC
+            """;
+        
+        return entityManager.createQuery(jpql, UserStatistics.class)
+            .setParameter("startDate", startDate.atStartOfDay())
+            .setParameter("endDate", endDate.atTime(23, 59, 59))
+            .getResultList();
+    }
+    
+    // 使用存储过程
+    public void callUserCleanupProcedure(int daysOld) {
+        StoredProcedureQuery query = entityManager
+            .createStoredProcedureQuery("cleanup_inactive_users")
+            .registerStoredProcedureParameter("days_old", Integer.class, ParameterMode.IN)
+            .registerStoredProcedureParameter("deleted_count", Integer.class, ParameterMode.OUT)
+            .setParameter("days_old", daysOld);
+        
+        query.execute();
+        
+        Integer deletedCount = (Integer) query.getOutputParameterValue("deleted_count");
+        logger.info("清理非活跃用户: 删除了 {} 个用户", deletedCount);
+    }
+    
+    // 事务传播示例
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createUserAuditLog(Long userId, String action) {
+        // 使用新事务记录审计日志，即使主事务回滚也会保存
+        UserAuditLog log = new UserAuditLog(userId, action, LocalDateTime.now());
+        entityManager.persist(log);
+    }
+    
+    // 只读事务优化
+    @Transactional(readOnly = true)
+    public Optional<User> findUserById(Long id) {
+        return userRepository.findById(id);
+    }
+    
+    // 超时控制
+    @Transactional(timeout = 10) // 10秒超时
+    public void longRunningOperation() {
+        // 长时间运行的操作
+    }
+}
+
+// Repository接口优化
+@Repository
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+    
+    // 使用JOIN FETCH避免N+1查询
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.orders WHERE u.status = :status")
+    List<User> findAllWithOrders(@Param("status") UserStatus status);
+    
+    // 分页查询with JOIN FETCH
+    @Query(value = "SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.orders",
+           countQuery = "SELECT COUNT(u) FROM User u")
+    Page<User> findAllWithOrders(Pageable pageable);
+    
+    // 使用索引字段查询
+    @Query("SELECT u FROM User u WHERE u.email = :email")
+    Optional<User> findByEmail(@Param("email") String email);
+    
+    // 批量查询
+    @Query("SELECT u FROM User u WHERE u.id IN :ids")
+    List<User> findByIdIn(@Param("ids") List<Long> ids);
+    
+    // 统计查询
+    @Query("SELECT COUNT(u) FROM User u WHERE u.status = :status AND u.createTime >= :since")
+    long countByStatusAndCreateTimeAfter(@Param("status") UserStatus status, @Param("since") LocalDateTime since);
+    
+    // 原生SQL查询（复杂查询）
+    @Query(value = """
+        SELECT u.*, 
+               COUNT(o.id) as order_count,
+               COALESCE(SUM(o.amount), 0) as total_amount
+        FROM users u
+        LEFT JOIN orders o ON u.id = o.user_id
+        WHERE u.create_time >= :startDate
+        GROUP BY u.id
+        HAVING COUNT(o.id) > :minOrderCount
+        ORDER BY total_amount DESC
+        """, nativeQuery = true)
+    List<Object[]> findActiveUsersWithStatistics(
+        @Param("startDate") LocalDateTime startDate,
+        @Param("minOrderCount") int minOrderCount
+    );
+    
+    // 批量更新
+    @Modifying
+    @Query("UPDATE User u SET u.lastLoginTime = :loginTime WHERE u.id = :userId")
+    int updateLastLoginTime(@Param("userId") Long userId, @Param("loginTime") LocalDateTime loginTime);
+    
+    // 批量删除
+    @Modifying
+    @Query("DELETE FROM User u WHERE u.status = :status AND u.createTime < :before")
+    int deleteByStatusAndCreateTimeBefore(@Param("status") UserStatus status, @Param("before") LocalDateTime before);
+}
+```
+
+## 13. 依赖管理检查
 
 ### 12.1 依赖安全 (Critical)
 
@@ -6890,6 +12278,371 @@ GNU Lesser General Public License=false
 <!-- mvn versions:display-plugin-updates -->
 <!-- mvn versions:display-property-updates -->
 ```
+
+#### 12.2.3 传递依赖控制
+- **检查方法**: 检查和控制传递依赖的版本和范围
+- **检查标准**: 明确管理传递依赖，避免版本冲突和安全风险
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 未控制传递依赖 -->
+<dependencies>
+    <!-- 直接依赖，但未控制其传递依赖 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+        <version>2.7.14</version>
+        <!-- 传递依赖可能包含漏洞版本 -->
+    </dependency>
+    
+    <!-- 引入了不需要的传递依赖 -->
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>some-library</artifactId>
+        <version>1.0.0</version>
+        <!-- 可能传递依赖了log4j 1.x等有安全问题的库 -->
+    </dependency>
+    
+    <!-- 传递依赖版本冲突 -->
+    <dependency>
+        <groupId>library-a</groupId>
+        <artifactId>library-a</artifactId>
+        <version>1.0</version>
+        <!-- 依赖jackson 2.13.0 -->
+    </dependency>
+    
+    <dependency>
+        <groupId>library-b</groupId>
+        <artifactId>library-b</artifactId>
+        <version>2.0</version>
+        <!-- 依赖jackson 2.15.2 -->
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 控制传递依赖 -->
+<dependencyManagement>
+    <dependencies>
+        <!-- 使用BOM控制传递依赖版本 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-dependencies</artifactId>
+            <version>2.7.14</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        
+        <!-- 强制指定传递依赖版本 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.15.2</version>
+        </dependency>
+        
+        <!-- 排除有安全问题的传递依赖 -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.20.0</version>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<dependencies>
+    <!-- 排除不安全的传递依赖 -->
+    <dependency>
+        <groupId>com.example</groupId>
+        <artifactId>some-library</artifactId>
+        <version>1.0.0</version>
+        <exclusions>
+            <!-- 排除旧版本log4j -->
+            <exclusion>
+                <groupId>log4j</groupId>
+                <artifactId>log4j</artifactId>
+            </exclusion>
+            <!-- 排除commons-logging -->
+            <exclusion>
+                <groupId>commons-logging</groupId>
+                <artifactId>commons-logging</artifactId>
+            </exclusion>
+            <!-- 排除旧版本jackson -->
+            <exclusion>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    
+    <!-- 显式添加安全版本 -->
+    <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-core</artifactId>
+    </dependency>
+    
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+</dependencies>
+
+<!-- 传递依赖分析插件 -->
+<build>
+    <plugins>
+        <!-- 传递依赖分析 -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>3.6.0</version>
+            <executions>
+                <execution>
+                    <id>analyze-transitive</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>tree</goal>
+                    </goals>
+                    <configuration>
+                        <outputFile>target/dependency-tree.txt</outputFile>
+                        <verbose>true</verbose>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        
+        <!-- 依赖收敛检查 -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <version>3.4.1</version>
+            <executions>
+                <execution>
+                    <id>enforce-dependency-convergence</id>
+                    <goals>
+                        <goal>enforce</goal>
+                    </goals>
+                    <configuration>
+                        <rules>
+                            <dependencyConvergence/>
+                            <bannedDependencies>
+                                <excludes>
+                                    <!-- 禁止使用有安全问题的依赖 -->
+                                    <exclude>log4j:log4j:*:*:compile</exclude>
+                                    <exclude>commons-logging:commons-logging:*:*:compile</exclude>
+                                    <exclude>org.apache.logging.log4j:log4j-core:[2.0,2.17.0)</exclude>
+                                </excludes>
+                            </bannedDependencies>
+                        </rules>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+
+<!-- 传递依赖检查命令 -->
+<!-- mvn dependency:tree -Dverbose -->
+<!-- mvn dependency:analyze-duplicate -->
+<!-- mvn enforcer:enforce -->
+```
+
+#### 12.2.4 依赖文档维护
+- **检查方法**: 检查依赖文档的完整性和准确性
+- **检查标准**: 维护完整的依赖文档，包括版本说明、使用原因、更新记录
+- **不正确实例**:
+```xml
+<!-- 错误示例 - 缺少依赖文档 -->
+<dependencies>
+    <!-- 没有注释说明用途 -->
+    <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>32.1.2-jre</version>
+    </dependency>
+    
+    <!-- 版本选择没有说明 -->
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>3.12.0</version>
+    </dependency>
+    
+    <!-- 临时依赖没有标记 -->
+    <dependency>
+        <groupId>some.temp</groupId>
+        <artifactId>temp-fix</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+</dependencies>
+
+<!-- 正确示例 - 完整的依赖文档 -->
+<dependencies>
+    <!-- 
+        Google Guava工具库
+        用途: 提供集合操作、缓存、字符串处理等工具类
+        版本说明: 使用32.x版本支持Java 8+
+        更新策略: 跟随最新稳定版本
+        负责人: 架构组
+        最后更新: 2024-01-15
+    -->
+    <dependency>
+        <groupId>com.google.guava</groupId>
+        <artifactId>guava</artifactId>
+        <version>32.1.2-jre</version>
+    </dependency>
+    
+    <!-- 
+        Apache Commons Lang3
+        用途: 字符串操作、数组操作、反射工具等
+        版本说明: 3.12.0修复了CVE-2022-42003安全漏洞
+        依赖原因: 替换自定义工具类，提高代码质量
+        更新策略: 定期更新，关注安全补丁
+        负责人: 开发组
+        最后更新: 2024-01-10
+    -->
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-lang3</artifactId>
+        <version>3.12.0</version>
+    </dependency>
+    
+    <!-- 
+        临时修复依赖 - 待移除
+        用途: 修复第三方库的bug
+        版本说明: 基于原版本1.0修改
+        移除计划: 等待官方版本1.1发布后移除
+        跟踪Issue: JIRA-12345
+        负责人: 张三
+        创建时间: 2024-01-01
+        预计移除: 2024-03-01
+    -->
+    <dependency>
+        <groupId>some.temp</groupId>
+        <artifactId>temp-fix</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <!-- TODO: 移除此临时依赖 -->
+    </dependency>
+</dependencies>
+
+<!-- 依赖文档生成 -->
+<build>
+    <plugins>
+        <!-- 生成依赖报告 -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-project-info-reports-plugin</artifactId>
+            <version>3.4.5</version>
+            <executions>
+                <execution>
+                    <id>generate-dependency-report</id>
+                    <phase>site</phase>
+                    <goals>
+                        <goal>dependencies</goal>
+                        <goal>dependency-info</goal>
+                        <goal>dependency-management</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+        
+        <!-- 许可证报告 -->
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>license-maven-plugin</artifactId>
+            <version>2.2.0</version>
+            <executions>
+                <execution>
+                    <id>generate-license-file</id>
+                    <phase>generate-resources</phase>
+                    <goals>
+                        <goal>aggregate-add-third-party</goal>
+                    </goals>
+                    <configuration>
+                        <outputDirectory>target/generated-sources/license</outputDirectory>
+                        <thirdPartyFilename>THIRD-PARTY.txt</thirdPartyFilename>
+                        <includeTransitiveDependencies>true</includeTransitiveDependencies>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+```markdown
+# 依赖管理文档模板
+
+## 项目依赖清单
+
+### 核心依赖
+
+| 依赖名称 | 版本 | 用途 | 负责人 | 更新策略 | 最后更新 |
+|---------|------|------|--------|----------|----------|
+| spring-boot-starter-web | 2.7.14 | Web框架 | 架构组 | 跟随LTS版本 | 2024-01-15 |
+| spring-boot-starter-data-jpa | 2.7.14 | 数据访问 | 架构组 | 跟随LTS版本 | 2024-01-15 |
+| mysql-connector-java | 8.0.33 | MySQL驱动 | DBA组 | 跟随MySQL版本 | 2024-01-10 |
+
+### 工具依赖
+
+| 依赖名称 | 版本 | 用途 | 负责人 | 更新策略 | 最后更新 |
+|---------|------|------|--------|----------|----------|
+| guava | 32.1.2-jre | 工具类库 | 开发组 | 定期更新 | 2024-01-15 |
+| commons-lang3 | 3.12.0 | 字符串工具 | 开发组 | 关注安全更新 | 2024-01-10 |
+| jackson-databind | 2.15.2 | JSON处理 | 开发组 | 关注安全更新 | 2024-01-12 |
+
+### 测试依赖
+
+| 依赖名称 | 版本 | 用途 | 负责人 | 更新策略 | 最后更新 |
+|---------|------|------|--------|----------|----------|
+| spring-boot-starter-test | 2.7.14 | 测试框架 | 测试组 | 跟随主框架 | 2024-01-15 |
+| testcontainers | 1.19.0 | 集成测试 | 测试组 | 定期更新 | 2024-01-08 |
+
+### 临时依赖（待移除）
+
+| 依赖名称 | 版本 | 用途 | 移除计划 | 跟踪Issue | 负责人 |
+|---------|------|------|----------|-----------|--------|
+| temp-fix-lib | 1.0-SNAPSHOT | 临时修复 | 2024-03-01 | JIRA-12345 | 张三 |
+
+## 依赖更新记录
+
+### 2024-01-15
+- 升级Spring Boot从2.7.13到2.7.14
+- 修复安全漏洞CVE-2023-xxxxx
+- 负责人: 架构组
+
+### 2024-01-12
+- 升级jackson-databind从2.15.1到2.15.2
+- 修复JSON解析安全问题
+- 负责人: 开发组
+
+### 2024-01-10
+- 升级commons-lang3从3.11到3.12.0
+- 添加新的字符串处理方法
+- 负责人: 开发组
+
+## 依赖审查计划
+
+- **月度审查**: 每月第一周检查安全更新
+- **季度审查**: 每季度评估依赖必要性
+- **年度审查**: 每年进行大版本升级评估
+
+## 依赖添加流程
+
+1. 评估依赖必要性
+2. 检查许可证兼容性
+3. 进行安全扫描
+4. 更新依赖文档
+5. 代码评审确认
+6. 添加到项目中
+
+## 联系方式
+
+- 架构组: architecture@company.com
+- 开发组: development@company.com
+- 测试组: testing@company.com
+- DBA组: dba@company.com
+```
+
+<!-- 依赖文档生成命令 -->
+<!-- mvn site -->
+<!-- mvn license:aggregate-add-third-party -->
+<!-- mvn project-info-reports:dependencies -->
 
 ## 检查清单使用说明
 
