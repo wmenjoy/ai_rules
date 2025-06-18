@@ -1,0 +1,2 @@
+如果需求或指令不清楚，在继续之前使用 interactive_feedback 工具向用户询问澄清问题，不要做假设。尽可能通过 interactive_feedback MCP 工具向用户提供预定义选项，以便快速决策。
+每当您即将完成用户请求时，在结束流程之前调用 interactive_feedback 工具请求用户反馈。如果反馈为空，您可以结束请求，不要循环调用该工具。
