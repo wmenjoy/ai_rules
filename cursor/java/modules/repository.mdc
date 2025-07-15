@@ -1,0 +1,628 @@
+# 数据访问层规范 (模块层规则)
+> JPA查询优化、SQL标准和数据访问的最佳实践
+
+## 基础规范
+
+### Repository接口设计原则
+- **继承JpaRepository**：获得基础CRUD操作方法
+- **继承JpaSpecificationExecutor**：支持动态查询和复杂条件
+- **方法命名约定**：遵循Spring Data JPA命名规范
+- **查询优化**：合理使用@Query注解和原生SQL
+- **分页支持**：大数据量查询必须支持分页
+
+### 查询方法分类
+- **简单查询**：使用方法命名约定，如findByUsername
+- **复杂查询**：使用@Query注解编写JPQL或SQL
+- **动态查询**：使用Specification接口处理动态条件
+- **统计查询**：使用聚合函数进行数据统计
+- **批量操作**：使用@Modifying注解执行批量更新删除
+
+### 性能优化策略
+- **懒加载配置**：合理配置@OneToMany、@ManyToMany的fetch策略
+- **JOIN FETCH**：避免N+1查询问题
+- **索引设计**：在Entity上定义合适的索引
+- **查询投影**：只查询需要的字段，使用DTO投影
+- **批量操作**：使用批量插入、更新、删除
+
+### 事务和锁机制
+- **只读事务**：查询方法使用只读事务
+- **乐观锁**：使用@Version实现乐观锁
+- **悲观锁**：使用@Lock注解实现悲观锁
+- **事务传播**：Repository方法通常不需要事务注解
+- **隔离级别**：根据业务需求设置合适的隔离级别
+
+## 强制行为
+
+### Repository接口定义
+- **@Repository注解**：标识数据访问组件
+- **继承标准接口**：继承JpaRepository和JpaSpecificationExecutor
+- **方法签名规范**：返回类型明确，参数验证
+- **异常处理**：让Service层处理DataAccessException
+
+### 查询方法实现
+- **命名查询优先**：简单查询使用方法命名约定
+- **JPQL查询**：复杂查询使用JPQL，保持数据库无关性
+- **原生SQL**：性能敏感查询使用原生SQL
+- **参数绑定**：使用@Param注解明确参数名称
+
+### 分页和排序
+- **Pageable参数**：分页查询方法接受Pageable参数
+- **Sort支持**：支持多字段排序
+- **总数优化**：大数据量分页查询优化count查询
+- **默认排序**：提供合理的默认排序规则
+
+### 缓存集成
+- **查询缓存**：热点数据使用二级缓存
+- **缓存更新**：数据变更时及时更新缓存
+- **缓存Key设计**：使用业务相关的缓存Key
+- **缓存失效策略**：设置合理的缓存过期时间
+
+## 禁止行为
+
+### 查询设计禁令
+- **禁止在Repository中编写业务逻辑**：Repository只负责数据访问
+- **禁止返回Entity给Controller**：Repository可以返回Entity给Service
+- **禁止在Repository中处理异常**：让上层Service处理异常
+- **禁止Repository之间相互调用**：避免复杂的依赖关系
+- **禁止在Repository中使用@Transactional**：事务由Service层管理
+
+### 性能相关禁令
+- **禁止SELECT * 查询**：明确指定需要的字段
+- **禁止N+1查询**：使用JOIN FETCH或分别查询
+- **禁止大结果集一次性加载**：使用分页或流式处理
+- **禁止在循环中执行查询**：使用批量查询或IN条件
+- **禁止忽略索引设计**：查询字段必须有合适的索引
+
+### SQL编写禁令
+- **禁止SQL注入风险**：使用参数化查询，不拼接SQL
+- **禁止硬编码数据库特定语法**：保持数据库兼容性
+- **禁止复杂的嵌套查询**：拆分为多个简单查询
+- **禁止不必要的关联查询**：避免过度JOIN
+- **禁止忽略查询性能**：复杂查询必须分析执行计划
+
+### 数据一致性禁令
+- **禁止绕过实体验证**：数据验证在Entity层进行
+- **禁止直接操作数据库连接**：使用JPA API操作数据
+- **禁止忽略事务边界**：理解Repository在事务中的作用
+- **禁止数据状态不一致**：确保关联数据的一致性
+- **禁止忽略并发控制**：多用户环境下考虑并发问题
+
+## 示例代码
+
+### 标准的Repository接口设计
+```java
+/* [AI-BLOCK-START] - 生成工具: Repository规范 v2.0 */
+@Repository
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+    
+    // ================== 简单查询方法 ==================
+    
+    /**
+     * 根据用户名查找用户
+     */
+    Optional<User> findByUsername(String username);
+    
+    /**
+     * 根据邮箱查找用户
+     */
+    Optional<User> findByEmail(String email);
+    
+    /**
+     * 根据状态查找用户列表
+     */
+    List<User> findByStatus(UserStatus status);
+    
+    /**
+     * 根据状态分页查找用户
+     */
+    Page<User> findByStatus(UserStatus status, Pageable pageable);
+    
+    /**
+     * 查找指定时间段内创建的用户
+     */
+    List<User> findByCreateTimeBetween(LocalDateTime start, LocalDateTime end);
+    
+    /**
+     * 检查用户名是否存在（排除已删除）
+     */
+    boolean existsByUsernameAndDeletedFalse(String username);
+    
+    /**
+     * 检查邮箱是否存在（排除已删除）
+     */
+    boolean existsByEmailAndDeletedFalse(String email);
+    
+    /**
+     * 根据状态统计用户数量
+     */
+    long countByStatus(UserStatus status);
+    
+    /**
+     * 查找活跃用户（状态为ACTIVE且未删除）
+     */
+    List<User> findByStatusAndDeletedFalse(UserStatus status);
+    
+    // ================== JPQL查询方法 ==================
+    
+    /**
+     * 根据关键词搜索用户（用户名或邮箱）
+     */
+    @Query("SELECT u FROM User u WHERE " +
+           "(u.username LIKE %:keyword% OR u.email LIKE %:keyword%) " +
+           "AND u.deleted = false")
+    Page<User> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
+    
+    /**
+     * 查找指定角色的用户
+     */
+    @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.deleted = false")
+    List<User> findByRoleName(@Param("roleName") String roleName);
+    
+    /**
+     * 查找用户及其角色信息（避免N+1查询）
+     */
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.roles WHERE u.id = :id AND u.deleted = false")
+    Optional<User> findByIdWithRoles(@Param("id") Long id);
+    
+    /**
+     * 查找用户的订单统计信息
+     */
+    @Query("SELECT u, COUNT(o) as orderCount, SUM(o.totalAmount) as totalAmount " +
+           "FROM User u LEFT JOIN u.orders o " +
+           "WHERE u.id = :userId AND (o.status IS NULL OR o.status = 'COMPLETED') " +
+           "GROUP BY u")
+    Object[] findUserOrderStatistics(@Param("userId") Long userId);
+    
+    /**
+     * 查找最近活跃的用户
+     */
+    @Query("SELECT u FROM User u WHERE u.status = 'ACTIVE' AND u.lastLoginTime >= :since " +
+           "ORDER BY u.lastLoginTime DESC")
+    List<User> findRecentActiveUsers(@Param("since") LocalDateTime since, Pageable pageable);
+    
+    // ================== 原生SQL查询 ==================
+    
+    /**
+     * 使用原生SQL查询用户统计信息（性能优化）
+     */
+    @Query(value = "SELECT DATE(create_time) as date, COUNT(*) as count " +
+                   "FROM users WHERE create_time >= :since AND deleted = false " +
+                   "GROUP BY DATE(create_time) ORDER BY date", 
+           nativeQuery = true)
+    List<Object[]> getUserRegistrationStatistics(@Param("since") LocalDateTime since);
+    
+    /**
+     * 原生SQL分页查询（复杂条件）
+     */
+    @Query(value = "SELECT u.* FROM users u " +
+                   "LEFT JOIN user_roles ur ON u.id = ur.user_id " +
+                   "LEFT JOIN roles r ON ur.role_id = r.id " +
+                   "WHERE (:status IS NULL OR u.status = :status) " +
+                   "AND (:roleName IS NULL OR r.name = :roleName) " +
+                   "AND u.deleted = false " +
+                   "ORDER BY u.create_time DESC",
+           countQuery = "SELECT COUNT(DISTINCT u.id) FROM users u " +
+                       "LEFT JOIN user_roles ur ON u.id = ur.user_id " +
+                       "LEFT JOIN roles r ON ur.role_id = r.id " +
+                       "WHERE (:status IS NULL OR u.status = :status) " +
+                       "AND (:roleName IS NULL OR r.name = :roleName) " +
+                       "AND u.deleted = false",
+           nativeQuery = true)
+    Page<User> findUsersWithComplexConditions(@Param("status") String status,
+                                             @Param("roleName") String roleName,
+                                             Pageable pageable);
+    
+    // ================== 更新和删除操作 ==================
+    
+    /**
+     * 批量更新用户状态
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.status = :status, u.updateTime = :updateTime " +
+           "WHERE u.id IN :ids AND u.deleted = false")
+    int batchUpdateStatus(@Param("ids") List<Long> ids, 
+                         @Param("status") UserStatus status,
+                         @Param("updateTime") LocalDateTime updateTime);
+    
+    /**
+     * 软删除用户
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.deleted = true, u.updateTime = CURRENT_TIMESTAMP " +
+           "WHERE u.id = :id")
+    int softDeleteById(@Param("id") Long id);
+    
+    /**
+     * 批量软删除
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.deleted = true, u.updateTime = CURRENT_TIMESTAMP " +
+           "WHERE u.id IN :ids")
+    int batchSoftDelete(@Param("ids") List<Long> ids);
+    
+    /**
+     * 更新最后登录时间
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.lastLoginTime = :loginTime WHERE u.id = :id")
+    int updateLastLoginTime(@Param("id") Long id, @Param("loginTime") LocalDateTime loginTime);
+    
+    // ================== DTO投影查询 ==================
+    
+    /**
+     * 查询用户基本信息投影（提升性能）
+     */
+    @Query("SELECT new com.company.project.dto.UserBasicInfo(u.id, u.username, u.email, u.status) " +
+           "FROM User u WHERE u.deleted = false")
+    List<UserBasicInfo> findUserBasicInfoList();
+    
+    /**
+     * 分页查询用户摘要信息
+     */
+    @Query("SELECT new com.company.project.dto.UserSummary(u.id, u.username, u.email, u.status, u.createTime) " +
+           "FROM User u WHERE u.deleted = false")
+    Page<UserSummary> findUserSummaries(Pageable pageable);
+}
+/* [AI-BLOCK-END] */
+```
+
+### 动态查询Specification实现
+```java
+/* [AI-BLOCK-START] - 生成工具: Repository规范 v2.0 */
+/**
+ * 用户查询规格构建器
+ * 用于构建复杂的动态查询条件
+ */
+public class UserSpecifications {
+    
+    /**
+     * 根据查询条件构建Specification
+     */
+    public static Specification<User> buildSpecification(UserSearchCriteria criteria) {
+        return Specification.where(notDeleted())
+            .and(usernameContains(criteria.getUsername()))
+            .and(emailContains(criteria.getEmail()))
+            .and(statusEquals(criteria.getStatus()))
+            .and(hasRole(criteria.getRoleName()))
+            .and(createTimeBetween(criteria.getCreateTimeFrom(), criteria.getCreateTimeTo()))
+            .and(lastLoginAfter(criteria.getLastLoginAfter()));
+    }
+    
+    /**
+     * 未删除条件
+     */
+    public static Specification<User> notDeleted() {
+        return (root, query, criteriaBuilder) -> 
+            criteriaBuilder.equal(root.get("deleted"), false);
+    }
+    
+    /**
+     * 用户名模糊匹配
+     */
+    public static Specification<User> usernameContains(String username) {
+        return (root, query, criteriaBuilder) -> {
+            if (StringUtils.isBlank(username)) {
+                return criteriaBuilder.conjunction();
+            }
+            return criteriaBuilder.like(
+                criteriaBuilder.lower(root.get("username")),
+                "%" + username.toLowerCase() + "%"
+            );
+        };
+    }
+    
+    /**
+     * 邮箱模糊匹配
+     */
+    public static Specification<User> emailContains(String email) {
+        return (root, query, criteriaBuilder) -> {
+            if (StringUtils.isBlank(email)) {
+                return criteriaBuilder.conjunction();
+            }
+            return criteriaBuilder.like(
+                criteriaBuilder.lower(root.get("email")),
+                "%" + email.toLowerCase() + "%"
+            );
+        };
+    }
+    
+    /**
+     * 状态精确匹配
+     */
+    public static Specification<User> statusEquals(UserStatus status) {
+        return (root, query, criteriaBuilder) -> {
+            if (status == null) {
+                return criteriaBuilder.conjunction();
+            }
+            return criteriaBuilder.equal(root.get("status"), status);
+        };
+    }
+    
+    /**
+     * 角色匹配
+     */
+    public static Specification<User> hasRole(String roleName) {
+        return (root, query, criteriaBuilder) -> {
+            if (StringUtils.isBlank(roleName)) {
+                return criteriaBuilder.conjunction();
+            }
+            
+            // 关联查询角色表
+            Join<User, Role> roleJoin = root.join("roles", JoinType.INNER);
+            return criteriaBuilder.equal(roleJoin.get("name"), roleName);
+        };
+    }
+    
+    /**
+     * 创建时间范围查询
+     */
+    public static Specification<User> createTimeBetween(LocalDateTime from, LocalDateTime to) {
+        return (root, query, criteriaBuilder) -> {
+            if (from == null && to == null) {
+                return criteriaBuilder.conjunction();
+            }
+            
+            if (from != null && to != null) {
+                return criteriaBuilder.between(root.get("createTime"), from, to);
+            } else if (from != null) {
+                return criteriaBuilder.greaterThanOrEqualTo(root.get("createTime"), from);
+            } else {
+                return criteriaBuilder.lessThanOrEqualTo(root.get("createTime"), to);
+            }
+        };
+    }
+    
+    /**
+     * 最后登录时间查询
+     */
+    public static Specification<User> lastLoginAfter(LocalDateTime after) {
+        return (root, query, criteriaBuilder) -> {
+            if (after == null) {
+                return criteriaBuilder.conjunction();
+            }
+            return criteriaBuilder.greaterThanOrEqualTo(root.get("lastLoginTime"), after);
+        };
+    }
+    
+    /**
+     * 复合条件：活跃用户
+     */
+    public static Specification<User> isActiveUser() {
+        return Specification.where(notDeleted())
+            .and(statusEquals(UserStatus.ACTIVE))
+            .and(lastLoginAfter(LocalDateTime.now().minusDays(30)));
+    }
+    
+    /**
+     * 复合条件：新注册用户
+     */
+    public static Specification<User> isNewUser(int days) {
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+        return Specification.where(notDeleted())
+            .and(createTimeBetween(since, null));
+    }
+}
+
+/**
+ * 用户搜索条件DTO
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserSearchCriteria {
+    
+    /**
+     * 用户名关键词
+     */
+    private String username;
+    
+    /**
+     * 邮箱关键词
+     */
+    private String email;
+    
+    /**
+     * 用户状态
+     */
+    private UserStatus status;
+    
+    /**
+     * 角色名称
+     */
+    private String roleName;
+    
+    /**
+     * 创建时间开始
+     */
+    private LocalDateTime createTimeFrom;
+    
+    /**
+     * 创建时间结束
+     */
+    private LocalDateTime createTimeTo;
+    
+    /**
+     * 最后登录时间之后
+     */
+    private LocalDateTime lastLoginAfter;
+}
+/* [AI-BLOCK-END] */
+```
+
+### 自定义Repository实现
+```java
+/* [AI-BLOCK-START] - 生成工具: Repository规范 v2.0 */
+/**
+ * 用户Repository自定义接口
+ */
+public interface UserRepositoryCustom {
+    
+    /**
+     * 批量插入用户
+     */
+    void batchInsertUsers(List<User> users);
+    
+    /**
+     * 复杂统计查询
+     */
+    UserStatistics getUserStatistics(UserStatisticsRequest request);
+    
+    /**
+     * 流式处理大量数据
+     */
+    void processUsersInBatch(UserStatus status, Consumer<List<User>> processor);
+}
+
+/**
+ * 用户Repository自定义实现
+ */
+@Repository
+public class UserRepositoryCustomImpl implements UserRepositoryCustom {
+    
+    @PersistenceContext
+    private EntityManager entityManager;
+    
+    /**
+     * 批量插入用户（性能优化）
+     */
+    @Override
+    public void batchInsertUsers(List<User> users) {
+        final int batchSize = 50;
+        
+        for (int i = 0; i < users.size(); i++) {
+            entityManager.persist(users.get(i));
+            
+            // 每批次提交
+            if (i % batchSize == 0 && i > 0) {
+                entityManager.flush();
+                entityManager.clear();
+            }
+        }
+        
+        // 处理剩余的数据
+        entityManager.flush();
+        entityManager.clear();
+    }
+    
+    /**
+     * 复杂统计查询
+     */
+    @Override
+    public UserStatistics getUserStatistics(UserStatisticsRequest request) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        
+        // 总用户数查询
+        CriteriaQuery<Long> totalQuery = cb.createQuery(Long.class);
+        Root<User> totalRoot = totalQuery.from(User.class);
+        totalQuery.select(cb.count(totalRoot))
+            .where(buildStatisticsPredicates(cb, totalRoot, request));
+        Long totalUsers = entityManager.createQuery(totalQuery).getSingleResult();
+        
+        // 活跃用户数查询
+        CriteriaQuery<Long> activeQuery = cb.createQuery(Long.class);
+        Root<User> activeRoot = activeQuery.from(User.class);
+        Predicate activePredicates = cb.and(
+            buildStatisticsPredicates(cb, activeRoot, request),
+            cb.equal(activeRoot.get("status"), UserStatus.ACTIVE)
+        );
+        activeQuery.select(cb.count(activeRoot)).where(activePredicates);
+        Long activeUsers = entityManager.createQuery(activeQuery).getSingleResult();
+        
+        // 按状态分组统计
+        CriteriaQuery<Object[]> statusQuery = cb.createQuery(Object[].class);
+        Root<User> statusRoot = statusQuery.from(User.class);
+        statusQuery.multiselect(
+            statusRoot.get("status"),
+            cb.count(statusRoot)
+        ).where(buildStatisticsPredicates(cb, statusRoot, request))
+         .groupBy(statusRoot.get("status"));
+        
+        List<Object[]> statusResults = entityManager.createQuery(statusQuery).getResultList();
+        Map<UserStatus, Long> statusDistribution = statusResults.stream()
+            .collect(Collectors.toMap(
+                row -> (UserStatus) row[0],
+                row -> (Long) row[1]
+            ));
+        
+        return UserStatistics.builder()
+            .totalUsers(totalUsers)
+            .activeUsers(activeUsers)
+            .statusDistribution(statusDistribution)
+            .build();
+    }
+    
+    /**
+     * 流式处理大量数据
+     */
+    @Override
+    public void processUsersInBatch(UserStatus status, Consumer<List<User>> processor) {
+        final int batchSize = 1000;
+        int offset = 0;
+        
+        while (true) {
+            // 分批查询
+            String jpql = "SELECT u FROM User u WHERE u.status = :status AND u.deleted = false " +
+                         "ORDER BY u.id";
+            
+            List<User> batch = entityManager.createQuery(jpql, User.class)
+                .setParameter("status", status)
+                .setFirstResult(offset)
+                .setMaxResults(batchSize)
+                .getResultList();
+            
+            if (batch.isEmpty()) {
+                break;
+            }
+            
+            // 处理当前批次
+            processor.accept(batch);
+            
+            // 清理持久化上下文，释放内存
+            entityManager.clear();
+            
+            offset += batchSize;
+        }
+    }
+    
+    /**
+     * 构建统计查询的谓词
+     */
+    private Predicate buildStatisticsPredicates(CriteriaBuilder cb, Root<User> root, 
+                                               UserStatisticsRequest request) {
+        List<Predicate> predicates = new ArrayList<>();
+        
+        // 基础条件：未删除
+        predicates.add(cb.equal(root.get("deleted"), false));
+        
+        // 时间范围条件
+        if (request.getStartTime() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("createTime"), request.getStartTime()));
+        }
+        if (request.getEndTime() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("createTime"), request.getEndTime()));
+        }
+        
+        return cb.and(predicates.toArray(new Predicate[0]));
+    }
+}
+
+/**
+ * 扩展UserRepository接口
+ */
+@Repository
+public interface UserRepository extends JpaRepository<User, Long>, 
+                                       JpaSpecificationExecutor<User>, 
+                                       UserRepositoryCustom {
+    // 标准方法和自定义方法的组合
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此Repository规范确保数据访问层的高性能、可维护性和数据一致性*
+description:
+globs:
+alwaysApply: false
+---

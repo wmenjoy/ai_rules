@@ -1,0 +1,1236 @@
+# 性能优化流程 (流程层规则)
+> 性能分析、优化策略和监控指标的系统化优化流程
+
+## 基础规范
+
+### 性能优化原则
+- **测量驱动**：基于实际测量数据进行优化
+- **渐进式优化**：逐步优化，避免过度优化
+- **80/20法则**：优先优化影响最大的20%代码
+- **可测量性**：优化效果必须可量化验证
+- **持续监控**：建立持续的性能监控体系
+
+### 性能指标体系
+- **响应时间**：API响应时间、页面加载时间
+- **吞吐量**：QPS、TPS等并发处理能力
+- **资源使用率**：CPU、内存、磁盘、网络使用率
+- **错误率**：系统错误率、业务错误率
+- **可用性**：系统正常运行时间百分比
+
+### 优化层次划分
+- **代码层优化**：算法、数据结构、编码实践
+- **JVM层优化**：垃圾回收、内存配置、JIT优化
+- **数据库层优化**：查询优化、索引设计、连接池配置
+- **网络层优化**：缓存策略、CDN、负载均衡
+- **架构层优化**：服务拆分、异步处理、分布式缓存
+
+### 性能测试策略
+- **基准测试**：建立性能基线
+- **负载测试**：验证正常负载下的性能
+- **压力测试**：确定系统极限
+- **容量测试**：评估系统扩展能力
+- **稳定性测试**：长时间运行的稳定性
+
+## 强制行为
+
+### 性能分析要求
+- **性能剖析**：使用JProfiler、Arthas等工具分析热点
+- **火焰图分析**：可视化分析CPU使用情况
+- **内存分析**：分析内存使用模式和泄漏
+- **SQL分析**：分析慢查询和执行计划
+- **网络分析**：分析网络请求和响应时间
+
+### 代码优化标准
+- **算法优化**：选择时间复杂度更低的算法
+- **数据结构优化**：使用合适的数据结构
+- **缓存使用**：合理使用本地缓存和分布式缓存
+- **异步处理**：I/O密集型操作使用异步
+- **资源管理**：及时释放资源，避免泄漏
+
+### 数据库优化要求
+- **索引优化**：合理设计和使用索引
+- **查询优化**：优化SQL查询语句
+- **连接池配置**：合理配置数据库连接池
+- **分页查询**：大数据量查询使用分页
+- **批量操作**：批量插入、更新操作
+
+### 监控和告警
+- **性能监控**：实时监控关键性能指标
+- **告警机制**：性能异常时及时告警
+- **性能仪表板**：可视化展示性能数据
+- **趋势分析**：分析性能变化趋势
+- **容量规划**：基于监控数据进行容量规划
+
+## 禁止行为
+
+### 优化禁令
+- **禁止过度优化**：避免在不必要的地方优化
+- **禁止无测量优化**：优化前必须有性能测量基线
+- **禁止忽略可读性**：性能优化不能牺牲代码可读性
+- **禁止单一指标优化**：避免只关注单一性能指标
+- **禁止生产环境试验**：性能优化要在测试环境验证
+
+### 代码禁令
+- **禁止同步阻塞I/O**：I/O操作使用异步或非阻塞模式
+- **禁止不必要的对象创建**：避免在循环中创建大量对象
+- **禁止字符串频繁拼接**：使用StringBuilder或StringBuffer
+- **禁止不关闭资源**：确保文件、连接等资源正确关闭
+- **禁止深层循环嵌套**：避免多层循环嵌套
+
+### 数据库禁令
+- **禁止SELECT ***：明确指定需要的字段
+- **禁止没有WHERE条件的UPDATE/DELETE**：避免全表操作
+- **禁止在WHERE子句中使用函数**：避免索引失效
+- **禁止大事务**：避免长时间锁定资源
+- **禁止N+1查询**：使用JOIN或批量查询
+
+### 缓存禁令
+- **禁止缓存击穿**：避免热点数据缓存失效
+- **禁止缓存穿透**：避免查询不存在的数据
+- **禁止缓存雪崩**：避免大量缓存同时失效
+- **禁止缓存预热不足**：系统启动时预热关键缓存
+- **禁止不合理的缓存过期时间**：设置合适的缓存TTL
+
+## 示例代码
+
+### 性能监控配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 性能优化流程 v2.0 */
+/**
+ * 性能监控配置
+ * 配置Micrometer指标收集和监控
+ */
+@Configuration
+@EnableConfigurationProperties(PerformanceMonitoringProperties.class)
+@Slf4j
+public class PerformanceMonitoringConfig {
+    
+    private final PerformanceMonitoringProperties properties;
+    
+    public PerformanceMonitoringConfig(PerformanceMonitoringProperties properties) {
+        this.properties = properties;
+    }
+    
+    /**
+     * Prometheus监控配置
+     */
+    @Bean
+    @ConditionalOnProperty(name = "management.metrics.export.prometheus.enabled", havingValue = "true")
+    public PrometheusMeterRegistry prometheusMeterRegistry() {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        
+        // 注册JVM指标
+        new JvmMemoryMetrics().bindTo(registry);
+        new JvmGcMetrics().bindTo(registry);
+        new JvmThreadMetrics().bindTo(registry);
+        new ProcessorMetrics().bindTo(registry);
+        new ClassLoaderMetrics().bindTo(registry);
+        new UptimeMetrics().bindTo(registry);
+        
+        log.info("Prometheus监控已启用");
+        
+        return registry;
+    }
+    
+    /**
+     * 自定义性能指标
+     */
+    @Bean
+    public PerformanceMetrics performanceMetrics(MeterRegistry meterRegistry) {
+        return new PerformanceMetrics(meterRegistry);
+    }
+    
+    /**
+     * HTTP请求监控过滤器
+     */
+    @Bean
+    public FilterRegistrationBean<HttpRequestMetricsFilter> httpRequestMetricsFilter(
+            MeterRegistry meterRegistry) {
+        
+        FilterRegistrationBean<HttpRequestMetricsFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new HttpRequestMetricsFilter(meterRegistry));
+        registration.addUrlPatterns("/api/*");
+        registration.setOrder(1);
+        
+        return registration;
+    }
+    
+    /**
+     * 数据库性能监控
+     */
+    @Bean
+    public DatabaseMetrics databaseMetrics(DataSource dataSource, MeterRegistry meterRegistry) {
+        return new DatabaseMetrics(dataSource, meterRegistry);
+    }
+    
+    /**
+     * 缓存性能监控
+     */
+    @Bean
+    public CacheMetrics cacheMetrics(CacheManager cacheManager, MeterRegistry meterRegistry) {
+        return new CacheMetrics(cacheManager, meterRegistry);
+    }
+    
+    /**
+     * GC监控
+     */
+    @Bean
+    public GcMetrics gcMetrics(MeterRegistry meterRegistry) {
+        return new GcMetrics(meterRegistry);
+    }
+}
+
+/**
+ * 性能监控属性配置
+ */
+@ConfigurationProperties(prefix = "app.performance.monitoring")
+@Data
+public class PerformanceMonitoringProperties {
+    
+    /**
+     * 是否启用性能监控
+     */
+    private boolean enabled = true;
+    
+    /**
+     * HTTP请求监控配置
+     */
+    private HttpRequestMonitoring httpRequest = new HttpRequestMonitoring();
+    
+    /**
+     * 数据库监控配置
+     */
+    private DatabaseMonitoring database = new DatabaseMonitoring();
+    
+    /**
+     * 缓存监控配置
+     */
+    private CacheMonitoring cache = new CacheMonitoring();
+    
+    @Data
+    public static class HttpRequestMonitoring {
+        private boolean enabled = true;
+        private long slowRequestThreshold = 1000; // 慢请求阈值(ms)
+        private boolean includeQueryParams = false;
+    }
+    
+    @Data
+    public static class DatabaseMonitoring {
+        private boolean enabled = true;
+        private long slowQueryThreshold = 500; // 慢查询阈值(ms)
+        private boolean logSlowQueries = true;
+    }
+    
+    @Data
+    public static class CacheMonitoring {
+        private boolean enabled = true;
+        private boolean trackHitRatio = true;
+        private boolean trackEvictions = true;
+    }
+}
+
+/**
+ * 自定义性能指标
+ */
+@Component
+@Slf4j
+public class PerformanceMetrics {
+    
+    private final MeterRegistry meterRegistry;
+    private final Timer.Builder responseTimeTimer;
+    private final Counter.Builder errorCounter;
+    private final Gauge.Builder activeRequestsGauge;
+    
+    // 用于记录活跃请求数
+    private final AtomicLong activeRequests = new AtomicLong(0);
+    
+    public PerformanceMetrics(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        
+        // 响应时间计时器
+        this.responseTimeTimer = Timer.builder("http.request.duration")
+            .description("HTTP请求响应时间")
+            .register(meterRegistry);
+        
+        // 错误计数器
+        this.errorCounter = Counter.builder("http.request.errors")
+            .description("HTTP请求错误数")
+            .register(meterRegistry);
+        
+        // 活跃请求数量表
+        this.activeRequestsGauge = Gauge.builder("http.request.active")
+            .description("当前活跃请求数")
+            .register(meterRegistry, activeRequests, AtomicLong::get);
+    }
+    
+    /**
+     * 记录HTTP请求指标
+     */
+    public void recordHttpRequest(String uri, String method, int status, long duration) {
+        // 记录响应时间
+        responseTimeTimer.tags(
+            "uri", sanitizeUri(uri),
+            "method", method,
+            "status", String.valueOf(status)
+        ).record(duration, TimeUnit.MILLISECONDS);
+        
+        // 记录错误
+        if (status >= 400) {
+            errorCounter.tags(
+                "uri", sanitizeUri(uri),
+                "method", method,
+                "status", String.valueOf(status)
+            ).increment();
+        }
+    }
+    
+    /**
+     * 增加活跃请求数
+     */
+    public void incrementActiveRequests() {
+        activeRequests.incrementAndGet();
+    }
+    
+    /**
+     * 减少活跃请求数
+     */
+    public void decrementActiveRequests() {
+        activeRequests.decrementAndGet();
+    }
+    
+    /**
+     * 记录业务指标
+     */
+    public void recordBusinessMetric(String name, String operation, long value) {
+        Timer.builder("business.operation.duration")
+            .description("业务操作执行时间")
+            .tags("operation", operation)
+            .register(meterRegistry)
+            .record(value, TimeUnit.MILLISECONDS);
+    }
+    
+    /**
+     * 记录缓存指标
+     */
+    public void recordCacheMetric(String cacheName, String operation, boolean hit) {
+        Counter.builder("cache.operations")
+            .description("缓存操作统计")
+            .tags(
+                "cache", cacheName,
+                "operation", operation,
+                "result", hit ? "hit" : "miss"
+            )
+            .register(meterRegistry)
+            .increment();
+    }
+    
+    /**
+     * 记录数据库连接池指标
+     */
+    public void recordConnectionPoolMetrics(String poolName, int active, int idle, int total) {
+        Gauge.builder("db.connection.active")
+            .description("数据库活跃连接数")
+            .tags("pool", poolName)
+            .register(meterRegistry, this, metrics -> active);
+        
+        Gauge.builder("db.connection.idle")
+            .description("数据库空闲连接数")
+            .tags("pool", poolName)
+            .register(meterRegistry, this, metrics -> idle);
+        
+        Gauge.builder("db.connection.total")
+            .description("数据库总连接数")
+            .tags("pool", poolName)
+            .register(meterRegistry, this, metrics -> total);
+    }
+    
+    /**
+     * 清理URI中的敏感信息
+     */
+    private String sanitizeUri(String uri) {
+        if (uri == null) {
+            return "unknown";
+        }
+        
+        // 移除查询参数
+        int queryIndex = uri.indexOf('?');
+        if (queryIndex > 0) {
+            uri = uri.substring(0, queryIndex);
+        }
+        
+        // 替换路径参数为通用标识符
+        uri = uri.replaceAll("/\\d+", "/{id}");
+        uri = uri.replaceAll("/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", "/{uuid}");
+        
+        return uri;
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 性能分析工具集成
+```java
+/* [AI-BLOCK-START] - 生成工具: 性能优化流程 v2.0 */
+/**
+ * 性能分析服务
+ * 提供性能数据收集、分析和报告功能
+ */
+@Service
+@Slf4j
+public class PerformanceAnalysisService {
+    
+    private final MeterRegistry meterRegistry;
+    private final PerformanceDataRepository performanceDataRepository;
+    private final ApplicationContext applicationContext;
+    
+    public PerformanceAnalysisService(MeterRegistry meterRegistry,
+                                    PerformanceDataRepository performanceDataRepository,
+                                    ApplicationContext applicationContext) {
+        this.meterRegistry = meterRegistry;
+        this.performanceDataRepository = performanceDataRepository;
+        this.applicationContext = applicationContext;
+    }
+    
+    /**
+     * 生成性能报告
+     */
+    public PerformanceReport generatePerformanceReport(PerformanceReportRequest request) {
+        log.info("生成性能报告: {}", request);
+        
+        LocalDateTime startTime = request.getStartTime();
+        LocalDateTime endTime = request.getEndTime();
+        
+        // 收集各类性能指标
+        HttpMetrics httpMetrics = collectHttpMetrics(startTime, endTime);
+        DatabaseMetrics dbMetrics = collectDatabaseMetrics(startTime, endTime);
+        JvmMetrics jvmMetrics = collectJvmMetrics(startTime, endTime);
+        BusinessMetrics businessMetrics = collectBusinessMetrics(startTime, endTime);
+        
+        // 生成性能分析结果
+        List<PerformanceIssue> issues = analyzePerformanceIssues(
+            httpMetrics, dbMetrics, jvmMetrics, businessMetrics);
+        
+        // 生成优化建议
+        List<OptimizationRecommendation> recommendations = generateOptimizationRecommendations(issues);
+        
+        return PerformanceReport.builder()
+            .reportId(UUID.randomUUID().toString())
+            .startTime(startTime)
+            .endTime(endTime)
+            .httpMetrics(httpMetrics)
+            .databaseMetrics(dbMetrics)
+            .jvmMetrics(jvmMetrics)
+            .businessMetrics(businessMetrics)
+            .issues(issues)
+            .recommendations(recommendations)
+            .generateTime(LocalDateTime.now())
+            .build();
+    }
+    
+    /**
+     * 收集HTTP性能指标
+     */
+    private HttpMetrics collectHttpMetrics(LocalDateTime startTime, LocalDateTime endTime) {
+        // 查询响应时间分布
+        Search responseTimeSearch = Search.in(meterRegistry)
+            .name("http.request.duration");
+        
+        DistributionSummary responseTimes = DistributionSummary.builder("response.time.analysis")
+            .register(meterRegistry);
+        
+        responseTimeSearch.timers().forEach(timer -> {
+            responseTimes.record(timer.mean(TimeUnit.MILLISECONDS));
+        });
+        
+        // 计算关键指标
+        double averageResponseTime = responseTimes.mean();
+        double p95ResponseTime = responseTimes.percentile(0.95);
+        double p99ResponseTime = responseTimes.percentile(0.99);
+        
+        // 查询错误率
+        Search errorSearch = Search.in(meterRegistry)
+            .name("http.request.errors");
+        
+        double totalErrors = errorSearch.counters().stream()
+            .mapToDouble(Counter::count)
+            .sum();
+        
+        Search totalRequestSearch = Search.in(meterRegistry)
+            .name("http.request.duration");
+        
+        double totalRequests = totalRequestSearch.timers().stream()
+            .mapToDouble(Timer::count)
+            .sum();
+        
+        double errorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
+        
+        // 查询吞吐量
+        double throughput = totalRequests / Duration.between(startTime, endTime).toMinutes();
+        
+        return HttpMetrics.builder()
+            .averageResponseTime(averageResponseTime)
+            .p95ResponseTime(p95ResponseTime)
+            .p99ResponseTime(p99ResponseTime)
+            .errorRate(errorRate)
+            .throughput(throughput)
+            .totalRequests((long) totalRequests)
+            .totalErrors((long) totalErrors)
+            .build();
+    }
+    
+    /**
+     * 收集数据库性能指标
+     */
+    private DatabaseMetrics collectDatabaseMetrics(LocalDateTime startTime, LocalDateTime endTime) {
+        // 这里应该从实际的数据库监控系统获取数据
+        // 示例：从performance_schema或自定义监控表查询
+        
+        List<SlowQuery> slowQueries = performanceDataRepository
+            .findSlowQueries(startTime, endTime);
+        
+        // 连接池状态
+        DataSource dataSource = applicationContext.getBean(DataSource.class);
+        ConnectionPoolStats connectionStats = getConnectionPoolStats(dataSource);
+        
+        // 查询统计
+        QueryStats queryStats = performanceDataRepository
+            .getQueryStats(startTime, endTime);
+        
+        return DatabaseMetrics.builder()
+            .slowQueries(slowQueries)
+            .connectionPoolStats(connectionStats)
+            .queryStats(queryStats)
+            .averageQueryTime(queryStats.getAverageExecutionTime())
+            .totalQueries(queryStats.getTotalQueries())
+            .build();
+    }
+    
+    /**
+     * 收集JVM性能指标
+     */
+    private JvmMetrics collectJvmMetrics(LocalDateTime startTime, LocalDateTime endTime) {
+        MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+        MemoryUsage heapMemory = memoryBean.getHeapMemoryUsage();
+        MemoryUsage nonHeapMemory = memoryBean.getNonHeapMemoryUsage();
+        
+        // 垃圾回收统计
+        List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
+        List<GcStats> gcStats = gcBeans.stream()
+            .map(this::convertToGcStats)
+            .collect(Collectors.toList());
+        
+        // 线程统计
+        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
+        ThreadStats threadStats = ThreadStats.builder()
+            .totalThreads(threadBean.getThreadCount())
+            .peakThreads(threadBean.getPeakThreadCount())
+            .daemonThreads(threadBean.getDaemonThreadCount())
+            .deadlockedThreads(threadBean.findDeadlockedThreads() != null ? 
+                threadBean.findDeadlockedThreads().length : 0)
+            .build();
+        
+        return JvmMetrics.builder()
+            .heapMemoryUsage(convertToMemoryStats(heapMemory))
+            .nonHeapMemoryUsage(convertToMemoryStats(nonHeapMemory))
+            .gcStats(gcStats)
+            .threadStats(threadStats)
+            .build();
+    }
+    
+    /**
+     * 分析性能问题
+     */
+    private List<PerformanceIssue> analyzePerformanceIssues(HttpMetrics httpMetrics,
+                                                           DatabaseMetrics dbMetrics,
+                                                           JvmMetrics jvmMetrics,
+                                                           BusinessMetrics businessMetrics) {
+        List<PerformanceIssue> issues = new ArrayList<>();
+        
+        // 分析HTTP性能问题
+        if (httpMetrics.getAverageResponseTime() > 1000) {
+            issues.add(PerformanceIssue.builder()
+                .type(IssueType.HIGH_RESPONSE_TIME)
+                .severity(IssueSeverity.HIGH)
+                .description("平均响应时间过高: " + httpMetrics.getAverageResponseTime() + "ms")
+                .affectedComponent("HTTP服务")
+                .metrics(Map.of("averageResponseTime", httpMetrics.getAverageResponseTime()))
+                .build());
+        }
+        
+        if (httpMetrics.getErrorRate() > 5) {
+            issues.add(PerformanceIssue.builder()
+                .type(IssueType.HIGH_ERROR_RATE)
+                .severity(IssueSeverity.CRITICAL)
+                .description("错误率过高: " + String.format("%.2f%%", httpMetrics.getErrorRate()))
+                .affectedComponent("HTTP服务")
+                .metrics(Map.of("errorRate", httpMetrics.getErrorRate()))
+                .build());
+        }
+        
+        // 分析数据库性能问题
+        if (!dbMetrics.getSlowQueries().isEmpty()) {
+            issues.add(PerformanceIssue.builder()
+                .type(IssueType.SLOW_DATABASE_QUERIES)
+                .severity(IssueSeverity.MEDIUM)
+                .description("发现 " + dbMetrics.getSlowQueries().size() + " 个慢查询")
+                .affectedComponent("数据库")
+                .metrics(Map.of("slowQueryCount", dbMetrics.getSlowQueries().size()))
+                .build());
+        }
+        
+        // 分析JVM性能问题
+        MemoryStats heapMemory = jvmMetrics.getHeapMemoryUsage();
+        double memoryUsagePercent = (double) heapMemory.getUsed() / heapMemory.getMax() * 100;
+        
+        if (memoryUsagePercent > 80) {
+            issues.add(PerformanceIssue.builder()
+                .type(IssueType.HIGH_MEMORY_USAGE)
+                .severity(IssueSeverity.HIGH)
+                .description("内存使用率过高: " + String.format("%.2f%%", memoryUsagePercent))
+                .affectedComponent("JVM")
+                .metrics(Map.of("memoryUsagePercent", memoryUsagePercent))
+                .build());
+        }
+        
+        // 分析GC性能问题
+        List<GcStats> gcStats = jvmMetrics.getGcStats();
+        double totalGcTime = gcStats.stream()
+            .mapToDouble(GcStats::getTotalCollectionTime)
+            .sum();
+        
+        if (totalGcTime > 10000) { // 10秒
+            issues.add(PerformanceIssue.builder()
+                .type(IssueType.FREQUENT_GC)
+                .severity(IssueSeverity.MEDIUM)
+                .description("GC耗时过长: " + totalGcTime + "ms")
+                .affectedComponent("JVM垃圾回收")
+                .metrics(Map.of("totalGcTime", totalGcTime))
+                .build());
+        }
+        
+        return issues;
+    }
+    
+    /**
+     * 生成优化建议
+     */
+    private List<OptimizationRecommendation> generateOptimizationRecommendations(
+            List<PerformanceIssue> issues) {
+        
+        List<OptimizationRecommendation> recommendations = new ArrayList<>();
+        
+        for (PerformanceIssue issue : issues) {
+            switch (issue.getType()) {
+                case HIGH_RESPONSE_TIME:
+                    recommendations.add(OptimizationRecommendation.builder()
+                        .category(OptimizationCategory.APPLICATION)
+                        .priority(RecommendationPriority.HIGH)
+                        .title("优化响应时间")
+                        .description("检查慢接口，优化数据库查询，增加缓存")
+                        .expectedImpact("响应时间减少30-50%")
+                        .estimatedEffort("中等")
+                        .relatedIssue(issue.getType())
+                        .build());
+                    break;
+                    
+                case HIGH_ERROR_RATE:
+                    recommendations.add(OptimizationRecommendation.builder()
+                        .category(OptimizationCategory.STABILITY)
+                        .priority(RecommendationPriority.CRITICAL)
+                        .title("降低错误率")
+                        .description("分析错误日志，修复bug，增加异常处理")
+                        .expectedImpact("错误率降低到1%以下")
+                        .estimatedEffort("高")
+                        .relatedIssue(issue.getType())
+                        .build());
+                    break;
+                    
+                case SLOW_DATABASE_QUERIES:
+                    recommendations.add(OptimizationRecommendation.builder()
+                        .category(OptimizationCategory.DATABASE)
+                        .priority(RecommendationPriority.HIGH)
+                        .title("优化数据库查询")
+                        .description("添加索引，优化SQL语句，考虑查询缓存")
+                        .expectedImpact("查询时间减少40-60%")
+                        .estimatedEffort("中等")
+                        .relatedIssue(issue.getType())
+                        .build());
+                    break;
+                    
+                case HIGH_MEMORY_USAGE:
+                    recommendations.add(OptimizationRecommendation.builder()
+                        .category(OptimizationCategory.JVM)
+                        .priority(RecommendationPriority.HIGH)
+                        .title("优化内存使用")
+                        .description("调整JVM参数，优化对象创建，检查内存泄漏")
+                        .expectedImpact("内存使用率降低到60%以下")
+                        .estimatedEffort("中等")
+                        .relatedIssue(issue.getType())
+                        .build());
+                    break;
+                    
+                case FREQUENT_GC:
+                    recommendations.add(OptimizationRecommendation.builder()
+                        .category(OptimizationCategory.JVM)
+                        .priority(RecommendationPriority.MEDIUM)
+                        .title("优化垃圾回收")
+                        .description("调整GC参数，优化对象生命周期管理")
+                        .expectedImpact("GC停顿时间减少50%")
+                        .estimatedEffort("低")
+                        .relatedIssue(issue.getType())
+                        .build());
+                    break;
+            }
+        }
+        
+        return recommendations;
+    }
+    
+    // 辅助方法...
+    private ConnectionPoolStats getConnectionPoolStats(DataSource dataSource) {
+        if (dataSource instanceof HikariDataSource) {
+            HikariDataSource hikariDS = (HikariDataSource) dataSource;
+            HikariPoolMXBean poolBean = hikariDS.getHikariPoolMXBean();
+            
+            return ConnectionPoolStats.builder()
+                .activeConnections(poolBean.getActiveConnections())
+                .idleConnections(poolBean.getIdleConnections())
+                .totalConnections(poolBean.getTotalConnections())
+                .threadsAwaitingConnection(poolBean.getThreadsAwaitingConnection())
+                .build();
+        }
+        
+        return ConnectionPoolStats.builder().build();
+    }
+    
+    private GcStats convertToGcStats(GarbageCollectorMXBean gcBean) {
+        return GcStats.builder()
+            .name(gcBean.getName())
+            .collectionCount(gcBean.getCollectionCount())
+            .totalCollectionTime(gcBean.getCollectionTime())
+            .build();
+    }
+    
+    private MemoryStats convertToMemoryStats(MemoryUsage memoryUsage) {
+        return MemoryStats.builder()
+            .init(memoryUsage.getInit())
+            .used(memoryUsage.getUsed())
+            .committed(memoryUsage.getCommitted())
+            .max(memoryUsage.getMax())
+            .build();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 性能优化实施工具
+```java
+/* [AI-BLOCK-START] - 生成工具: 性能优化流程 v2.0 */
+/**
+ * 性能优化实施服务
+ * 提供自动化性能优化功能
+ */
+@Service
+@Slf4j
+public class PerformanceOptimizationService {
+    
+    private final CacheManager cacheManager;
+    private final DataSource dataSource;
+    private final MeterRegistry meterRegistry;
+    private final OptimizationConfigProperties optimizationConfig;
+    
+    public PerformanceOptimizationService(CacheManager cacheManager,
+                                        DataSource dataSource,
+                                        MeterRegistry meterRegistry,
+                                        OptimizationConfigProperties optimizationConfig) {
+        this.cacheManager = cacheManager;
+        this.dataSource = dataSource;
+        this.meterRegistry = meterRegistry;
+        this.optimizationConfig = optimizationConfig;
+    }
+    
+    /**
+     * 执行性能优化
+     */
+    @Async
+    public CompletableFuture<OptimizationResult> executeOptimization(
+            OptimizationRequest request) {
+        
+        log.info("开始执行性能优化: {}", request);
+        
+        List<OptimizationTask> tasks = createOptimizationTasks(request);
+        List<OptimizationTaskResult> results = new ArrayList<>();
+        
+        for (OptimizationTask task : tasks) {
+            try {
+                OptimizationTaskResult result = executeOptimizationTask(task);
+                results.add(result);
+                
+                log.info("优化任务完成: {} - {}", task.getName(), result.getStatus());
+                
+            } catch (Exception e) {
+                log.error("优化任务失败: {}", task.getName(), e);
+                results.add(OptimizationTaskResult.builder()
+                    .taskName(task.getName())
+                    .status(TaskStatus.FAILED)
+                    .message("执行失败: " + e.getMessage())
+                    .build());
+            }
+        }
+        
+        OptimizationResult optimizationResult = OptimizationResult.builder()
+            .requestId(request.getRequestId())
+            .totalTasks(tasks.size())
+            .successfulTasks(results.stream()
+                .mapToInt(r -> r.getStatus() == TaskStatus.SUCCESS ? 1 : 0)
+                .sum())
+            .failedTasks(results.stream()
+                .mapToInt(r -> r.getStatus() == TaskStatus.FAILED ? 1 : 0)
+                .sum())
+            .taskResults(results)
+            .executionTime(LocalDateTime.now())
+            .build();
+        
+        log.info("性能优化完成: 成功 {}/{} 个任务", 
+            optimizationResult.getSuccessfulTasks(), 
+            optimizationResult.getTotalTasks());
+        
+        return CompletableFuture.completedFuture(optimizationResult);
+    }
+    
+    /**
+     * 创建优化任务列表
+     */
+    private List<OptimizationTask> createOptimizationTasks(OptimizationRequest request) {
+        List<OptimizationTask> tasks = new ArrayList<>();
+        
+        // 缓存优化任务
+        if (request.getOptimizationTypes().contains(OptimizationType.CACHE)) {
+            tasks.add(OptimizationTask.builder()
+                .name("缓存预热")
+                .type(OptimizationType.CACHE)
+                .description("预热关键业务数据缓存")
+                .priority(TaskPriority.HIGH)
+                .build());
+            
+            tasks.add(OptimizationTask.builder()
+                .name("缓存清理")
+                .type(OptimizationType.CACHE)
+                .description("清理过期和无效缓存")
+                .priority(TaskPriority.MEDIUM)
+                .build());
+        }
+        
+        // 数据库优化任务
+        if (request.getOptimizationTypes().contains(OptimizationType.DATABASE)) {
+            tasks.add(OptimizationTask.builder()
+                .name("连接池调优")
+                .type(OptimizationType.DATABASE)
+                .description("优化数据库连接池配置")
+                .priority(TaskPriority.HIGH)
+                .build());
+            
+            tasks.add(OptimizationTask.builder()
+                .name("查询计划分析")
+                .type(OptimizationType.DATABASE)
+                .description("分析和优化慢查询")
+                .priority(TaskPriority.MEDIUM)
+                .build());
+        }
+        
+        // JVM优化任务
+        if (request.getOptimizationTypes().contains(OptimizationType.JVM)) {
+            tasks.add(OptimizationTask.builder()
+                .name("GC调优")
+                .type(OptimizationType.JVM)
+                .description("优化垃圾回收参数")
+                .priority(TaskPriority.MEDIUM)
+                .build());
+            
+            tasks.add(OptimizationTask.builder()
+                .name("内存分析")
+                .type(OptimizationType.JVM)
+                .description("分析内存使用模式")
+                .priority(TaskPriority.LOW)
+                .build());
+        }
+        
+        // 按优先级排序
+        tasks.sort(Comparator.comparing(OptimizationTask::getPriority));
+        
+        return tasks;
+    }
+    
+    /**
+     * 执行单个优化任务
+     */
+    private OptimizationTaskResult executeOptimizationTask(OptimizationTask task) {
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            switch (task.getType()) {
+                case CACHE:
+                    return executeCacheOptimization(task);
+                case DATABASE:
+                    return executeDatabaseOptimization(task);
+                case JVM:
+                    return executeJvmOptimization(task);
+                case APPLICATION:
+                    return executeApplicationOptimization(task);
+                default:
+                    throw new UnsupportedOperationException("不支持的优化类型: " + task.getType());
+            }
+            
+        } finally {
+            long executionTime = System.currentTimeMillis() - startTime;
+            meterRegistry.timer("optimization.task.duration")
+                .tags("task", task.getName(), "type", task.getType().name())
+                .record(executionTime, TimeUnit.MILLISECONDS);
+        }
+    }
+    
+    /**
+     * 执行缓存优化
+     */
+    private OptimizationTaskResult executeCacheOptimization(OptimizationTask task) {
+        switch (task.getName()) {
+            case "缓存预热":
+                return executeCacheWarmup();
+            case "缓存清理":
+                return executeCacheCleanup();
+            default:
+                throw new UnsupportedOperationException("不支持的缓存优化任务: " + task.getName());
+        }
+    }
+    
+    /**
+     * 执行缓存预热
+     */
+    private OptimizationTaskResult executeCacheWarmup() {
+        log.info("开始执行缓存预热...");
+        
+        int warmedCaches = 0;
+        
+        try {
+            // 预热用户缓存
+            Cache userCache = cacheManager.getCache("users");
+            if (userCache != null) {
+                // 这里应该预热热点用户数据
+                // userService.preloadHotUsers();
+                warmedCaches++;
+            }
+            
+            // 预热配置缓存
+            Cache configCache = cacheManager.getCache("configs");
+            if (configCache != null) {
+                // 这里应该预热系统配置
+                // configService.preloadConfigs();
+                warmedCaches++;
+            }
+            
+            // 预热权限缓存
+            Cache permissionCache = cacheManager.getCache("permissions");
+            if (permissionCache != null) {
+                // 这里应该预热权限数据
+                // permissionService.preloadPermissions();
+                warmedCaches++;
+            }
+            
+            String message = String.format("成功预热 %d 个缓存", warmedCaches);
+            log.info(message);
+            
+            return OptimizationTaskResult.builder()
+                .taskName("缓存预热")
+                .status(TaskStatus.SUCCESS)
+                .message(message)
+                .metrics(Map.of("warmedCaches", warmedCaches))
+                .build();
+                
+        } catch (Exception e) {
+            log.error("缓存预热失败", e);
+            return OptimizationTaskResult.builder()
+                .taskName("缓存预热")
+                .status(TaskStatus.FAILED)
+                .message("缓存预热失败: " + e.getMessage())
+                .build();
+        }
+    }
+    
+    /**
+     * 执行缓存清理
+     */
+    private OptimizationTaskResult executeCacheCleanup() {
+        log.info("开始执行缓存清理...");
+        
+        int clearedCaches = 0;
+        
+        try {
+            // 清理所有缓存中的过期数据
+            for (String cacheName : cacheManager.getCacheNames()) {
+                Cache cache = cacheManager.getCache(cacheName);
+                if (cache != null) {
+                    // 这里应该实现智能清理逻辑
+                    // 比如清理访问频率低的数据
+                    cache.clear(); // 简单示例，实际应该更智能
+                    clearedCaches++;
+                }
+            }
+            
+            String message = String.format("成功清理 %d 个缓存", clearedCaches);
+            log.info(message);
+            
+            return OptimizationTaskResult.builder()
+                .taskName("缓存清理")
+                .status(TaskStatus.SUCCESS)
+                .message(message)
+                .metrics(Map.of("clearedCaches", clearedCaches))
+                .build();
+                
+        } catch (Exception e) {
+            log.error("缓存清理失败", e);
+            return OptimizationTaskResult.builder()
+                .taskName("缓存清理")
+                .status(TaskStatus.FAILED)
+                .message("缓存清理失败: " + e.getMessage())
+                .build();
+        }
+    }
+    
+    /**
+     * 执行数据库优化
+     */
+    private OptimizationTaskResult executeDatabaseOptimization(OptimizationTask task) {
+        switch (task.getName()) {
+            case "连接池调优":
+                return executeConnectionPoolOptimization();
+            case "查询计划分析":
+                return executeQueryPlanAnalysis();
+            default:
+                throw new UnsupportedOperationException("不支持的数据库优化任务: " + task.getName());
+        }
+    }
+    
+    /**
+     * 执行连接池优化
+     */
+    private OptimizationTaskResult executeConnectionPoolOptimization() {
+        log.info("开始执行连接池调优...");
+        
+        try {
+            if (dataSource instanceof HikariDataSource) {
+                HikariDataSource hikariDS = (HikariDataSource) dataSource;
+                HikariPoolMXBean poolBean = hikariDS.getHikariPoolMXBean();
+                
+                // 分析当前连接池状态
+                int activeConnections = poolBean.getActiveConnections();
+                int idleConnections = poolBean.getIdleConnections();
+                int totalConnections = poolBean.getTotalConnections();
+                int maxPoolSize = hikariDS.getMaximumPoolSize();
+                
+                // 动态调整连接池大小（如果配置允许）
+                if (optimizationConfig.isAllowDynamicPoolSizing()) {
+                    int suggestedPoolSize = calculateOptimalPoolSize(activeConnections, totalConnections);
+                    
+                    if (suggestedPoolSize != maxPoolSize) {
+                        // 这里应该通过配置中心动态调整
+                        log.info("建议调整连接池大小从 {} 到 {}", maxPoolSize, suggestedPoolSize);
+                    }
+                }
+                
+                Map<String, Object> metrics = Map.of(
+                    "activeConnections", activeConnections,
+                    "idleConnections", idleConnections,
+                    "totalConnections", totalConnections,
+                    "maxPoolSize", maxPoolSize
+                );
+                
+                return OptimizationTaskResult.builder()
+                    .taskName("连接池调优")
+                    .status(TaskStatus.SUCCESS)
+                    .message("连接池状态分析完成")
+                    .metrics(metrics)
+                    .build();
+                    
+            } else {
+                return OptimizationTaskResult.builder()
+                    .taskName("连接池调优")
+                    .status(TaskStatus.SKIPPED)
+                    .message("非HikariCP连接池，跳过优化")
+                    .build();
+            }
+            
+        } catch (Exception e) {
+            log.error("连接池调优失败", e);
+            return OptimizationTaskResult.builder()
+                .taskName("连接池调优")
+                .status(TaskStatus.FAILED)
+                .message("连接池调优失败: " + e.getMessage())
+                .build();
+        }
+    }
+    
+    /**
+     * 计算最优连接池大小
+     */
+    private int calculateOptimalPoolSize(int activeConnections, int totalConnections) {
+        // 简单的启发式算法
+        // 实际应该基于历史数据和负载模式
+        
+        if (activeConnections > totalConnections * 0.8) {
+            // 连接使用率高，建议增加连接数
+            return Math.min(totalConnections + 5, 50);
+        } else if (activeConnections < totalConnections * 0.3) {
+            // 连接使用率低，建议减少连接数
+            return Math.max(totalConnections - 5, 5);
+        }
+        
+        return totalConnections; // 保持当前大小
+    }
+    
+    /**
+     * 执行查询计划分析
+     */
+    private OptimizationTaskResult executeQueryPlanAnalysis() {
+        log.info("开始执行查询计划分析...");
+        
+        try {
+            // 这里应该分析慢查询日志
+            // 并生成优化建议
+            
+            List<String> optimizationSuggestions = Arrays.asList(
+                "为users表的email字段添加索引",
+                "优化orders表的复合查询，考虑添加复合索引",
+                "review查询中的JOIN操作，考虑分解为多个查询"
+            );
+            
+            return OptimizationTaskResult.builder()
+                .taskName("查询计划分析")
+                .status(TaskStatus.SUCCESS)
+                .message("查询计划分析完成，发现 " + optimizationSuggestions.size() + " 个优化建议")
+                .metrics(Map.of("suggestions", optimizationSuggestions))
+                .build();
+                
+        } catch (Exception e) {
+            log.error("查询计划分析失败", e);
+            return OptimizationTaskResult.builder()
+                .taskName("查询计划分析")
+                .status(TaskStatus.FAILED)
+                .message("查询计划分析失败: " + e.getMessage())
+                .build();
+        }
+    }
+    
+    /**
+     * 执行JVM优化
+     */
+    private OptimizationTaskResult executeJvmOptimization(OptimizationTask task) {
+        // JVM优化通常需要重启应用程序
+        // 这里主要是分析和生成建议
+        
+        log.info("开始执行JVM优化分析: {}", task.getName());
+        
+        try {
+            MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
+            MemoryUsage heapMemory = memoryBean.getHeapMemoryUsage();
+            
+            List<GarbageCollectorMXBean> gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
+            
+            List<String> jvmRecommendations = new ArrayList<>();
+            
+            // 分析内存使用
+            double memoryUsage = (double) heapMemory.getUsed() / heapMemory.getMax();
+            if (memoryUsage > 0.8) {
+                jvmRecommendations.add("考虑增加堆内存大小(-Xmx参数)");
+            }
+            
+            // 分析GC性能
+            for (GarbageCollectorMXBean gcBean : gcBeans) {
+                if (gcBean.getCollectionTime() > 10000) { // 10秒
+                    jvmRecommendations.add("GC时间过长，考虑调整" + gcBean.getName() + "参数");
+                }
+            }
+            
+            return OptimizationTaskResult.builder()
+                .taskName(task.getName())
+                .status(TaskStatus.SUCCESS)
+                .message("JVM分析完成，生成 " + jvmRecommendations.size() + " 个建议")
+                .metrics(Map.of(
+                    "memoryUsage", memoryUsage,
+                    "recommendations", jvmRecommendations
+                ))
+                .build();
+                
+        } catch (Exception e) {
+            log.error("JVM优化分析失败", e);
+            return OptimizationTaskResult.builder()
+                .taskName(task.getName())
+                .status(TaskStatus.FAILED)
+                .message("JVM优化分析失败: " + e.getMessage())
+                .build();
+        }
+    }
+    
+    /**
+     * 执行应用程序优化
+     */
+    private OptimizationTaskResult executeApplicationOptimization(OptimizationTask task) {
+        // 应用程序级别的优化
+        log.info("开始执行应用程序优化: {}", task.getName());
+        
+        // 这里可以实现一些应用级别的优化
+        // 比如清理临时文件、重新加载配置等
+        
+        return OptimizationTaskResult.builder()
+            .taskName(task.getName())
+            .status(TaskStatus.SUCCESS)
+            .message("应用程序优化完成")
+            .build();
+    }
+}
+
+/**
+ * 优化配置属性
+ */
+@ConfigurationProperties(prefix = "app.performance.optimization")
+@Data
+public class OptimizationConfigProperties {
+    
+    /**
+     * 是否启用性能优化
+     */
+    private boolean enabled = true;
+    
+    /**
+     * 是否允许动态调整连接池大小
+     */
+    private boolean allowDynamicPoolSizing = false;
+    
+    /**
+     * 自动优化配置
+     */
+    private AutoOptimization autoOptimization = new AutoOptimization();
+    
+    @Data
+    public static class AutoOptimization {
+        private boolean enabled = false;
+        private String schedule = "0 0 2 * * ?"; // 每天凌晨2点
+        private List<OptimizationType> types = Arrays.asList(
+            OptimizationType.CACHE, 
+            OptimizationType.DATABASE
+        );
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此性能优化流程规范建立了完整的性能监控、分析和优化体系，确保系统性能的持续改进和优化*
+
+<function_calls>
+<invoke name="mcp_interactive_message_complete_notification">
+<parameter name="projectName">Java规范体系
+description:
+globs:
+alwaysApply: false
+---

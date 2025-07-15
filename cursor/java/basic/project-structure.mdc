@@ -1,0 +1,578 @@
+# 项目结构规范 (基础层规则)
+> Java项目标准目录结构和代码组织的统一规范
+
+## 基础规范
+
+### Maven标准目录结构
+```
+project-root/
+├── pom.xml                           # Maven项目配置文件
+├── README.md                         # 项目说明文档
+├── .gitignore                        # Git忽略文件配置
+├── .editorconfig                     # 编辑器配置
+├── checkstyle.xml                    # 代码检查规则
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/company/project/
+│   │   │       ├── ProjectApplication.java     # Spring Boot启动类
+│   │   │       ├── config/                     # 配置类包
+│   │   │       │   ├── DatabaseConfig.java
+│   │   │       │   ├── RedisConfig.java
+│   │   │       │   ├── SecurityConfig.java
+│   │   │       │   └── WebConfig.java
+│   │   │       ├── controller/                 # 控制器层
+│   │   │       │   ├── BaseController.java
+│   │   │       │   ├── UserController.java
+│   │   │       │   └── v1/                    # API版本分组
+│   │   │       ├── service/                    # 服务层
+│   │   │       │   ├── UserService.java
+│   │   │       │   └── impl/
+│   │   │       │       └── UserServiceImpl.java
+│   │   │       ├── repository/                 # 数据访问层
+│   │   │       │   ├── UserRepository.java
+│   │   │       │   └── mapper/                # MyBatis Mapper
+│   │   │       │       └── UserMapper.java
+│   │   │       ├── entity/                     # 实体类
+│   │   │       │   ├── BaseEntity.java
+│   │   │       │   └── User.java
+│   │   │       ├── dto/                        # 数据传输对象
+│   │   │       │   ├── request/
+│   │   │       │   │   └── CreateUserRequest.java
+│   │   │       │   ├── response/
+│   │   │       │   │   └── UserResponse.java
+│   │   │       │   └── converter/
+│   │   │       │       └── UserConverter.java
+│   │   │       ├── enums/                      # 枚举类
+│   │   │       │   ├── UserStatus.java
+│   │   │       │   └── ErrorCode.java
+│   │   │       ├── exception/                  # 异常类
+│   │   │       │   ├── BusinessException.java
+│   │   │       │   ├── GlobalExceptionHandler.java
+│   │   │       │   └── custom/
+│   │   │       ├── util/                       # 工具类
+│   │   │       │   ├── DateUtil.java
+│   │   │       │   ├── JsonUtil.java
+│   │   │       │   └── ValidationUtil.java
+│   │   │       ├── constant/                   # 常量类
+│   │   │       │   └── SystemConstants.java
+│   │   │       ├── aspect/                     # 切面类
+│   │   │       │   ├── LoggingAspect.java
+│   │   │       │   └── PerformanceAspect.java
+│   │   │       └── security/                   # 安全相关
+│   │   │           ├── UserDetailsServiceImpl.java
+│   │   │           └── JwtTokenProvider.java
+│   │   └── resources/
+│   │       ├── application.yml                 # 主配置文件
+│   │       ├── application-dev.yml             # 开发环境配置
+│   │       ├── application-test.yml            # 测试环境配置
+│   │       ├── application-prod.yml            # 生产环境配置
+│   │       ├── logback-spring.xml             # 日志配置
+│   │       ├── mapper/                         # MyBatis XML映射文件
+│   │       │   └── UserMapper.xml
+│   │       ├── db/
+│   │       │   └── migration/                  # 数据库迁移脚本
+│   │       │       ├── V1.0.1__Create_users_table.sql
+│   │       │       └── V1.0.2__Create_roles_table.sql
+│   │       ├── static/                         # 静态资源
+│   │       │   ├── css/
+│   │       │   ├── js/
+│   │       │   └── images/
+│   │       └── templates/                      # 模板文件
+│   └── test/
+│       ├── java/
+│       │   └── com/company/project/
+│       │       ├── controller/                 # 控制器测试
+│       │       │   └── UserControllerTest.java
+│       │       ├── service/                    # 服务层测试
+│       │       │   └── UserServiceTest.java
+│       │       ├── repository/                 # 数据访问层测试
+│       │       │   └── UserRepositoryTest.java
+│       │       ├── integration/                # 集成测试
+│       │       │   └── UserIntegrationTest.java
+│       │       └── util/                       # 测试工具类
+│       │           └── TestDataBuilder.java
+│       └── resources/
+│           ├── application-test.yml            # 测试配置
+│           ├── test-data/                      # 测试数据
+│           │   └── users.json
+│           └── mapper/                         # 测试用Mapper文件
+├── docs/                                       # 项目文档
+│   ├── api/                                   # API文档
+│   │   └── openapi.yaml
+│   ├── database/                              # 数据库文档
+│   │   ├── schema.md
+│   │   └── migration-guide.md
+│   ├── deployment/                            # 部署文档
+│   │   ├── docker-compose.yml
+│   │   └── kubernetes/
+│   └── development/                           # 开发文档
+│       ├── setup.md
+│       └── coding-standards.md
+├── scripts/                                   # 脚本文件
+│   ├── build.sh
+│   ├── deploy.sh
+│   └── database/
+│       ├── init.sql
+│       └── cleanup.sql
+└── docker/                                    # Docker相关文件
+    ├── Dockerfile
+    ├── docker-compose.yml
+    └── nginx.conf
+```
+
+### 包命名规范
+- **根包**: `com.{公司域名}.{项目名称}`
+- **功能分包**: 按功能模块划分子包
+- **层次分包**: 按架构层次划分包结构
+- **版本分包**: API接口按版本分包管理
+
+### 文件命名约定
+- **类文件**: 使用PascalCase命名，如 `UserService.java`
+- **接口文件**: 以业务含义命名，避免I前缀
+- **实现类**: 以Impl后缀命名，如 `UserServiceImpl.java`
+- **测试类**: 以Test后缀命名，如 `UserServiceTest.java`
+- **配置文件**: 使用kebab-case命名，如 `application-dev.yml`
+
+### 资源文件组织
+- **配置文件**: 按环境分离，使用Spring Profile管理
+- **静态资源**: 按类型分类存放（css、js、images）
+- **模板文件**: 按功能模块组织目录结构
+- **国际化文件**: 使用标准的i18n命名约定
+
+## 强制行为
+
+### 目录结构要求
+- **遵循Maven标准**: 严格按照Maven标准目录结构组织代码
+- **包路径一致**: 包路径必须与目录结构完全对应
+- **分层清晰**: 不同架构层的代码严格分包管理
+- **职责单一**: 每个包只包含相关性强的类文件
+
+### 代码组织原则
+- **按功能分包**: 优先按业务功能分包，再按技术层次
+- **接口实现分离**: 接口和实现类分别放置
+- **测试代码对应**: 测试包结构与源码包结构保持一致
+- **配置集中管理**: 所有配置类统一放在config包下
+
+### 文件命名标准
+- **类名与文件名**: 类名必须与文件名完全一致
+- **包名小写**: 包名使用全小写字母
+- **避免特殊字符**: 文件名不使用特殊字符和空格
+- **有意义命名**: 文件名要能清晰表达其功能用途
+
+### 资源管理规范
+- **环境配置分离**: 不同环境的配置文件必须分离
+- **敏感信息外置**: 敏感配置信息不直接写在配置文件中
+- **版本控制**: 所有资源文件都纳入版本控制
+- **文档同步**: 项目结构变更时同步更新文档
+
+## 禁止行为
+
+### 目录结构禁令
+- **禁止混乱的包结构**: 不允许将不相关的类放在同一包中
+- **禁止跨层调用**: 不允许跨越架构层进行直接调用
+- **禁止循环依赖**: 包之间不能有循环依赖关系
+- **禁止深层嵌套**: 包层次不超过6层深度
+
+### 命名禁令
+- **禁止中文命名**: 包名、类名、文件名不使用中文字符
+- **禁止无意义命名**: 避免使用Util、Helper等通用名称
+- **禁止数字开头**: 包名和类名不以数字开头
+- **禁止保留字**: 不使用Java保留字作为包名或类名
+
+### 代码组织禁令
+- **禁止单一巨型包**: 避免将所有类放在同一个包中
+- **禁止功能分散**: 相关功能的类不能分散在不同包中
+- **禁止层次混乱**: 不同架构层的代码不能混放
+- **禁止测试代码混入**: 测试代码不能放在main目录下
+
+### 资源文件禁令
+- **禁止硬编码配置**: 配置信息不能硬编码在Java代码中
+- **禁止重复配置**: 避免在不同配置文件中重复相同配置
+- **禁止敏感信息入库**: 密码、密钥等敏感信息不提交到版本库
+- **禁止无版本控制**: 项目相关文件都必须纳入版本控制
+
+## 示例代码
+
+### 标准的Spring Boot启动类
+```java
+/* [AI-BLOCK-START] - 生成工具: 项目结构规范 v2.0 */
+package com.company.project;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+/**
+ * 项目启动类
+ * 
+ * 项目主入口，负责启动Spring Boot应用程序并配置必要的功能模块。
+ * 
+ * @author 开发团队
+ * @version 1.0.0
+ * @since 2024-01-01
+ */
+@SpringBootApplication(scanBasePackages = "com.company.project")
+@EnableJpaAuditing(auditorAwareRef = "auditorProvider")
+@EnableTransactionManagement
+@EnableCaching
+@EnableAsync
+public class ProjectApplication {
+    
+    /**
+     * 应用程序主入口方法
+     * 
+     * @param args 命令行参数
+     */
+    public static void main(String[] args) {
+        // 设置默认环境
+        System.setProperty("spring.profiles.default", "dev");
+        
+        // 启动应用程序
+        SpringApplication.run(ProjectApplication.class, args);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 标准的包结构示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 项目结构规范 v2.0 */
+// com.company.project.controller 包
+package com.company.project.controller;
+
+import com.company.project.dto.request.CreateUserRequest;
+import com.company.project.dto.response.UserResponse;
+import com.company.project.service.UserService;
+
+/**
+ * 用户控制器
+ * 处理用户相关的HTTP请求
+ */
+@RestController
+@RequestMapping("/api/v1/users")
+public class UserController {
+    // 控制器实现
+}
+
+// com.company.project.service 包
+package com.company.project.service;
+
+import com.company.project.dto.request.CreateUserRequest;
+import com.company.project.dto.response.UserResponse;
+
+/**
+ * 用户服务接口
+ * 定义用户相关的业务操作
+ */
+public interface UserService {
+    UserResponse createUser(CreateUserRequest request);
+}
+
+// com.company.project.service.impl 包
+package com.company.project.service.impl;
+
+import com.company.project.service.UserService;
+
+/**
+ * 用户服务实现类
+ * 实现用户相关的具体业务逻辑
+ */
+@Service
+@Transactional(readOnly = true)
+public class UserServiceImpl implements UserService {
+    // 服务实现
+}
+
+// com.company.project.repository 包
+package com.company.project.repository;
+
+import com.company.project.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+/**
+ * 用户数据访问接口
+ * 定义用户实体的数据访问操作
+ */
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    // 数据访问方法
+}
+
+// com.company.project.entity 包
+package com.company.project.entity;
+
+import javax.persistence.*;
+
+/**
+ * 用户实体类
+ * 对应数据库中的users表
+ */
+@Entity
+@Table(name = "users")
+public class User extends BaseEntity {
+    // 实体属性和方法
+}
+
+// com.company.project.dto.request 包
+package com.company.project.dto.request;
+
+import javax.validation.constraints.NotBlank;
+
+/**
+ * 创建用户请求DTO
+ * 用于接收客户端的用户创建请求
+ */
+public class CreateUserRequest {
+    @NotBlank(message = "用户名不能为空")
+    private String username;
+    
+    // getter/setter方法
+}
+
+// com.company.project.dto.response 包
+package com.company.project.dto.response;
+
+/**
+ * 用户响应DTO
+ * 用于向客户端返回用户信息
+ */
+public class UserResponse {
+    private Long id;
+    private String username;
+    private String email;
+    
+    // getter/setter方法
+}
+/* [AI-BLOCK-END] */
+```
+
+### 配置文件组织示例
+```yaml
+# [AI-BLOCK-START] - 生成工具: 项目结构规范 v2.0
+# application.yml - 主配置文件
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  application:
+    name: ${APP_NAME:project-name}
+    version: ${APP_VERSION:1.0.0}
+
+# 通用配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.company.project: DEBUG
+
+---
+# application-dev.yml - 开发环境配置
+spring:
+  config:
+    activate:
+      on-profile: dev
+  
+  datasource:
+    url: jdbc:h2:mem:devdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+  
+  h2:
+    console:
+      enabled: true
+
+# 开发环境日志
+logging:
+  level:
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+
+---
+# application-test.yml - 测试环境配置
+spring:
+  config:
+    activate:
+      on-profile: test
+  
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+---
+# application-prod.yml - 生产环境配置
+spring:
+  config:
+    activate:
+      on-profile: prod
+  
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+# 生产环境日志
+logging:
+  level:
+    com.company.project: INFO
+    org.springframework.web: WARN
+# [AI-BLOCK-END]
+```
+
+### Maven POM文件结构示例
+```xml
+<!-- [AI-BLOCK-START] - 生成工具: 项目结构规范 v2.0 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 项目基本信息 -->
+    <groupId>com.company</groupId>
+    <artifactId>project-name</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Project Name</name>
+    <description>项目描述信息</description>
+
+    <!-- 属性配置 -->
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- 版本管理 -->
+        <spring-boot.version>2.7.18</spring-boot.version>
+        <mysql.version>8.0.33</mysql.version>
+        <mybatis-plus.version>3.5.3</mybatis-plus.version>
+    </properties>
+
+    <!-- 依赖管理 -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- 项目依赖 -->
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        
+        <!-- 数据库相关 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
+        </dependency>
+        
+        <!-- 测试依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!-- 构建配置 -->
+    <build>
+        <!-- 资源文件处理 -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>**/*.yml</include>
+                    <include>**/*.yaml</include>
+                    <include>**/*.properties</include>
+                    <include>**/*.xml</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>**/*.yml</exclude>
+                    <exclude>**/*.yaml</exclude>
+                    <exclude>**/*.properties</exclude>
+                    <exclude>**/*.xml</exclude>
+                </excludes>
+            </resource>
+        </resources>
+        
+        <plugins>
+            <!-- Spring Boot插件 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+<!-- [AI-BLOCK-END] -->
+```
+
+---
+
+*此项目结构规范建立了标准化的Java项目组织方式，确保项目的可维护性和团队协作的一致性*
+description:
+globs:
+alwaysApply: false
+---

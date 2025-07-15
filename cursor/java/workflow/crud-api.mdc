@@ -1,0 +1,437 @@
+# CRUD API开发流程规范 (流程层规则)
+> 标准化增删改查API完整实现流程
+
+## 基础规范
+
+### 开发流程标准
+- **需求分析**：明确数据模型、业务规则、权限控制
+- **API设计**：RESTful设计、统一响应格式、错误处理
+- **数据建模**：实体设计、关系映射、字段验证
+- **业务实现**：分层架构、事务管理、异常处理
+- **测试验证**：单元测试、集成测试、接口测试
+
+### 技术栈要求
+- **框架版本**：Spring Boot 2.7+, Spring Data JPA, MySQL 8.0+
+- **工具组件**：MyBatis-Plus, Redis, Swagger/OpenAPI
+- **代码质量**：SonarQube, JUnit 5, Mockito
+
+## 强制行为
+
+### 1. 需求分析阶段
+- **数据模型设计**：明确实体字段、数据类型、约束条件
+- **业务规则梳理**：验证规则、业务逻辑、权限控制
+- **API接口设计**：URL设计、参数定义、响应格式
+- **性能要求确定**：并发量、响应时间、数据量级
+
+### 2. 实体设计阶段
+- **JPA实体创建**：使用标准注解、审计字段、软删除
+- **字段验证注解**：@Valid、@NotNull、@Size等验证规则
+- **关系映射定义**：@OneToMany、@ManyToOne等关系注解
+- **索引策略设计**：@Index注解定义、复合索引优化
+
+### 3. Repository层实现
+- **继承JpaRepository**：获得基础CRUD方法
+- **自定义查询方法**：使用方法命名约定或@Query注解
+- **分页查询支持**：Pageable参数、Page返回类型
+- **动态查询实现**：Specification接口、Criteria API
+
+### 4. Service层实现
+- **事务管理**：@Transactional注解、事务边界控制
+- **业务逻辑封装**：参数验证、业务规则、异常处理
+- **缓存策略**：@Cacheable、@CacheEvict缓存注解
+- **日志记录**：关键操作日志、异常日志
+
+### 5. Controller层实现
+- **RESTful设计**：标准HTTP方法、资源路径设计
+- **参数验证**：@Valid注解、自定义验证器
+- **统一响应格式**：ApiResponse包装、错误码标准化
+- **接口文档**：Swagger注解、API文档生成
+
+### 6. 测试实现
+- **单元测试**：Service层、Repository层测试覆盖
+- **集成测试**：@SpringBootTest、TestContainers
+- **接口测试**：MockMvc、实际HTTP请求测试
+
+## 禁止行为
+
+### 设计禁令
+- **禁止跳过需求分析**：必须明确业务需求和技术要求
+- **禁止不设计直接编码**：必须先设计API接口和数据模型
+- **禁止忽略异常处理**：所有可能的异常情况都要处理
+- **禁止忽略权限控制**：敏感操作必须加权限检查
+
+### 实现禁令
+- **禁止在Controller中写业务逻辑**：业务逻辑必须在Service层
+- **禁止直接返回Entity**：必须使用DTO进行数据传输
+- **禁止忽略事务管理**：写操作必须有事务控制
+- **禁止硬编码SQL**：复杂查询使用JPQL或Criteria API
+
+### 测试禁令
+- **禁止不写测试用例**：核心功能必须有测试覆盖
+- **禁止只写正向测试**：必须包含异常情况测试
+- **禁止测试数据污染**：测试之间必须数据隔离
+
+## 标准化工作流程
+
+### 阶段1：项目初始化和需求分析
+```
+1. 创建标准目录结构
+2. 配置基础依赖和框架
+3. 分析业务需求
+4. 设计数据模型
+5. 设计API接口
+```
+
+### 阶段2：实体和Repository开发
+```
+1. 创建JPA实体类
+2. 定义Repository接口
+3. 实现自定义查询方法
+4. 添加单元测试
+```
+
+### 阶段3：Service业务逻辑开发
+```
+1. 创建Service接口和实现
+2. 实现CRUD业务逻辑
+3. 添加事务和缓存
+4. 异常处理和日志记录
+5. 编写Service层测试
+```
+
+### 阶段4：Controller接口开发
+```
+1. 创建Controller类
+2. 实现RESTful接口
+3. 参数验证和响应封装
+4. 异常处理和文档注解
+5. 编写接口测试
+```
+
+### 阶段5：集成测试和优化
+```
+1. 完整功能集成测试
+2. 性能测试和优化
+3. 代码质量检查
+4. 文档完善
+```
+
+## 示例代码实现
+
+### 完整CRUD实现示例
+
+#### 1. 实体类定义
+```java
+/* [AI-BLOCK-START] - 生成工具: CRUD流程 v2.0 */
+@Entity
+@Table(name = "products", indexes = {
+    @Index(name = "idx_product_category", columnList = "category_id"),
+    @Index(name = "idx_product_status", columnList = "status"),
+    @Index(name = "idx_product_create_time", columnList = "create_time")
+})
+@EntityListeners(AuditingEntityListener.class)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Product {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(name = "name", length = 100, nullable = false)
+    @NotBlank(message = "Product name cannot be blank")
+    @Size(max = 100, message = "Product name cannot exceed 100 characters")
+    private String name;
+    
+    @Column(name = "description", length = 500)
+    @Size(max = 500, message = "Description cannot exceed 500 characters")
+    private String description;
+    
+    @Column(name = "price", precision = 10, scale = 2, nullable = false)
+    @NotNull(message = "Price cannot be null")
+    @DecimalMin(value = "0.01", message = "Price must be greater than 0")
+    private BigDecimal price;
+    
+    @Column(name = "stock_quantity", nullable = false)
+    @Min(value = 0, message = "Stock quantity cannot be negative")
+    private Integer stockQuantity;
+    
+    @Column(name = "category_id", nullable = false)
+    @NotNull(message = "Category ID cannot be null")
+    private Long categoryId;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    private ProductStatus status;
+    
+    @CreatedDate
+    @Column(name = "create_time", nullable = false, updatable = false)
+    private LocalDateTime createTime;
+    
+    @LastModifiedDate
+    @Column(name = "update_time", nullable = false)
+    private LocalDateTime updateTime;
+    
+    @Column(name = "deleted", nullable = false)
+    @Builder.Default
+    private Boolean deleted = false;
+    
+    @Version
+    private Long version;
+}
+
+public enum ProductStatus {
+    ACTIVE("正常"),
+    INACTIVE("停用"),
+    OUT_OF_STOCK("缺货");
+    
+    private final String description;
+    
+    ProductStatus(String description) {
+        this.description = description;
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+#### 2. Repository接口
+```java
+/* [AI-BLOCK-START] - 生成工具: CRUD流程 v2.0 */
+@Repository
+public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
+    
+    // 方法命名查询
+    List<Product> findByStatusAndDeletedFalse(ProductStatus status);
+    
+    Page<Product> findByCategoryIdAndDeletedFalse(Long categoryId, Pageable pageable);
+    
+    boolean existsByNameAndDeletedFalse(String name);
+    
+    @Query("SELECT p FROM Product p WHERE p.name LIKE %:keyword% AND p.deleted = false")
+    Page<Product> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
+    
+    @Query("SELECT p FROM Product p WHERE p.price BETWEEN :minPrice AND :maxPrice AND p.deleted = false")
+    List<Product> findByPriceRange(@Param("minPrice") BigDecimal minPrice, 
+                                  @Param("maxPrice") BigDecimal maxPrice);
+    
+    @Modifying
+    @Query("UPDATE Product p SET p.deleted = true, p.updateTime = CURRENT_TIMESTAMP WHERE p.id = :id")
+    int softDeleteById(@Param("id") Long id);
+}
+/* [AI-BLOCK-END] */
+```
+
+#### 3. Service实现
+```java
+/* [AI-BLOCK-START] - 生成工具: CRUD流程 v2.0 */
+@Service
+@Transactional(readOnly = true)
+@Slf4j
+public class ProductServiceImpl implements ProductService {
+    
+    private final ProductRepository productRepository;
+    private final ProductConverter productConverter;
+    
+    public ProductServiceImpl(ProductRepository productRepository, ProductConverter productConverter) {
+        this.productRepository = productRepository;
+        this.productConverter = productConverter;
+    }
+    
+    @Override
+    @Transactional
+    @Cacheable(value = "products", key = "#result.id", unless = "#result == null")
+    public ProductResponse createProduct(CreateProductRequest request) {
+        log.info("Creating product: {}", request.getName());
+        
+        try {
+            // 业务验证
+            validateCreateProduct(request);
+            
+            // 转换并保存
+            Product product = productConverter.toEntity(request);
+            product.setStatus(ProductStatus.ACTIVE);
+            product.setDeleted(false);
+            
+            Product savedProduct = productRepository.save(product);
+            
+            log.info("Product created successfully: id={}, name={}", savedProduct.getId(), savedProduct.getName());
+            return productConverter.toResponse(savedProduct);
+            
+        } catch (Exception e) {
+            log.error("Failed to create product: {}", request.getName(), e);
+            throw new BusinessException(ErrorCode.PRODUCT_CREATE_FAILED, "Product creation failed", e);
+        }
+    }
+    
+    @Override
+    public ProductResponse getProductById(Long id) {
+        Product product = productRepository.findById(id)
+            .filter(p -> !p.getDeleted())
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
+            
+        return productConverter.toResponse(product);
+    }
+    
+    @Override
+    public Page<ProductResponse> getProducts(Pageable pageable, ProductSearchCriteria criteria) {
+        Specification<Product> spec = ProductSpecifications.buildSpecification(criteria);
+        Page<Product> products = productRepository.findAll(spec, pageable);
+        
+        return products.map(productConverter::toResponse);
+    }
+    
+    @Override
+    @Transactional
+    @CacheEvict(value = "products", key = "#id")
+    public ProductResponse updateProduct(Long id, UpdateProductRequest request) {
+        log.info("Updating product: id={}", id);
+        
+        Product product = productRepository.findById(id)
+            .filter(p -> !p.getDeleted())
+            .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
+            
+        // 更新字段
+        updateProductFields(product, request);
+        
+        Product updatedProduct = productRepository.save(product);
+        
+        log.info("Product updated successfully: id={}", id);
+        return productConverter.toResponse(updatedProduct);
+    }
+    
+    @Override
+    @Transactional
+    @CacheEvict(value = "products", key = "#id")
+    public void deleteProduct(Long id) {
+        log.info("Deleting product: id={}", id);
+        
+        if (!productRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Product not found: " + id);
+        }
+        
+        int updated = productRepository.softDeleteById(id);
+        if (updated == 0) {
+            throw new BusinessException(ErrorCode.PRODUCT_DELETE_FAILED, "Failed to delete product: " + id);
+        }
+        
+        log.info("Product deleted successfully: id={}", id);
+    }
+    
+    private void validateCreateProduct(CreateProductRequest request) {
+        if (productRepository.existsByNameAndDeletedFalse(request.getName())) {
+            throw new BusinessException(ErrorCode.PRODUCT_NAME_EXISTS, "Product name already exists: " + request.getName());
+        }
+    }
+    
+    private void updateProductFields(Product product, UpdateProductRequest request) {
+        if (StringUtils.hasText(request.getName())) {
+            product.setName(request.getName());
+        }
+        if (StringUtils.hasText(request.getDescription())) {
+            product.setDescription(request.getDescription());
+        }
+        if (request.getPrice() != null) {
+            product.setPrice(request.getPrice());
+        }
+        if (request.getStockQuantity() != null) {
+            product.setStockQuantity(request.getStockQuantity());
+        }
+        if (request.getStatus() != null) {
+            product.setStatus(request.getStatus());
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+#### 4. Controller实现
+```java
+/* [AI-BLOCK-START] - 生成工具: CRUD流程 v2.0 */
+@RestController
+@RequestMapping("/api/v1/products")
+@Validated
+@Slf4j
+@Tag(name = "Product Management", description = "产品管理API")
+public class ProductController {
+    
+    private final ProductService productService;
+    
+    public ProductController(ProductService productService) {
+        this.productService = productService;
+    }
+    
+    @PostMapping
+    @Operation(summary = "创建产品", description = "创建新的产品")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "创建成功"),
+        @ApiResponse(responseCode = "400", description = "参数错误"),
+        @ApiResponse(responseCode = "409", description = "产品名称已存在")
+    })
+    public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
+            @Valid @RequestBody CreateProductRequest request) {
+        
+        log.info("Received create product request: {}", request.getName());
+        
+        ProductResponse product = productService.createProduct(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(product));
+    }
+    
+    @GetMapping("/{id}")
+    @Operation(summary = "获取产品详情", description = "根据ID获取产品详细信息")
+    public ResponseEntity<ApiResponse<ProductResponse>> getProduct(
+            @PathVariable @Min(1) Long id) {
+        
+        ProductResponse product = productService.getProductById(id);
+        return ResponseEntity.ok(ApiResponse.success(product));
+    }
+    
+    @GetMapping
+    @Operation(summary = "分页查询产品", description = "根据条件分页查询产品列表")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getProducts(
+            @RequestParam(defaultValue = "0") @Min(0) Integer page,
+            @RequestParam(defaultValue = "20") @Range(min = 1, max = 100) Integer size,
+            @RequestParam(defaultValue = "id") String sort,
+            @RequestParam(defaultValue = "desc") String direction,
+            @ModelAttribute ProductSearchCriteria criteria) {
+        
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        
+        Page<ProductResponse> products = productService.getProducts(pageable, criteria);
+        return ResponseEntity.ok(ApiResponse.success(products));
+    }
+    
+    @PutMapping("/{id}")
+    @Operation(summary = "更新产品", description = "更新产品信息")
+    public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
+            @PathVariable @Min(1) Long id,
+            @Valid @RequestBody UpdateProductRequest request) {
+        
+        log.info("Received update product request: id={}", id);
+        
+        ProductResponse product = productService.updateProduct(id, request);
+        return ResponseEntity.ok(ApiResponse.success(product));
+    }
+    
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除产品", description = "软删除产品")
+    public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable @Min(1) Long id) {
+        log.info("Received delete product request: id={}", id);
+        
+        productService.deleteProduct(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此CRUD API开发流程确保标准化、高质量的增删改查接口实现*
+description:
+globs:
+alwaysApply: false
+---

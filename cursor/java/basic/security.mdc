@@ -1,0 +1,684 @@
+# 安全规范 (基础层规则)
+> 安全编码、漏洞防护和数据保护的企业级安全标准
+
+## 基础规范
+
+### 安全编码原则
+- **输入验证**：所有外部输入必须进行严格验证和过滤
+- **输出编码**：所有输出数据必须进行适当的编码处理
+- **最小权限原则**：每个组件只获得完成任务所需的最小权限
+- **深度防御**：实施多层安全控制措施
+- **失败安全**：系统失败时应默认为安全状态
+
+### 认证与授权
+- **强密码策略**：密码复杂度要求，定期更新策略
+- **多因素认证**：敏感操作启用MFA验证
+- **会话管理**：安全的会话创建、维护和销毁
+- **权限控制**：基于角色的访问控制(RBAC)
+- **API安全**：JWT令牌验证，OAuth2授权
+
+### 数据保护
+- **敏感数据加密**：静态数据和传输数据加密
+- **密钥管理**：安全的密钥生成、存储和轮换
+- **数据脱敏**：日志和测试环境数据脱敏
+- **数据完整性**：数据传输和存储完整性校验
+- **数据备份安全**：备份数据的加密和访问控制
+
+### 通信安全
+- **HTTPS强制**：所有HTTP通信必须使用HTTPS
+- **证书管理**：SSL/TLS证书的正确配置和更新
+- **API安全**：API接口的认证、授权和限流
+- **跨域安全**：CORS策略的安全配置
+- **请求签名**：重要API请求的数字签名验证
+
+## 强制行为
+
+### 输入验证要求
+- **参数验证**：使用@Valid注解和Bean Validation进行参数验证
+- **SQL注入防护**：使用参数化查询，禁止字符串拼接SQL
+- **XSS防护**：对用户输入进行HTML编码和过滤
+- **文件上传安全**：验证文件类型、大小和内容
+- **路径遍历防护**：验证和限制文件路径访问
+
+### 身份认证实施
+- **密码安全**：使用BCrypt等强哈希算法存储密码
+- **令牌管理**：JWT令牌的安全生成、验证和过期处理
+- **会话安全**：设置安全的会话配置和超时机制
+- **登录保护**：实施登录尝试限制和账户锁定机制
+- **注销安全**：完整清理会话和令牌信息
+
+### 权限控制实施
+- **方法级权限**：使用@PreAuthorize注解进行方法级权限控制
+- **资源访问控制**：验证用户对资源的访问权限
+- **角色管理**：实施细粒度的角色和权限管理
+- **权限缓存**：安全地缓存权限信息并及时更新
+- **权限审计**：记录所有权限相关的操作日志
+
+### 敏感数据处理
+- **数据分类**：对敏感数据进行分类和标记
+- **加密存储**：敏感数据使用AES-256等强加密算法
+- **传输加密**：敏感数据传输使用TLS 1.2+
+- **访问日志**：记录所有敏感数据的访问操作
+- **数据清理**：及时清理临时存储的敏感数据
+
+## 禁止行为
+
+### 输入处理禁令
+- **禁止信任用户输入**：永远不信任来自客户端的任何数据
+- **禁止SQL字符串拼接**：不使用字符串拼接构造SQL查询
+- **禁止执行动态代码**：不执行用户提供的代码或脚本
+- **禁止路径遍历**：不允许用户控制文件路径参数
+- **禁止反序列化不可信数据**：不反序列化来源不明的数据
+
+### 认证授权禁令
+- **禁止明文存储密码**：密码必须使用强哈希算法存储
+- **禁止硬编码凭据**：不在代码中硬编码密码、密钥等凭据
+- **禁止绕过权限检查**：不提供绕过权限验证的后门
+- **禁止权限提升**：普通用户不能获得管理员权限
+- **禁止共享账户**：不使用共享或默认账户
+
+### 数据安全禁令
+- **禁止明文传输敏感数据**：敏感数据传输必须加密
+- **禁止在日志中记录敏感信息**：密码、令牌等不能出现在日志中
+- **禁止在URL中传递敏感参数**：敏感信息不通过URL参数传递
+- **禁止客户端存储敏感数据**：不在客户端存储敏感信息
+- **禁止使用弱加密算法**：不使用MD5、SHA1等弱加密算法
+
+### 配置安全禁令
+- **禁止使用默认配置**：不使用框架或中间件的默认安全配置
+- **禁止暴露敏感信息**：错误页面不暴露系统内部信息
+- **禁止不安全的CORS配置**：不允许任意域的跨域访问
+- **禁止调试信息泄露**：生产环境不输出调试信息
+- **禁止不安全的会话配置**：会话必须设置安全标志
+
+## 示例代码
+
+### 安全的用户认证实现
+```java
+/* [AI-BLOCK-START] - 生成工具: 安全规范 v2.0 */
+@Service
+@Slf4j
+public class AuthenticationService {
+    
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    // 登录尝试限制配置
+    private static final int MAX_LOGIN_ATTEMPTS = 5;
+    private static final Duration LOCKOUT_DURATION = Duration.ofMinutes(30);
+    
+    public AuthenticationService(UserRepository userRepository,
+                               PasswordEncoder passwordEncoder,
+                               JwtTokenProvider jwtTokenProvider,
+                               RedisTemplate<String, Object> redisTemplate) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtTokenProvider = jwtTokenProvider;
+        this.redisTemplate = redisTemplate;
+    }
+    
+    /**
+     * 用户登录认证
+     * 
+     * @param loginRequest 登录请求
+     * @return 认证结果
+     * @throws AuthenticationException 认证失败时抛出
+     */
+    @Transactional
+    public AuthenticationResponse authenticate(LoginRequest loginRequest) {
+        // 输入验证
+        validateLoginRequest(loginRequest);
+        
+        // 检查账户是否被锁定
+        checkAccountLockout(loginRequest.getUsername());
+        
+        try {
+            // 查找用户
+            User user = userRepository.findByUsername(loginRequest.getUsername())
+                .orElseThrow(() -> new BadCredentialsException("用户名或密码错误"));
+            
+            // 验证密码
+            if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPasswordHash())) {
+                // 记录失败尝试
+                recordFailedLoginAttempt(loginRequest.getUsername());
+                throw new BadCredentialsException("用户名或密码错误");
+            }
+            
+            // 检查用户状态
+            validateUserStatus(user);
+            
+            // 清除失败尝试记录
+            clearFailedLoginAttempts(loginRequest.getUsername());
+            
+            // 生成JWT令牌
+            String accessToken = jwtTokenProvider.generateAccessToken(user);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(user);
+            
+            // 记录登录日志
+            logSecurityEvent("USER_LOGIN_SUCCESS", user.getUsername(), 
+                getClientInfo(loginRequest));
+            
+            return AuthenticationResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtTokenProvider.getAccessTokenExpiration())
+                .build();
+                
+        } catch (AuthenticationException e) {
+            // 记录安全事件
+            logSecurityEvent("USER_LOGIN_FAILED", loginRequest.getUsername(), 
+                e.getMessage());
+            throw e;
+        }
+    }
+    
+    /**
+     * 验证登录请求参数
+     */
+    private void validateLoginRequest(LoginRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("登录请求不能为空");
+        }
+        
+        // 用户名验证
+        String username = request.getUsername();
+        if (StringUtils.isBlank(username)) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        
+        // 防止用户名注入攻击
+        if (!username.matches("^[a-zA-Z0-9_@\\.\\-]{3,50}$")) {
+            throw new IllegalArgumentException("用户名格式不正确");
+        }
+        
+        // 密码验证
+        String password = request.getPassword();
+        if (StringUtils.isBlank(password)) {
+            throw new IllegalArgumentException("密码不能为空");
+        }
+        
+        if (password.length() < 8 || password.length() > 128) {
+            throw new IllegalArgumentException("密码长度必须在8-128字符之间");
+        }
+    }
+    
+    /**
+     * 检查账户锁定状态
+     */
+    private void checkAccountLockout(String username) {
+        String lockoutKey = "auth:lockout:" + username;
+        String attemptKey = "auth:attempts:" + username;
+        
+        // 检查是否被锁定
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(lockoutKey))) {
+            throw new AccountLockedException("账户已被锁定，请30分钟后重试");
+        }
+        
+        // 检查失败尝试次数
+        Integer attempts = (Integer) redisTemplate.opsForValue().get(attemptKey);
+        if (attempts != null && attempts >= MAX_LOGIN_ATTEMPTS) {
+            // 锁定账户
+            redisTemplate.opsForValue().set(lockoutKey, true, LOCKOUT_DURATION);
+            redisTemplate.delete(attemptKey);
+            
+            logSecurityEvent("ACCOUNT_LOCKED", username, 
+                "账户因多次登录失败被锁定");
+            
+            throw new AccountLockedException("账户已被锁定，请30分钟后重试");
+        }
+    }
+    
+    /**
+     * 记录失败的登录尝试
+     */
+    private void recordFailedLoginAttempt(String username) {
+        String attemptKey = "auth:attempts:" + username;
+        
+        Integer attempts = (Integer) redisTemplate.opsForValue().get(attemptKey);
+        attempts = (attempts == null) ? 1 : attempts + 1;
+        
+        redisTemplate.opsForValue().set(attemptKey, attempts, Duration.ofMinutes(30));
+        
+        logSecurityEvent("LOGIN_ATTEMPT_FAILED", username, 
+            "登录失败，尝试次数: " + attempts);
+    }
+    
+    /**
+     * 清除失败登录尝试记录
+     */
+    private void clearFailedLoginAttempts(String username) {
+        String attemptKey = "auth:attempts:" + username;
+        redisTemplate.delete(attemptKey);
+    }
+    
+    /**
+     * 验证用户状态
+     */
+    private void validateUserStatus(User user) {
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new DisabledException("用户账户未激活");
+        }
+        
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new AccountLockedException("用户账户已被锁定");
+        }
+        
+        if (user.getStatus() == UserStatus.DELETED) {
+            throw new DisabledException("用户账户不存在");
+        }
+    }
+    
+    /**
+     * 记录安全事件
+     */
+    private void logSecurityEvent(String eventType, String username, String details) {
+        SecurityAuditLog auditLog = SecurityAuditLog.builder()
+            .eventType(eventType)
+            .username(username)
+            .details(details)
+            .ipAddress(getCurrentIPAddress())
+            .userAgent(getCurrentUserAgent())
+            .timestamp(LocalDateTime.now())
+            .build();
+            
+        // 异步记录审计日志
+        securityAuditService.recordAsync(auditLog);
+        
+        // 同时记录到应用日志
+        log.info("Security Event: {} - User: {} - Details: {}", 
+            eventType, username, details);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 安全的密码处理
+```java
+/* [AI-BLOCK-START] - 生成工具: 安全规范 v2.0 */
+@Service
+public class PasswordService {
+    
+    private final PasswordEncoder passwordEncoder;
+    private final SecureRandom secureRandom;
+    
+    // 密码策略配置
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_PASSWORD_LENGTH = 128;
+    private static final Pattern STRONG_PASSWORD_PATTERN = Pattern.compile(
+        "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{"
+        + MIN_PASSWORD_LENGTH + "," + MAX_PASSWORD_LENGTH + "}$"
+    );
+    
+    public PasswordService(PasswordEncoder passwordEncoder) {
+        this.passwordEncoder = passwordEncoder;
+        this.secureRandom = new SecureRandom();
+    }
+    
+    /**
+     * 验证密码强度
+     * 
+     * @param password 待验证的密码
+     * @throws WeakPasswordException 密码强度不足时抛出
+     */
+    public void validatePasswordStrength(String password) {
+        if (StringUtils.isBlank(password)) {
+            throw new WeakPasswordException("密码不能为空");
+        }
+        
+        if (password.length() < MIN_PASSWORD_LENGTH) {
+            throw new WeakPasswordException("密码长度至少" + MIN_PASSWORD_LENGTH + "位");
+        }
+        
+        if (password.length() > MAX_PASSWORD_LENGTH) {
+            throw new WeakPasswordException("密码长度不能超过" + MAX_PASSWORD_LENGTH + "位");
+        }
+        
+        if (!STRONG_PASSWORD_PATTERN.matcher(password).matches()) {
+            throw new WeakPasswordException(
+                "密码必须包含大小写字母、数字和特殊字符");
+        }
+        
+        // 检查常见弱密码
+        checkCommonPasswords(password);
+        
+        // 检查密码是否包含个人信息（如果有用户上下文）
+        checkPersonalInformation(password);
+    }
+    
+    /**
+     * 安全地哈希密码
+     * 
+     * @param rawPassword 原始密码
+     * @return 哈希后的密码
+     */
+    public String hashPassword(String rawPassword) {
+        // 验证密码强度
+        validatePasswordStrength(rawPassword);
+        
+        // 使用BCrypt进行哈希，自动生成盐值
+        String hashedPassword = passwordEncoder.encode(rawPassword);
+        
+        // 清理内存中的原始密码（Java的String是不可变的，但仍要注意）
+        // 在实际应用中，应该使用char[]而不是String来处理密码
+        
+        return hashedPassword;
+    }
+    
+    /**
+     * 验证密码
+     * 
+     * @param rawPassword 原始密码
+     * @param hashedPassword 哈希后的密码
+     * @return 是否匹配
+     */
+    public boolean verifyPassword(String rawPassword, String hashedPassword) {
+        if (StringUtils.isAnyBlank(rawPassword, hashedPassword)) {
+            return false;
+        }
+        
+        try {
+            return passwordEncoder.matches(rawPassword, hashedPassword);
+        } catch (Exception e) {
+            log.error("密码验证失败", e);
+            return false;
+        }
+    }
+    
+    /**
+     * 生成安全的随机密码
+     * 
+     * @param length 密码长度
+     * @return 随机密码
+     */
+    public String generateSecurePassword(int length) {
+        if (length < MIN_PASSWORD_LENGTH || length > MAX_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException(
+                "密码长度必须在" + MIN_PASSWORD_LENGTH + "-" + MAX_PASSWORD_LENGTH + "之间");
+        }
+        
+        String lowercase = "abcdefghijklmnopqrstuvwxyz";
+        String uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        String digits = "0123456789";
+        String special = "@$!%*?&";
+        String allChars = lowercase + uppercase + digits + special;
+        
+        StringBuilder password = new StringBuilder();
+        
+        // 确保至少包含每种类型的字符
+        password.append(lowercase.charAt(secureRandom.nextInt(lowercase.length())));
+        password.append(uppercase.charAt(secureRandom.nextInt(uppercase.length())));
+        password.append(digits.charAt(secureRandom.nextInt(digits.length())));
+        password.append(special.charAt(secureRandom.nextInt(special.length())));
+        
+        // 填充剩余长度
+        for (int i = 4; i < length; i++) {
+            password.append(allChars.charAt(secureRandom.nextInt(allChars.length())));
+        }
+        
+        // 随机打乱字符顺序
+        return shuffleString(password.toString());
+    }
+    
+    /**
+     * 检查是否为常见弱密码
+     */
+    private void checkCommonPasswords(String password) {
+        Set<String> commonPasswords = Set.of(
+            "password", "123456", "password123", "admin", "qwerty",
+            "letmein", "welcome", "monkey", "dragon", "password1"
+        );
+        
+        if (commonPasswords.contains(password.toLowerCase())) {
+            throw new WeakPasswordException("不能使用常见的弱密码");
+        }
+    }
+    
+    /**
+     * 检查密码是否包含个人信息
+     */
+    private void checkPersonalInformation(String password) {
+        // 获取当前用户上下文（如果存在）
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            String username = auth.getName();
+            if (StringUtils.isNotBlank(username) && 
+                password.toLowerCase().contains(username.toLowerCase())) {
+                throw new WeakPasswordException("密码不能包含用户名");
+            }
+        }
+    }
+    
+    /**
+     * 随机打乱字符串
+     */
+    private String shuffleString(String input) {
+        char[] chars = input.toCharArray();
+        for (int i = chars.length - 1; i > 0; i--) {
+            int j = secureRandom.nextInt(i + 1);
+            char temp = chars[i];
+            chars[i] = chars[j];
+            chars[j] = temp;
+        }
+        return new String(chars);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 安全的数据传输和存储
+```java
+/* [AI-BLOCK-START] - 生成工具: 安全规范 v2.0 */
+@Service
+public class DataSecurityService {
+    
+    private final AESUtil aesUtil;
+    private final RSAUtil rsaUtil;
+    
+    private static final String SENSITIVE_DATA_PREFIX = "ENCRYPTED:";
+    
+    /**
+     * 加密敏感数据
+     * 
+     * @param sensitiveData 敏感数据
+     * @return 加密后的数据
+     */
+    public String encryptSensitiveData(String sensitiveData) {
+        if (StringUtils.isBlank(sensitiveData)) {
+            return sensitiveData;
+        }
+        
+        try {
+            // 使用AES-256加密
+            String encryptedData = aesUtil.encrypt(sensitiveData);
+            return SENSITIVE_DATA_PREFIX + encryptedData;
+            
+        } catch (Exception e) {
+            log.error("敏感数据加密失败", e);
+            throw new DataSecurityException("数据加密失败", e);
+        }
+    }
+    
+    /**
+     * 解密敏感数据
+     * 
+     * @param encryptedData 加密的数据
+     * @return 解密后的数据
+     */
+    public String decryptSensitiveData(String encryptedData) {
+        if (StringUtils.isBlank(encryptedData)) {
+            return encryptedData;
+        }
+        
+        if (!encryptedData.startsWith(SENSITIVE_DATA_PREFIX)) {
+            // 如果没有加密前缀，可能是明文数据（向后兼容）
+            return encryptedData;
+        }
+        
+        try {
+            String cipherText = encryptedData.substring(SENSITIVE_DATA_PREFIX.length());
+            return aesUtil.decrypt(cipherText);
+            
+        } catch (Exception e) {
+            log.error("敏感数据解密失败", e);
+            throw new DataSecurityException("数据解密失败", e);
+        }
+    }
+    
+    /**
+     * 脱敏显示敏感数据
+     * 
+     * @param sensitiveData 敏感数据
+     * @param dataType 数据类型
+     * @return 脱敏后的数据
+     */
+    public String maskSensitiveData(String sensitiveData, SensitiveDataType dataType) {
+        if (StringUtils.isBlank(sensitiveData)) {
+            return sensitiveData;
+        }
+        
+        switch (dataType) {
+            case PHONE:
+                return maskPhone(sensitiveData);
+            case EMAIL:
+                return maskEmail(sensitiveData);
+            case ID_CARD:
+                return maskIdCard(sensitiveData);
+            case BANK_CARD:
+                return maskBankCard(sensitiveData);
+            case NAME:
+                return maskName(sensitiveData);
+            default:
+                return maskDefault(sensitiveData);
+        }
+    }
+    
+    /**
+     * 手机号脱敏
+     */
+    private String maskPhone(String phone) {
+        if (phone.length() != 11) {
+            return maskDefault(phone);
+        }
+        return phone.substring(0, 3) + "****" + phone.substring(7);
+    }
+    
+    /**
+     * 邮箱脱敏
+     */
+    private String maskEmail(String email) {
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 0) {
+            return maskDefault(email);
+        }
+        
+        String localPart = email.substring(0, atIndex);
+        String domainPart = email.substring(atIndex);
+        
+        if (localPart.length() <= 2) {
+            return "*" + domainPart;
+        }
+        
+        return localPart.charAt(0) + "***" + localPart.charAt(localPart.length() - 1) + domainPart;
+    }
+    
+    /**
+     * 身份证号脱敏
+     */
+    private String maskIdCard(String idCard) {
+        if (idCard.length() < 8) {
+            return maskDefault(idCard);
+        }
+        return idCard.substring(0, 4) + "**********" + idCard.substring(idCard.length() - 4);
+    }
+    
+    /**
+     * 银行卡号脱敏
+     */
+    private String maskBankCard(String bankCard) {
+        if (bankCard.length() < 8) {
+            return maskDefault(bankCard);
+        }
+        return bankCard.substring(0, 4) + " **** **** " + bankCard.substring(bankCard.length() - 4);
+    }
+    
+    /**
+     * 姓名脱敏
+     */
+    private String maskName(String name) {
+        if (name.length() <= 1) {
+            return "*";
+        }
+        if (name.length() == 2) {
+            return name.charAt(0) + "*";
+        }
+        return name.charAt(0) + "*".repeat(name.length() - 2) + name.charAt(name.length() - 1);
+    }
+    
+    /**
+     * 默认脱敏
+     */
+    private String maskDefault(String data) {
+        if (data.length() <= 3) {
+            return "*".repeat(data.length());
+        }
+        return data.substring(0, 1) + "*".repeat(data.length() - 2) + data.substring(data.length() - 1);
+    }
+    
+    /**
+     * 生成数据完整性校验码
+     * 
+     * @param data 数据
+     * @return 校验码
+     */
+    public String generateIntegrityHash(String data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(data.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+            
+        } catch (NoSuchAlgorithmException e) {
+            throw new DataSecurityException("生成完整性校验码失败", e);
+        }
+    }
+    
+    /**
+     * 验证数据完整性
+     * 
+     * @param data 数据
+     * @param expectedHash 期望的校验码
+     * @return 是否完整
+     */
+    public boolean verifyIntegrity(String data, String expectedHash) {
+        String actualHash = generateIntegrityHash(data);
+        return MessageDigest.isEqual(
+            actualHash.getBytes(StandardCharsets.UTF_8),
+            expectedHash.getBytes(StandardCharsets.UTF_8)
+        );
+    }
+}
+
+/**
+ * 敏感数据类型枚举
+ */
+public enum SensitiveDataType {
+    PHONE,      // 手机号
+    EMAIL,      // 邮箱
+    ID_CARD,    // 身份证
+    BANK_CARD,  // 银行卡
+    NAME,       // 姓名
+    PASSWORD,   // 密码
+    OTHER       // 其他
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此安全规范建立了全面的安全防护体系，确保应用程序在各个层面都具备企业级的安全保障*
+description:
+globs:
+alwaysApply: false
+---

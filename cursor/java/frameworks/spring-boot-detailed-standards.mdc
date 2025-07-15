@@ -1,0 +1,680 @@
+# Spring Boot 详细开发规范
+> Spring Boot 2.2.0+ 企业级开发标准
+
+## 🎯 架构分层规范
+
+### 分层职责定义 [MUST - L1]
+- **Controller层**：请求路由、参数验证、响应封装
+- **Service层**：业务逻辑、事务管理、异常处理
+- **Repository层**：数据访问、查询优化、数据转换
+- **Entity层**：数据模型、字段映射、关系定义
+
+## 🔧 Controller层规范
+
+### RESTful API设计 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Spring Boot规范 v1.0
+@RestController
+@RequestMapping("/api/v1/users")
+@Validated
+@Slf4j
+public class UserController {
+    
+    private final UserService userService;
+    
+    // 构造器注入，避免@Autowired
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+    
+    /**
+     * 创建用户
+     * POST /api/v1/users
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+        
+        log.info("Creating user with email: {}", request.getEmail());
+        
+        UserResponse user = userService.createUser(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(user));
+    }
+    
+    /**
+     * 获取用户详情
+     * GET /api/v1/users/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(
+            @PathVariable @Min(1) Long id) {
+        
+        UserResponse user = userService.findUserById(id);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+    
+    /**
+     * 分页查询用户
+     * GET /api/v1/users?page=0&size=20&status=ACTIVE
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getUsers(
+            @RequestParam(defaultValue = "0") @Min(0) Integer page,
+            @RequestParam(defaultValue = "20") @Range(min = 1, max = 100) Integer size,
+            @RequestParam(required = false) UserStatus status) {
+        
+        PageRequest pageRequest = PageRequest.of(page, size);
+        PageResponse<UserResponse> users = userService.findUsers(pageRequest, status);
+        return ResponseEntity.ok(ApiResponse.success(users));
+    }
+    
+    /**
+     * 更新用户
+     * PUT /api/v1/users/{id}
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(
+            @PathVariable @Min(1) Long id,
+            @Valid @RequestBody UpdateUserRequest request) {
+        
+        log.info("Updating user: {}", id);
+        
+        UserResponse user = userService.updateUser(id, request);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+    
+    /**
+     * 删除用户（软删除）
+     * DELETE /api/v1/users/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable @Min(1) Long id) {
+        log.info("Deleting user: {}", id);
+        
+        userService.deleteUser(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 统一响应格式 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Spring Boot规范 v1.0
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ApiResponse<T> {
+    
+    /**
+     * 响应状态码
+     * 200: 成功
+     * 400: 参数错误
+     * 500: 系统错误
+     */
+    private Integer code;
+    
+    /**
+     * 响应消息
+     */
+    private String message;
+    
+    /**
+     * 响应数据
+     */
+    private T data;
+    
+    /**
+     * 时间戳
+     */
+    private Long timestamp;
+    
+    /**
+     * 请求ID，用于链路追踪
+     */
+    private String requestId;
+    
+    public static <T> ApiResponse<T> success(T data) {
+        return ApiResponse.<T>builder()
+            .code(200)
+            .message("Success")
+            .data(data)
+            .timestamp(System.currentTimeMillis())
+            .requestId(MDC.get("requestId"))
+            .build();
+    }
+    
+    public static <T> ApiResponse<T> error(Integer code, String message) {
+        return ApiResponse.<T>builder()
+            .code(code)
+            .message(message)
+            .timestamp(System.currentTimeMillis())
+            .requestId(MDC.get("requestId"))
+            .build();
+    }
+}
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PageResponse<T> {
+    
+    /**
+     * 数据列表
+     */
+    private List<T> content;
+    
+    /**
+     * 当前页码（从0开始）
+     */
+    private Integer page;
+    
+    /**
+     * 每页大小
+     */
+    private Integer size;
+    
+    /**
+     * 总元素数
+     */
+    private Long total;
+    
+    /**
+     * 总页数
+     */
+    private Integer totalPages;
+    
+    /**
+     * 是否为第一页
+     */
+    private Boolean first;
+    
+    /**
+     * 是否为最后一页
+     */
+    private Boolean last;
+}
+// [AI-BLOCK-END]
+```
+
+### 全局异常处理 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Spring Boot规范 v1.0
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+    
+    /**
+     * 参数验证异常
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(
+            MethodArgumentNotValidException e) {
+        
+        String message = e.getBindingResult().getFieldErrors().stream()
+            .map(error -> error.getField() + ": " + error.getDefaultMessage())
+            .collect(Collectors.joining(", "));
+            
+        log.warn("Validation error: {}", message);
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(400, "参数验证失败: " + message));
+    }
+    
+    /**
+     * 业务异常
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
+        log.warn("Business error: {} - {}", e.getErrorCode(), e.getMessage());
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
+    }
+    
+    /**
+     * 资源不存在异常
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(
+            ResourceNotFoundException e) {
+        
+        log.warn("Resource not found: {}", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.error(404, e.getMessage()));
+    }
+    
+    /**
+     * 系统异常
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleSystemException(Exception e) {
+        log.error("System error", e);
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(ApiResponse.error(500, "系统内部错误"));
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 🔧 Service层规范
+
+### 事务管理规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Spring Boot规范 v1.0
+@Service
+@Transactional(readOnly = true)
+@Slf4j
+public class UserServiceImpl implements UserService {
+    
+    private final UserRepository userRepository;
+    private final UserConverter userConverter;
+    private final EmailService emailService;
+    
+    public UserServiceImpl(UserRepository userRepository, 
+                          UserConverter userConverter,
+                          EmailService emailService) {
+        this.userRepository = userRepository;
+        this.userConverter = userConverter;
+        this.emailService = emailService;
+    }
+    
+    /**
+     * 创建用户 - 写操作需要显式声明事务
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserResponse createUser(CreateUserRequest request) {
+        // 参数验证
+        validateCreateUserRequest(request);
+        
+        // 检查邮箱是否已存在
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new BusinessException(ErrorCode.USER_EMAIL_EXISTS, "邮箱已存在");
+        }
+        
+        try {
+            // 创建用户实体
+            User user = userConverter.toEntity(request);
+            user.setStatus(UserStatus.ACTIVE);
+            user.setCreateTime(LocalDateTime.now());
+            
+            // 保存用户
+            User savedUser = userRepository.save(user);
+            
+            // 发送欢迎邮件（异步处理，不影响主事务）
+            sendWelcomeEmailAsync(savedUser);
+            
+            return userConverter.toResponse(savedUser);
+            
+        } catch (Exception e) {
+            log.error("Failed to create user: {}", request.getEmail(), e);
+            throw new BusinessException(ErrorCode.USER_CREATE_FAILED, "用户创建失败");
+        }
+    }
+    
+    /**
+     * 查询用户 - 只读事务
+     */
+    @Override
+    public UserResponse findUserById(Long id) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + id));
+            
+        return userConverter.toResponse(user);
+    }
+    
+    /**
+     * 分页查询用户
+     */
+    @Override
+    public PageResponse<UserResponse> findUsers(Pageable pageable, UserStatus status) {
+        Page<User> userPage;
+        
+        if (status != null) {
+            userPage = userRepository.findByStatus(status, pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+        
+        List<UserResponse> userResponses = userPage.getContent().stream()
+            .map(userConverter::toResponse)
+            .collect(Collectors.toList());
+            
+        return PageResponse.<UserResponse>builder()
+            .content(userResponses)
+            .page(userPage.getNumber())
+            .size(userPage.getSize())
+            .total(userPage.getTotalElements())
+            .totalPages(userPage.getTotalPages())
+            .first(userPage.isFirst())
+            .last(userPage.isLast())
+            .build();
+    }
+    
+    /**
+     * 更新用户
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public UserResponse updateUser(Long id, UpdateUserRequest request) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + id));
+            
+        // 更新字段
+        if (StringUtils.hasText(request.getName())) {
+            user.setName(request.getName());
+        }
+        if (StringUtils.hasText(request.getPhone())) {
+            user.setPhone(request.getPhone());
+        }
+        user.setUpdateTime(LocalDateTime.now());
+        
+        User updatedUser = userRepository.save(user);
+        return userConverter.toResponse(updatedUser);
+    }
+    
+    /**
+     * 软删除用户
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteUser(Long id) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + id));
+            
+        user.setStatus(UserStatus.DELETED);
+        user.setUpdateTime(LocalDateTime.now());
+        
+        userRepository.save(user);
+        
+        log.info("User deleted: {}", id);
+    }
+    
+    /**
+     * 异步发送欢迎邮件
+     */
+    @Async
+    public void sendWelcomeEmailAsync(User user) {
+        try {
+            emailService.sendWelcomeEmail(user.getEmail(), user.getName());
+        } catch (Exception e) {
+            log.error("Failed to send welcome email to: {}", user.getEmail(), e);
+        }
+    }
+    
+    private void validateCreateUserRequest(CreateUserRequest request) {
+        if (!EmailValidator.isValid(request.getEmail())) {
+            throw new BusinessException(ErrorCode.INVALID_EMAIL, "邮箱格式无效");
+        }
+        
+        if (request.getName().length() < 2 || request.getName().length() > 50) {
+            throw new BusinessException(ErrorCode.INVALID_NAME, "姓名长度必须在2-50字符之间");
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 🔧 Repository层规范
+
+### JPA Repository规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Spring Boot规范 v1.0
+@Repository
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+    
+    /**
+     * 方法命名查询 - 简单查询推荐使用
+     */
+    Optional<User> findByEmail(String email);
+    
+    List<User> findByStatus(UserStatus status);
+    
+    Page<User> findByStatus(UserStatus status, Pageable pageable);
+    
+    List<User> findByCreateTimeBetween(LocalDateTime start, LocalDateTime end);
+    
+    boolean existsByEmail(String email);
+    
+    long countByStatus(UserStatus status);
+    
+    /**
+     * @Query注解 - 复杂查询使用JPQL
+     */
+    @Query("SELECT u FROM User u WHERE u.status = :status AND u.createTime >= :since")
+    List<User> findActiveUsersSince(@Param("status") UserStatus status, 
+                                  @Param("since") LocalDateTime since);
+    
+    @Query("SELECT u FROM User u WHERE u.name LIKE %:keyword% OR u.email LIKE %:keyword%")
+    Page<User> searchUsers(@Param("keyword") String keyword, Pageable pageable);
+    
+    /**
+     * 原生SQL查询 - 性能敏感或复杂统计查询
+     */
+    @Query(value = "SELECT DATE(create_time) as date, COUNT(*) as count " +
+                   "FROM users WHERE create_time >= :since " +
+                   "GROUP BY DATE(create_time) ORDER BY date", 
+           nativeQuery = true)
+    List<Object[]> getUserRegistrationStatistics(@Param("since") LocalDateTime since);
+    
+    /**
+     * 更新查询 - 批量更新操作
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.status = :status, u.updateTime = :updateTime WHERE u.id IN :ids")
+    int updateUserStatus(@Param("ids") List<Long> ids, 
+                        @Param("status") UserStatus status,
+                        @Param("updateTime") LocalDateTime updateTime);
+    
+    /**
+     * 自定义Repository实现 - 复杂动态查询
+     */
+    interface UserRepositoryCustom {
+        Page<User> findUsersWithDynamicCriteria(UserSearchCriteria criteria, Pageable pageable);
+    }
+}
+
+@Repository
+public class UserRepositoryImpl implements UserRepository.UserRepositoryCustom {
+    
+    @PersistenceContext
+    private EntityManager entityManager;
+    
+    @Override
+    public Page<User> findUsersWithDynamicCriteria(UserSearchCriteria criteria, Pageable pageable) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<User> query = cb.createQuery(User.class);
+        Root<User> root = query.from(User.class);
+        
+        List<Predicate> predicates = buildPredicates(cb, root, criteria);
+        
+        if (!predicates.isEmpty()) {
+            query.where(cb.and(predicates.toArray(new Predicate[0])));
+        }
+        
+        // 排序
+        if (pageable.getSort().isSorted()) {
+            List<Order> orders = pageable.getSort().stream()
+                .map(order -> order.isAscending() 
+                    ? cb.asc(root.get(order.getProperty()))
+                    : cb.desc(root.get(order.getProperty())))
+                .collect(Collectors.toList());
+            query.orderBy(orders);
+        }
+        
+        // 分页查询
+        TypedQuery<User> typedQuery = entityManager.createQuery(query);
+        typedQuery.setFirstResult((int) pageable.getOffset());
+        typedQuery.setMaxResults(pageable.getPageSize());
+        
+        List<User> users = typedQuery.getResultList();
+        
+        // 计算总数
+        long total = countUsersWithCriteria(criteria);
+        
+        return new PageImpl<>(users, pageable, total);
+    }
+    
+    private List<Predicate> buildPredicates(CriteriaBuilder cb, Root<User> root, 
+                                          UserSearchCriteria criteria) {
+        List<Predicate> predicates = new ArrayList<>();
+        
+        if (StringUtils.hasText(criteria.getName())) {
+            predicates.add(cb.like(cb.lower(root.get("name")), 
+                "%" + criteria.getName().toLowerCase() + "%"));
+        }
+        
+        if (StringUtils.hasText(criteria.getEmail())) {
+            predicates.add(cb.like(cb.lower(root.get("email")), 
+                "%" + criteria.getEmail().toLowerCase() + "%"));
+        }
+        
+        if (criteria.getStatus() != null) {
+            predicates.add(cb.equal(root.get("status"), criteria.getStatus()));
+        }
+        
+        if (criteria.getCreateTimeFrom() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("createTime"), 
+                criteria.getCreateTimeFrom()));
+        }
+        
+        if (criteria.getCreateTimeTo() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("createTime"), 
+                criteria.getCreateTimeTo()));
+        }
+        
+        return predicates;
+    }
+    
+    private long countUsersWithCriteria(UserSearchCriteria criteria) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<User> root = countQuery.from(User.class);
+        
+        List<Predicate> predicates = buildPredicates(cb, root, criteria);
+        
+        countQuery.select(cb.count(root));
+        if (!predicates.isEmpty()) {
+            countQuery.where(cb.and(predicates.toArray(new Predicate[0])));
+        }
+        
+        return entityManager.createQuery(countQuery).getSingleResult();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 🔧 配置类规范
+
+### 应用配置 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Spring Boot规范 v1.0
+@Configuration
+@EnableJpaAuditing
+@EnableAsync
+@EnableScheduling
+@Slf4j
+public class ApplicationConfig {
+    
+    /**
+     * 异步任务线程池配置
+     */
+    @Bean(name = "taskExecutor")
+    public ThreadPoolTaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        
+        // 核心线程数
+        executor.setCorePoolSize(5);
+        // 最大线程数
+        executor.setMaxPoolSize(10);
+        // 队列容量
+        executor.setQueueCapacity(100);
+        // 线程名前缀
+        executor.setThreadNamePrefix("Async-");
+        // 拒绝策略
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        // 关闭时等待任务完成
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        // 等待时间
+        executor.setAwaitTerminationSeconds(60);
+        
+        executor.initialize();
+        return executor;
+    }
+    
+    /**
+     * RestTemplate配置
+     */
+    @Bean
+    public RestTemplate restTemplate() {
+        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(10000);
+        
+        RestTemplate restTemplate = new RestTemplate(factory);
+        
+        // 添加请求拦截器
+        restTemplate.getInterceptors().add((request, body, execution) -> {
+            String requestId = UUID.randomUUID().toString();
+            request.getHeaders().add("X-Request-ID", requestId);
+            
+            log.info("RestTemplate request: {} {}", request.getMethod(), request.getURI());
+            
+            ClientHttpResponse response = execution.execute(request, body);
+            
+            log.info("RestTemplate response: {}", response.getStatusCode());
+            
+            return response;
+        });
+        
+        return restTemplate;
+    }
+    
+    /**
+     * 对象转换器配置
+     */
+    @Bean
+    public ModelMapper modelMapper() {
+        ModelMapper mapper = new ModelMapper();
+        
+        // 严格匹配策略
+        mapper.getConfiguration()
+            .setMatchingStrategy(MatchingStrategies.STRICT)
+            .setFieldMatchingEnabled(true)
+            .setFieldAccessLevel(org.modelmapper.config.Configuration.AccessLevel.PRIVATE);
+            
+        return mapper;
+    }
+    
+    /**
+     * 审计字段自动填充
+     */
+    @Bean
+    public AuditorAware<String> auditorProvider() {
+        return () -> {
+            // 从Spring Security上下文获取当前用户
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated() 
+                && !authentication.getPrincipal().equals("anonymousUser")) {
+                return Optional.of(authentication.getName());
+            }
+            return Optional.of("system");
+        };
+    }
+}
+// [AI-BLOCK-END]
+```
+
+---
+
+*此Spring Boot详细规范为企业级开发提供完整的实施标准和最佳实践*
+description:
+globs:
+alwaysApply: false
+---

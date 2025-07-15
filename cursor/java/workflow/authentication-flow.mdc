@@ -1,0 +1,1470 @@
+# 认证授权流程规范
+
+## 基础规范
+
+### 认证授权原则
+- **最小权限原则**: 用户只能访问必要的资源
+- **职责分离**: 认证和授权分离处理
+- **安全传输**: 敏感信息加密传输
+- **会话管理**: 合理的会话超时和刷新机制
+
+### Spring Security配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+@EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true)
+public class SecurityConfig {
+    
+    @Autowired
+    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    
+    @Autowired
+    private JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    
+    @Autowired
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+    
+    @Autowired
+    private UserDetailsService userDetailsService;
+    
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
+    }
+    
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+    
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder());
+        provider.setHideUserNotFoundExceptions(false);
+        return provider;
+    }
+    
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            // 禁用CSRF（使用JWT时）
+            .csrf(csrf -> csrf.disable())
+            
+            // 配置会话管理
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            
+            // 配置异常处理
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                .accessDeniedHandler(jwtAccessDeniedHandler))
+            
+            // 配置请求授权
+            .authorizeHttpRequests(authz -> authz
+                // 公开接口
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/public/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                
+                // 管理员接口
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                
+                // 用户管理接口
+                .requestMatchers(HttpMethod.GET, "/api/users/**").hasAnyRole("USER", "ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/users").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/users/**").hasAnyRole("USER", "ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
+                
+                // 其他接口需要认证
+                .anyRequest().authenticated())
+            
+            // 添加JWT过滤器
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            
+            // 配置认证提供者
+            .authenticationProvider(authenticationProvider());
+        
+        return http.build();
+    }
+    
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 强制行为
+
+### JWT工具类实现
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+@Slf4j
+public class JwtTokenProvider {
+    
+    @Value("${app.jwt.secret}")
+    private String jwtSecret;
+    
+    @Value("${app.jwt.expiration:86400000}")
+    private long jwtExpirationInMs;
+    
+    @Value("${app.jwt.refresh-expiration:604800000}")
+    private long refreshExpirationInMs;
+    
+    private static final String AUTHORITIES_KEY = "authorities";
+    private static final String USER_ID_KEY = "userId";
+    private static final String TOKEN_TYPE_KEY = "tokenType";
+    
+    @PostConstruct
+    public void init() {
+        jwtSecret = Base64.getEncoder().encodeToString(jwtSecret.getBytes());
+    }
+    
+    /**
+     * 生成访问令牌
+     */
+    public String generateAccessToken(Authentication authentication) {
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        
+        Date expiryDate = new Date(System.currentTimeMillis() + jwtExpirationInMs);
+        
+        String authorities = authentication.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .collect(Collectors.joining(","));
+        
+        return Jwts.builder()
+            .setSubject(userPrincipal.getUsername())
+            .claim(USER_ID_KEY, userPrincipal.getId())
+            .claim(AUTHORITIES_KEY, authorities)
+            .claim(TOKEN_TYPE_KEY, "ACCESS")
+            .setIssuedAt(new Date())
+            .setExpiration(expiryDate)
+            .signWith(SignatureAlgorithm.HS512, jwtSecret)
+            .compact();
+    }
+    
+    /**
+     * 生成刷新令牌
+     */
+    public String generateRefreshToken(Authentication authentication) {
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        
+        Date expiryDate = new Date(System.currentTimeMillis() + refreshExpirationInMs);
+        
+        return Jwts.builder()
+            .setSubject(userPrincipal.getUsername())
+            .claim(USER_ID_KEY, userPrincipal.getId())
+            .claim(TOKEN_TYPE_KEY, "REFRESH")
+            .setIssuedAt(new Date())
+            .setExpiration(expiryDate)
+            .signWith(SignatureAlgorithm.HS512, jwtSecret)
+            .compact();
+    }
+    
+    /**
+     * 从令牌中获取用户名
+     */
+    public String getUsernameFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        return claims.getSubject();
+    }
+    
+    /**
+     * 从令牌中获取用户ID
+     */
+    public Long getUserIdFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        return claims.get(USER_ID_KEY, Long.class);
+    }
+    
+    /**
+     * 从令牌中获取权限信息
+     */
+    public Collection<? extends GrantedAuthority> getAuthoritiesFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        String authorities = claims.get(AUTHORITIES_KEY, String.class);
+        
+        if (StringUtils.hasText(authorities)) {
+            return Arrays.stream(authorities.split(","))
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+        }
+        
+        return Collections.emptyList();
+    }
+    
+    /**
+     * 验证令牌
+     */
+    public boolean validateToken(String token) {
+        try {
+            Claims claims = getClaimsFromToken(token);
+            return !isTokenExpired(claims);
+        } catch (SignatureException e) {
+            log.warn("JWT签名无效: {}", e.getMessage());
+        } catch (MalformedJwtException e) {
+            log.warn("JWT格式无效: {}", e.getMessage());
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT已过期: {}", e.getMessage());
+        } catch (UnsupportedJwtException e) {
+            log.warn("不支持的JWT: {}", e.getMessage());
+        } catch (IllegalArgumentException e) {
+            log.warn("JWT参数为空: {}", e.getMessage());
+        }
+        return false;
+    }
+    
+    /**
+     * 检查是否为刷新令牌
+     */
+    public boolean isRefreshToken(String token) {
+        try {
+            Claims claims = getClaimsFromToken(token);
+            String tokenType = claims.get(TOKEN_TYPE_KEY, String.class);
+            return "REFRESH".equals(tokenType);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * 获取令牌过期时间
+     */
+    public Date getExpirationFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        return claims.getExpiration();
+    }
+    
+    private Claims getClaimsFromToken(String token) {
+        return Jwts.parser()
+            .setSigningKey(jwtSecret)
+            .parseClaimsJws(token)
+            .getBody();
+    }
+    
+    private boolean isTokenExpired(Claims claims) {
+        Date expiration = claims.getExpiration();
+        return expiration.before(new Date());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### JWT认证过滤器
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+@Slf4j
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    
+    @Autowired
+    private JwtTokenProvider tokenProvider;
+    
+    @Autowired
+    private UserDetailsService userDetailsService;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    private static final String TOKEN_HEADER = "Authorization";
+    private static final String TOKEN_PREFIX = "Bearer ";
+    private static final String BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
+    
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, 
+                                  HttpServletResponse response, 
+                                  FilterChain filterChain) throws ServletException, IOException {
+        
+        try {
+            String token = getTokenFromRequest(request);
+            
+            if (StringUtils.hasText(token) && tokenProvider.validateToken(token)) {
+                // 检查令牌是否在黑名单中
+                if (isTokenBlacklisted(token)) {
+                    log.warn("令牌已被列入黑名单: {}", token);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+                
+                // 检查是否为访问令牌（不是刷新令牌）
+                if (tokenProvider.isRefreshToken(token)) {
+                    log.warn("刷新令牌不能用于API访问");
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+                
+                String username = tokenProvider.getUsernameFromToken(token);
+                
+                if (StringUtils.hasText(username) && 
+                    SecurityContextHolder.getContext().getAuthentication() == null) {
+                    
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    
+                    if (userDetails != null) {
+                        UsernamePasswordAuthenticationToken authentication = 
+                            new UsernamePasswordAuthenticationToken(
+                                userDetails, null, userDetails.getAuthorities());
+                        
+                        authentication.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request));
+                        
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                        
+                        // 记录用户活动
+                        recordUserActivity(request, username);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("JWT认证失败", e);
+        }
+        
+        filterChain.doFilter(request, response);
+    }
+    
+    private String getTokenFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader(TOKEN_HEADER);
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(TOKEN_PREFIX)) {
+            return bearerToken.substring(TOKEN_PREFIX.length());
+        }
+        return null;
+    }
+    
+    private boolean isTokenBlacklisted(String token) {
+        try {
+            String key = BLACKLIST_KEY_PREFIX + token;
+            return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+        } catch (Exception e) {
+            log.error("检查令牌黑名单失败", e);
+            return false;
+        }
+    }
+    
+    private void recordUserActivity(HttpServletRequest request, String username) {
+        try {
+            String userAgent = request.getHeader("User-Agent");
+            String ipAddress = getClientIpAddress(request);
+            String requestUri = request.getRequestURI();
+            
+            UserActivityLog activity = UserActivityLog.builder()
+                .username(username)
+                .ipAddress(ipAddress)
+                .userAgent(userAgent)
+                .requestUri(requestUri)
+                .accessTime(LocalDateTime.now())
+                .build();
+            
+            // 异步记录用户活动
+            CompletableFuture.runAsync(() -> {
+                try {
+                    userActivityService.recordActivity(activity);
+                } catch (Exception e) {
+                    log.error("记录用户活动失败", e);
+                }
+            });
+        } catch (Exception e) {
+            log.error("处理用户活动记录失败", e);
+        }
+    }
+    
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(xForwardedFor)) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(xRealIp)) {
+            return xRealIp;
+        }
+        
+        return request.getRemoteAddr();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 用户详情服务实现
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+@Transactional(readOnly = true)
+public class CustomUserDetailsService implements UserDetailsService {
+    
+    @Autowired
+    private UserMapper userMapper;
+    
+    @Autowired
+    private UserRoleMapper userRoleMapper;
+    
+    @Autowired
+    private RolePermissionMapper rolePermissionMapper;
+    
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // 1. 查询用户基本信息
+        LambdaQueryWrapper<User> userQuery = new LambdaQueryWrapper<>();
+        userQuery.eq(User::getUsername, username)
+                 .eq(User::getDeleted, false);
+        
+        User user = userMapper.selectOne(userQuery);
+        if (user == null) {
+            log.warn("用户不存在: {}", username);
+            throw new UsernameNotFoundException("用户不存在: " + username);
+        }
+        
+        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+            log.warn("用户状态异常: username={}, status={}", username, user.getStatus());
+            throw new DisabledException("用户状态异常: " + user.getStatus());
+        }
+        
+        // 2. 查询用户角色
+        List<UserRole> userRoles = getUserRoles(user.getId());
+        
+        // 3. 查询角色权限
+        Set<String> authorities = getUserAuthorities(userRoles);
+        
+        // 4. 构建权限列表
+        List<GrantedAuthority> grantedAuthorities = authorities.stream()
+            .map(SimpleGrantedAuthority::new)
+            .collect(Collectors.toList());
+        
+        // 5. 创建UserPrincipal
+        return UserPrincipal.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .password(user.getPasswordHash())
+            .email(user.getEmail())
+            .realName(user.getRealName())
+            .status(user.getStatus())
+            .authorities(grantedAuthorities)
+            .accountNonExpired(true)
+            .accountNonLocked(!UserStatus.LOCKED.equals(user.getStatus()))
+            .credentialsNonExpired(true)
+            .enabled(UserStatus.ACTIVE.equals(user.getStatus()))
+            .build();
+    }
+    
+    private List<UserRole> getUserRoles(Long userId) {
+        LambdaQueryWrapper<UserRole> roleQuery = new LambdaQueryWrapper<>();
+        roleQuery.eq(UserRole::getUserId, userId)
+                 .eq(UserRole::getDeleted, false);
+        
+        return userRoleMapper.selectList(roleQuery);
+    }
+    
+    private Set<String> getUserAuthorities(List<UserRole> userRoles) {
+        if (CollectionUtils.isEmpty(userRoles)) {
+            return Collections.emptySet();
+        }
+        
+        Set<String> authorities = new HashSet<>();
+        
+        // 添加角色权限
+        List<Long> roleIds = userRoles.stream()
+            .map(UserRole::getRoleId)
+            .collect(Collectors.toList());
+        
+        for (Long roleId : roleIds) {
+            // 添加角色
+            Role role = roleMapper.selectById(roleId);
+            if (role != null && role.getEnabled()) {
+                authorities.add("ROLE_" + role.getName());
+                
+                // 添加角色对应的权限
+                LambdaQueryWrapper<RolePermission> permQuery = new LambdaQueryWrapper<>();
+                permQuery.eq(RolePermission::getRoleId, roleId)
+                         .eq(RolePermission::getDeleted, false);
+                
+                List<RolePermission> rolePermissions = rolePermissionMapper.selectList(permQuery);
+                
+                for (RolePermission rp : rolePermissions) {
+                    Permission permission = permissionMapper.selectById(rp.getPermissionId());
+                    if (permission != null && permission.getEnabled()) {
+                        authorities.add(permission.getCode());
+                    }
+                }
+            }
+        }
+        
+        return authorities;
+    }
+}
+
+// 用户主体类
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserPrincipal implements UserDetails {
+    
+    private Long id;
+    private String username;
+    private String password;
+    private String email;
+    private String realName;
+    private UserStatus status;
+    private Collection<? extends GrantedAuthority> authorities;
+    private boolean accountNonExpired;
+    private boolean accountNonLocked;
+    private boolean credentialsNonExpired;
+    private boolean enabled;
+    
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return authorities;
+    }
+    
+    @Override
+    public String getPassword() {
+        return password;
+    }
+    
+    @Override
+    public String getUsername() {
+        return username;
+    }
+    
+    @Override
+    public boolean isAccountNonExpired() {
+        return accountNonExpired;
+    }
+    
+    @Override
+    public boolean isAccountNonLocked() {
+        return accountNonLocked;
+    }
+    
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return credentialsNonExpired;
+    }
+    
+    @Override
+    public boolean isEnabled() {
+        return enabled;
+    }
+    
+    // 便捷方法
+    public boolean hasRole(String role) {
+        return authorities.stream()
+            .anyMatch(auth -> auth.getAuthority().equals("ROLE_" + role));
+    }
+    
+    public boolean hasPermission(String permission) {
+        return authorities.stream()
+            .anyMatch(auth -> auth.getAuthority().equals(permission));
+    }
+    
+    public List<String> getRoles() {
+        return authorities.stream()
+            .map(GrantedAuthority::getAuthority)
+            .filter(auth -> auth.startsWith("ROLE_"))
+            .map(role -> role.substring(5))
+            .collect(Collectors.toList());
+    }
+    
+    public List<String> getPermissions() {
+        return authorities.stream()
+            .map(GrantedAuthority::getAuthority)
+            .filter(auth -> !auth.startsWith("ROLE_"))
+            .collect(Collectors.toList());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 认证服务实现
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+@Transactional
+public class AuthenticationService {
+    
+    @Autowired
+    private AuthenticationManager authenticationManager;
+    
+    @Autowired
+    private JwtTokenProvider tokenProvider;
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private LoginAttemptService loginAttemptService;
+    
+    private static final String REFRESH_TOKEN_KEY_PREFIX = "refresh_token:";
+    private static final String BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
+    
+    /**
+     * 用户登录
+     */
+    public AuthenticationResponseDTO login(LoginRequestDTO loginRequest) {
+        String username = loginRequest.getUsername();
+        String password = loginRequest.getPassword();
+        
+        // 1. 检查登录尝试次数
+        if (loginAttemptService.isBlocked(username)) {
+            throw new AuthenticationException("账户已被锁定，请稍后再试");
+        }
+        
+        try {
+            // 2. 执行认证
+            Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(username, password));
+            
+            // 3. 认证成功，重置登录尝试次数
+            loginAttemptService.resetAttempts(username);
+            
+            // 4. 生成令牌
+            String accessToken = tokenProvider.generateAccessToken(authentication);
+            String refreshToken = tokenProvider.generateRefreshToken(authentication);
+            
+            // 5. 存储刷新令牌
+            storeRefreshToken(username, refreshToken);
+            
+            // 6. 获取用户信息
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            
+            // 7. 更新最后登录时间
+            userService.updateLastLoginTime(userPrincipal.getId());
+            
+            // 8. 记录登录日志
+            recordLoginLog(userPrincipal, loginRequest.getIpAddress(), 
+                          loginRequest.getUserAgent(), true, null);
+            
+            log.info("用户登录成功: username={}, userId={}", username, userPrincipal.getId());
+            
+            return AuthenticationResponseDTO.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(tokenProvider.getJwtExpirationInMs() / 1000)
+                .user(UserResponseDTO.fromPrincipal(userPrincipal))
+                .build();
+                
+        } catch (BadCredentialsException e) {
+            // 认证失败，记录登录尝试
+            loginAttemptService.recordFailedAttempt(username);
+            recordLoginLog(null, loginRequest.getIpAddress(), 
+                          loginRequest.getUserAgent(), false, "密码错误");
+            
+            log.warn("用户登录失败: username={}, reason=密码错误", username);
+            throw new AuthenticationException("用户名或密码错误");
+            
+        } catch (DisabledException e) {
+            recordLoginLog(null, loginRequest.getIpAddress(), 
+                          loginRequest.getUserAgent(), false, "账户已禁用");
+            
+            log.warn("用户登录失败: username={}, reason=账户已禁用", username);
+            throw new AuthenticationException("账户已禁用");
+            
+        } catch (Exception e) {
+            loginAttemptService.recordFailedAttempt(username);
+            recordLoginLog(null, loginRequest.getIpAddress(), 
+                          loginRequest.getUserAgent(), false, e.getMessage());
+            
+            log.error("用户登录异常: username={}", username, e);
+            throw new AuthenticationException("登录失败");
+        }
+    }
+    
+    /**
+     * 刷新访问令牌
+     */
+    public AuthenticationResponseDTO refreshToken(RefreshTokenRequestDTO request) {
+        String refreshToken = request.getRefreshToken();
+        
+        // 1. 验证刷新令牌
+        if (!tokenProvider.validateToken(refreshToken) || 
+            !tokenProvider.isRefreshToken(refreshToken)) {
+            throw new AuthenticationException("无效的刷新令牌");
+        }
+        
+        // 2. 检查刷新令牌是否在黑名单中
+        if (isTokenBlacklisted(refreshToken)) {
+            throw new AuthenticationException("刷新令牌已失效");
+        }
+        
+        String username = tokenProvider.getUsernameFromToken(refreshToken);
+        
+        // 3. 检查存储的刷新令牌
+        String storedToken = getStoredRefreshToken(username);
+        if (!refreshToken.equals(storedToken)) {
+            throw new AuthenticationException("刷新令牌不匹配");
+        }
+        
+        // 4. 重新加载用户信息
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+            userDetails, null, userDetails.getAuthorities());
+        
+        // 5. 生成新的访问令牌
+        String newAccessToken = tokenProvider.generateAccessToken(authentication);
+        
+        // 6. 可选：生成新的刷新令牌
+        String newRefreshToken = tokenProvider.generateRefreshToken(authentication);
+        
+        // 7. 更新存储的刷新令牌
+        storeRefreshToken(username, newRefreshToken);
+        
+        // 8. 将旧的刷新令牌加入黑名单
+        blacklistToken(refreshToken);
+        
+        UserPrincipal userPrincipal = (UserPrincipal) userDetails;
+        
+        log.info("刷新令牌成功: username={}, userId={}", username, userPrincipal.getId());
+        
+        return AuthenticationResponseDTO.builder()
+            .accessToken(newAccessToken)
+            .refreshToken(newRefreshToken)
+            .tokenType("Bearer")
+            .expiresIn(tokenProvider.getJwtExpirationInMs() / 1000)
+            .user(UserResponseDTO.fromPrincipal(userPrincipal))
+            .build();
+    }
+    
+    /**
+     * 用户登出
+     */
+    public void logout(LogoutRequestDTO request) {
+        String accessToken = request.getAccessToken();
+        String refreshToken = request.getRefreshToken();
+        
+        try {
+            if (StringUtils.hasText(accessToken)) {
+                // 将访问令牌加入黑名单
+                blacklistToken(accessToken);
+            }
+            
+            if (StringUtils.hasText(refreshToken)) {
+                // 将刷新令牌加入黑名单
+                blacklistToken(refreshToken);
+                
+                // 从存储中删除刷新令牌
+                if (tokenProvider.validateToken(refreshToken)) {
+                    String username = tokenProvider.getUsernameFromToken(refreshToken);
+                    removeStoredRefreshToken(username);
+                }
+            }
+            
+            log.info("用户登出成功");
+            
+        } catch (Exception e) {
+            log.error("用户登出异常", e);
+            throw new SystemException("登出失败");
+        }
+    }
+    
+    /**
+     * 修改密码
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void changePassword(ChangePasswordRequestDTO request) {
+        // 1. 获取当前用户
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        
+        // 2. 验证原密码
+        if (!passwordEncoder.matches(request.getOldPassword(), userPrincipal.getPassword())) {
+            throw new BusinessRuleException("INVALID_OLD_PASSWORD", "原密码错误");
+        }
+        
+        // 3. 验证新密码强度
+        validatePasswordStrength(request.getNewPassword());
+        
+        // 4. 更新密码
+        String newPasswordHash = passwordEncoder.encode(request.getNewPassword());
+        userService.updatePassword(userPrincipal.getId(), newPasswordHash);
+        
+        // 5. 使所有现有令牌失效
+        invalidateAllUserTokens(userPrincipal.getUsername());
+        
+        log.info("用户修改密码成功: userId={}", userPrincipal.getId());
+    }
+    
+    /**
+     * 忘记密码
+     */
+    public void forgotPassword(ForgotPasswordRequestDTO request) {
+        String email = request.getEmail();
+        
+        // 1. 查找用户
+        User user = userService.findByEmail(email);
+        if (user == null) {
+            // 为了安全，不透露用户是否存在
+            log.warn("忘记密码请求，但邮箱不存在: {}", email);
+            return;
+        }
+        
+        // 2. 生成重置令牌
+        String resetToken = generatePasswordResetToken();
+        
+        // 3. 存储重置令牌（有效期30分钟）
+        String key = "password_reset:" + resetToken;
+        redisTemplate.opsForValue().set(key, user.getId(), Duration.ofMinutes(30));
+        
+        // 4. 发送重置邮件
+        emailService.sendPasswordResetEmail(email, resetToken);
+        
+        log.info("发送密码重置邮件: email={}, userId={}", email, user.getId());
+    }
+    
+    /**
+     * 重置密码
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void resetPassword(ResetPasswordRequestDTO request) {
+        String token = request.getToken();
+        String newPassword = request.getNewPassword();
+        
+        // 1. 验证重置令牌
+        String key = "password_reset:" + token;
+        Long userId = (Long) redisTemplate.opsForValue().get(key);
+        
+        if (userId == null) {
+            throw new BusinessRuleException("INVALID_RESET_TOKEN", "重置令牌无效或已过期");
+        }
+        
+        // 2. 验证新密码强度
+        validatePasswordStrength(newPassword);
+        
+        // 3. 更新密码
+        String newPasswordHash = passwordEncoder.encode(newPassword);
+        userService.updatePassword(userId, newPasswordHash);
+        
+        // 4. 删除重置令牌
+        redisTemplate.delete(key);
+        
+        // 5. 使所有现有令牌失效
+        User user = userService.getUserById(userId);
+        invalidateAllUserTokens(user.getUsername());
+        
+        log.info("用户重置密码成功: userId={}", userId);
+    }
+    
+    private void storeRefreshToken(String username, String refreshToken) {
+        String key = REFRESH_TOKEN_KEY_PREFIX + username;
+        Duration expiration = Duration.ofMillis(tokenProvider.getRefreshExpirationInMs());
+        redisTemplate.opsForValue().set(key, refreshToken, expiration);
+    }
+    
+    private String getStoredRefreshToken(String username) {
+        String key = REFRESH_TOKEN_KEY_PREFIX + username;
+        return (String) redisTemplate.opsForValue().get(key);
+    }
+    
+    private void removeStoredRefreshToken(String username) {
+        String key = REFRESH_TOKEN_KEY_PREFIX + username;
+        redisTemplate.delete(key);
+    }
+    
+    private void blacklistToken(String token) {
+        try {
+            Date expiration = tokenProvider.getExpirationFromToken(token);
+            Duration ttl = Duration.between(Instant.now(), expiration.toInstant());
+            
+            if (ttl.isPositive()) {
+                String key = BLACKLIST_KEY_PREFIX + token;
+                redisTemplate.opsForValue().set(key, "blacklisted", ttl);
+            }
+        } catch (Exception e) {
+            log.error("将令牌加入黑名单失败", e);
+        }
+    }
+    
+    private boolean isTokenBlacklisted(String token) {
+        try {
+            String key = BLACKLIST_KEY_PREFIX + token;
+            return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+        } catch (Exception e) {
+            log.error("检查令牌黑名单失败", e);
+            return false;
+        }
+    }
+    
+    private void invalidateAllUserTokens(String username) {
+        // 删除存储的刷新令牌
+        removeStoredRefreshToken(username);
+        
+        // 注意：访问令牌无法主动失效，只能等待过期
+        // 如果需要立即失效，可以考虑维护一个用户令牌版本号
+    }
+    
+    private void validatePasswordStrength(String password) {
+        if (password.length() < 8) {
+            throw new BusinessRuleException("WEAK_PASSWORD", "密码长度至少8位");
+        }
+        
+        if (!password.matches(".*[A-Z].*")) {
+            throw new BusinessRuleException("WEAK_PASSWORD", "密码必须包含大写字母");
+        }
+        
+        if (!password.matches(".*[a-z].*")) {
+            throw new BusinessRuleException("WEAK_PASSWORD", "密码必须包含小写字母");
+        }
+        
+        if (!password.matches(".*\\d.*")) {
+            throw new BusinessRuleException("WEAK_PASSWORD", "密码必须包含数字");
+        }
+        
+        if (!password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?].*")) {
+            throw new BusinessRuleException("WEAK_PASSWORD", "密码必须包含特殊字符");
+        }
+    }
+    
+    private String generatePasswordResetToken() {
+        return UUID.randomUUID().toString().replace("-", "");
+    }
+    
+    private void recordLoginLog(UserPrincipal user, String ipAddress, 
+                               String userAgent, boolean success, String failureReason) {
+        try {
+            LoginLog loginLog = LoginLog.builder()
+                .userId(user != null ? user.getId() : null)
+                .username(user != null ? user.getUsername() : null)
+                .ipAddress(ipAddress)
+                .userAgent(userAgent)
+                .success(success)
+                .failureReason(failureReason)
+                .loginTime(LocalDateTime.now())
+                .build();
+            
+            // 异步记录登录日志
+            CompletableFuture.runAsync(() -> {
+                try {
+                    loginLogService.recordLoginLog(loginLog);
+                } catch (Exception e) {
+                    log.error("记录登录日志失败", e);
+                }
+            });
+        } catch (Exception e) {
+            log.error("处理登录日志失败", e);
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 安全漏洞模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：密码明文传输和存储
+@RestController
+public class BadAuthController {
+    
+    // 禁止：密码明文传输
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestParam String username, 
+                                  @RequestParam String password) {  // 明文密码
+        // 禁止：密码明文比较
+        User user = userService.findByUsername(username);
+        if (user != null && password.equals(user.getPassword())) {  // 明文比较
+            return ResponseEntity.ok("登录成功");
+        }
+        return ResponseEntity.badRequest().body("登录失败");
+    }
+    
+    // 禁止：在日志中记录敏感信息
+    public void authenticateUser(String username, String password) {
+        log.info("用户登录: username={}, password={}", username, password);  // 记录密码
+        // ...
+    }
+}
+
+// ❌ 禁止：JWT密钥硬编码
+@Component
+public class BadJwtProvider {
+    
+    // 禁止：硬编码密钥
+    private static final String JWT_SECRET = "mySecretKey123";
+    
+    // 禁止：使用弱密钥
+    private static final String WEAK_SECRET = "123456";
+    
+    // 禁止：不验证令牌签名
+    public boolean validateToken(String token) {
+        try {
+            Jwts.parser().parseClaimsJws(token);  // 没有设置签名密钥
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
+
+// ❌ 禁止：权限控制缺失
+@RestController
+public class BadUserController {
+    
+    // 禁止：没有权限控制的敏感操作
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+        userService.deleteUser(id);  // 任何人都可以删除用户
+        return ResponseEntity.ok().build();
+    }
+    
+    // 禁止：不验证用户身份的数据访问
+    @GetMapping("/users/{id}/profile")
+    public UserProfile getUserProfile(@PathVariable Long id) {
+        return userService.getUserProfile(id);  // 可以查看任何人的资料
+    }
+}
+
+// ❌ 禁止：会话固定攻击
+@Service
+public class BadSessionService {
+    
+    // 禁止：登录后不更新会话ID
+    public void login(String username, String password, HttpServletRequest request) {
+        if (authenticate(username, password)) {
+            HttpSession session = request.getSession();
+            session.setAttribute("user", username);  // 没有更新会话ID
+        }
+    }
+}
+
+// ❌ 禁止：不安全的密码重置
+@Service
+public class BadPasswordResetService {
+    
+    // 禁止：可预测的重置令牌
+    public String generateResetToken(String email) {
+        return email + System.currentTimeMillis();  // 可预测
+    }
+    
+    // 禁止：重置令牌永不过期
+    public void storeResetToken(String email, String token) {
+        resetTokenMap.put(token, email);  // 没有设置过期时间
+    }
+    
+    // 禁止：不验证用户身份的密码重置
+    public void resetPassword(String token, String newPassword) {
+        String email = resetTokenMap.get(token);
+        if (email != null) {
+            userService.updatePassword(email, newPassword);  // 直接重置，不验证
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 性能和安全问题
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：登录暴力破解防护缺失
+@Service
+public class BadLoginService {
+    
+    // 禁止：没有登录尝试限制
+    public boolean login(String username, String password) {
+        User user = userService.findByUsername(username);
+        if (user != null && passwordEncoder.matches(password, user.getPassword())) {
+            return true;
+        }
+        // 没有记录失败尝试，没有账户锁定机制
+        return false;
+    }
+    
+    // 禁止：同步执行耗时操作
+    public void sendPasswordResetEmail(String email) {
+        emailService.send(email, "重置密码", "...");  // 同步发送，阻塞请求
+    }
+}
+
+// ❌ 禁止：令牌管理不当
+@Service
+public class BadTokenService {
+    
+    // 禁止：令牌永不过期
+    public String generateToken(String username) {
+        return Jwts.builder()
+            .setSubject(username)
+            .signWith(SignatureAlgorithm.HS512, secret)
+            .compact();  // 没有设置过期时间
+    }
+    
+    // 禁止：不能撤销的令牌
+    public void logout(String token) {
+        // 无法撤销JWT令牌，只能等待过期
+        log.info("用户登出，但令牌仍然有效");
+    }
+    
+    // 禁止：在内存中存储大量令牌
+    private Map<String, String> tokenStore = new HashMap<>();  // 内存泄露风险
+    
+    public void storeToken(String username, String token) {
+        tokenStore.put(username, token);  // 无限增长
+    }
+}
+
+// ❌ 禁止：权限检查绕过
+@RestController
+public class BadSecurityController {
+    
+    // 禁止：通过参数控制权限检查
+    @GetMapping("/admin/users")
+    public List<User> getUsers(@RequestParam(defaultValue = "false") boolean skipAuth) {
+        if (!skipAuth) {
+            // 权限检查
+            checkAdminRole();
+        }
+        return userService.getAllUsers();
+    }
+    
+    // 禁止：客户端控制的权限验证
+    @PostMapping("/users")
+    public User createUser(@RequestBody CreateUserRequest request) {
+        if (request.isAdmin()) {  // 客户端传入的管理员标识
+            // 创建管理员用户
+            return userService.createAdminUser(request);
+        }
+        return userService.createRegularUser(request);
+    }
+}
+
+// ❌ 禁止：SQL注入风险
+@Repository
+public class BadUserRepository {
+    
+    // 禁止：字符串拼接SQL
+    public User findByUsername(String username) {
+        String sql = "SELECT * FROM users WHERE username = '" + username + "'";
+        return jdbcTemplate.queryForObject(sql, User.class);  // SQL注入风险
+    }
+    
+    // 禁止：动态查询条件拼接
+    public List<User> searchUsers(String condition) {
+        String sql = "SELECT * FROM users WHERE " + condition;  // 直接拼接条件
+        return jdbcTemplate.query(sql, userRowMapper);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 示例代码
+
+### 完整的认证授权流程
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@RestController
+@RequestMapping("/api/auth")
+@Validated
+@Slf4j
+public class AuthenticationController {
+    
+    @Autowired
+    private AuthenticationService authenticationService;
+    
+    @Autowired
+    private RateLimitService rateLimitService;
+    
+    /**
+     * 用户登录
+     */
+    @PostMapping("/login")
+    @RateLimit(key = "login", limit = 5, window = 300) // 5分钟内最多5次
+    public ResponseEntity<ApiResponse<AuthenticationResponseDTO>> login(
+            @Valid @RequestBody LoginRequestDTO loginRequest,
+            HttpServletRequest request) {
+        
+        // 设置IP地址和User-Agent
+        loginRequest.setIpAddress(getClientIpAddress(request));
+        loginRequest.setUserAgent(request.getHeader("User-Agent"));
+        
+        // 检查IP限制
+        String clientIp = loginRequest.getIpAddress();
+        if (rateLimitService.isBlocked("login_ip:" + clientIp)) {
+            throw new BusinessRuleException("LOGIN_IP_BLOCKED", 
+                "IP地址已被暂时封禁，请稍后再试");
+        }
+        
+        try {
+            AuthenticationResponseDTO response = authenticationService.login(loginRequest);
+            
+            return ResponseEntity.ok(ApiResponse.success(response));
+            
+        } catch (AuthenticationException e) {
+            // 记录失败的IP
+            rateLimitService.recordFailedAttempt("login_ip:" + clientIp);
+            throw e;
+        }
+    }
+    
+    /**
+     * 刷新令牌
+     */
+    @PostMapping("/refresh")
+    @RateLimit(key = "refresh", limit = 10, window = 300)
+    public ResponseEntity<ApiResponse<AuthenticationResponseDTO>> refreshToken(
+            @Valid @RequestBody RefreshTokenRequestDTO request) {
+        
+        AuthenticationResponseDTO response = authenticationService.refreshToken(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    /**
+     * 用户登出
+     */
+    @PostMapping("/logout")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @Valid @RequestBody LogoutRequestDTO request) {
+        
+        authenticationService.logout(request);
+        return ResponseEntity.ok(ApiResponse.success(null, "登出成功"));
+    }
+    
+    /**
+     * 修改密码
+     */
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    @RateLimit(key = "change_password", limit = 3, window = 3600)
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @Valid @RequestBody ChangePasswordRequestDTO request) {
+        
+        authenticationService.changePassword(request);
+        return ResponseEntity.ok(ApiResponse.success(null, "密码修改成功"));
+    }
+    
+    /**
+     * 忘记密码
+     */
+    @PostMapping("/forgot-password")
+    @RateLimit(key = "forgot_password", limit = 3, window = 3600)
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequestDTO request) {
+        
+        authenticationService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(null, 
+            "如果邮箱存在，重置链接已发送"));
+    }
+    
+    /**
+     * 重置密码
+     */
+    @PostMapping("/reset-password")
+    @RateLimit(key = "reset_password", limit = 5, window = 3600)
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequestDTO request) {
+        
+        authenticationService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(null, "密码重置成功"));
+    }
+    
+    /**
+     * 获取当前用户信息
+     */
+    @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<UserResponseDTO>> getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        
+        UserResponseDTO userResponse = UserResponseDTO.fromPrincipal(userPrincipal);
+        return ResponseEntity.ok(ApiResponse.success(userResponse));
+    }
+    
+    /**
+     * 验证令牌
+     */
+    @PostMapping("/validate-token")
+    public ResponseEntity<ApiResponse<TokenValidationResponseDTO>> validateToken(
+            @Valid @RequestBody TokenValidationRequestDTO request) {
+        
+        boolean isValid = authenticationService.validateToken(request.getToken());
+        
+        TokenValidationResponseDTO response = TokenValidationResponseDTO.builder()
+            .valid(isValid)
+            .build();
+        
+        if (isValid) {
+            try {
+                String username = tokenProvider.getUsernameFromToken(request.getToken());
+                Date expiration = tokenProvider.getExpirationFromToken(request.getToken());
+                
+                response.setUsername(username);
+                response.setExpiration(expiration);
+            } catch (Exception e) {
+                log.warn("获取令牌信息失败", e);
+            }
+        }
+        
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(xForwardedFor)) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(xRealIp)) {
+            return xRealIp;
+        }
+        
+        return request.getRemoteAddr();
+    }
+}
+
+// 登录尝试限制服务
+@Service
+@Slf4j
+public class LoginAttemptService {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    private static final String ATTEMPT_KEY_PREFIX = "login_attempt:";
+    private static final String BLOCK_KEY_PREFIX = "login_block:";
+    private static final int MAX_ATTEMPTS = 5;
+    private static final int BLOCK_DURATION_MINUTES = 30;
+    
+    public void recordFailedAttempt(String username) {
+        String key = ATTEMPT_KEY_PREFIX + username;
+        String countStr = (String) redisTemplate.opsForValue().get(key);
+        int count = countStr != null ? Integer.parseInt(countStr) : 0;
+        
+        count++;
+        
+        if (count >= MAX_ATTEMPTS) {
+            // 达到最大尝试次数，封禁账户
+            blockUser(username);
+            redisTemplate.delete(key);
+        } else {
+            // 记录失败次数，1小时后重置
+            redisTemplate.opsForValue().set(key, String.valueOf(count), 
+                Duration.ofHours(1));
+        }
+        
+        log.warn("用户登录失败: username={}, attempts={}", username, count);
+    }
+    
+    public void resetAttempts(String username) {
+        String key = ATTEMPT_KEY_PREFIX + username;
+        redisTemplate.delete(key);
+    }
+    
+    public boolean isBlocked(String username) {
+        String key = BLOCK_KEY_PREFIX + username;
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    }
+    
+    private void blockUser(String username) {
+        String key = BLOCK_KEY_PREFIX + username;
+        redisTemplate.opsForValue().set(key, "blocked", 
+            Duration.ofMinutes(BLOCK_DURATION_MINUTES));
+        
+        log.warn("用户账户已被封禁: username={}, duration={}分钟", 
+            username, BLOCK_DURATION_MINUTES);
+    }
+}
+
+// 权限验证切面
+@Aspect
+@Component
+@Slf4j
+public class AuthorizationAspect {
+    
+    @Around("@annotation(requiresPermission)")
+    public Object checkPermission(ProceedingJoinPoint joinPoint, 
+                                 RequiresPermission requiresPermission) throws Throwable {
+        
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("用户未认证");
+        }
+        
+        UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+        String[] requiredPermissions = requiresPermission.value();
+        
+        boolean hasPermission = Arrays.stream(requiredPermissions)
+            .anyMatch(userPrincipal::hasPermission);
+        
+        if (!hasPermission) {
+            log.warn("用户权限不足: userId={}, required={}, actual={}", 
+                userPrincipal.getId(), 
+                Arrays.toString(requiredPermissions),
+                userPrincipal.getPermissions());
+            
+            throw new AccessDeniedException("权限不足");
+        }
+        
+        return joinPoint.proceed();
+    }
+}
+
+// 自定义权限注解
+@Target({ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface RequiresPermission {
+    String[] value();
+}
+
+// 使用示例
+@RestController
+@RequestMapping("/api/admin")
+@PreAuthorize("hasRole('ADMIN')")
+public class AdminController {
+    
+    @GetMapping("/users")
+    @RequiresPermission({"user:read", "admin:user:list"})
+    public ResponseEntity<PageResponseDTO<UserResponseDTO>> getUsers(
+            @Valid UserQueryDTO queryDto) {
+        // 管理员查看用户列表
+        PageResponseDTO<UserResponseDTO> users = userService.pageUsers(queryDto);
+        return ResponseEntity.ok(ApiResponse.success(users));
+    }
+    
+    @PostMapping("/users")
+    @RequiresPermission("user:create")
+    public ResponseEntity<UserResponseDTO> createUser(
+            @Valid @RequestBody UserCreateDTO createDto) {
+        // 创建用户
+        UserResponseDTO user = userService.createUser(createDto);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+    
+    @DeleteMapping("/users/{id}")
+    @RequiresPermission("user:delete")
+    @PreAuthorize("#id != authentication.principal.id") // 不能删除自己
+    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
+        userService.deleteUser(id);
+        return ResponseEntity.ok().build();
+    }
+}
+// [AI-BLOCK-END]
+```
+description:
+globs:
+alwaysApply: false
+---

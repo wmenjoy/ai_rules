@@ -1,0 +1,1206 @@
+# 数据验证规范 (模块层规则)
+> 数据验证机制的标准化设计和实现规范
+
+## 基础规范
+
+### 验证设计原则
+- **多层验证**: 前端、后端、数据库多层验证保障
+- **业务语义**: 验证规则要符合业务语义
+- **性能考虑**: 验证逻辑要考虑性能影响
+- **用户友好**: 提供清晰的验证错误信息
+- **可扩展性**: 支持自定义验证规则
+
+### 验证分类体系
+- **格式验证**: 数据格式、长度、模式验证
+- **业务验证**: 业务规则和约束验证
+- **权限验证**: 数据访问权限验证
+- **完整性验证**: 数据完整性和一致性验证
+- **安全验证**: 安全相关的数据验证
+
+### JSR-303标准
+- **标准注解**: 使用标准的Bean Validation注解
+- **分组验证**: 使用验证分组支持不同场景
+- **自定义验证器**: 实现复杂的业务验证逻辑
+- **级联验证**: 支持嵌套对象的验证
+- **国际化**: 支持多语言的验证消息
+
+### 验证策略
+- **快速失败**: 遇到第一个错误立即返回
+- **收集所有错误**: 收集所有验证错误后统一返回
+- **条件验证**: 根据条件进行不同的验证
+- **异步验证**: 耗时的验证操作异步执行
+- **缓存验证**: 缓存验证结果提升性能
+
+## 强制行为
+
+### 验证注解使用
+- **标准注解**: 优先使用JSR-303标准注解
+- **组合注解**: 创建组合注解简化重复验证
+- **自定义注解**: 实现业务特定的验证注解
+- **消息定制**: 为验证注解提供清晰的错误消息
+- **分组应用**: 合理使用验证分组
+
+### 方法级验证
+- **@Validated**: 在类级别启用方法验证
+- **@Valid**: 在参数和返回值上使用@Valid注解
+- **分组验证**: 使用@Validated指定验证分组
+- **级联验证**: 对复杂对象进行级联验证
+- **返回值验证**: 验证方法返回值
+
+### 自定义验证器
+- **实现规范**: 实现ConstraintValidator接口
+- **线程安全**: 验证器必须是线程安全的
+- **依赖注入**: 支持依赖注入其他组件
+- **初始化方法**: 在initialize方法中进行初始化
+- **验证逻辑**: 在isValid方法中实现验证逻辑
+
+### 错误处理
+- **统一格式**: 使用统一的验证错误响应格式
+- **详细信息**: 提供详细的字段错误信息
+- **错误码**: 为验证错误定义明确的错误码
+- **国际化**: 支持多语言的错误消息
+- **上下文信息**: 包含验证失败的上下文
+
+## 禁止行为
+
+### 验证设计禁令
+- **禁止重复验证**: 避免在多处重复相同的验证逻辑
+- **禁止性能问题**: 验证逻辑不能严重影响性能
+- **禁止复杂验证器**: 验证器不包含复杂的业务逻辑
+- **禁止状态依赖**: 验证器不能依赖外部状态
+- **禁止忽略异常**: 验证过程中的异常要妥善处理
+
+### 注解使用禁令
+- **禁止错误组合**: 不使用冲突的验证注解组合
+- **禁止无意义验证**: 不添加无实际作用的验证注解
+- **禁止硬编码消息**: 不在注解中硬编码错误消息
+- **禁止过度验证**: 避免过度细致的验证影响用户体验
+- **禁止忽略分组**: 需要分组验证时不能忽略分组设置
+
+### 性能相关禁令
+- **禁止同步阻塞**: 验证中不进行耗时的同步操作
+- **禁止数据库查询**: 验证器中避免频繁的数据库查询
+- **禁止外部调用**: 验证中不调用外部服务
+- **禁止重复计算**: 避免重复的复杂计算
+- **禁止资源泄露**: 确保验证过程中资源正确释放
+
+### 安全相关禁令
+- **禁止信息泄露**: 验证错误不暴露敏感系统信息
+- **禁止注入攻击**: 验证逻辑要防范注入攻击
+- **禁止绕过验证**: 不能提供绕过验证的后门
+- **禁止弱验证**: 重要数据不能使用弱验证规则
+- **禁止明文传输**: 敏感验证信息不明文传输
+
+## 示例代码
+
+### 标准验证注解使用
+```java
+/* [AI-BLOCK-START] - 生成工具: 数据验证规范 v2.0 */
+/**
+ * 用户注册请求DTO - 完整的验证示例
+ * 
+ * 展示各种标准验证注解的使用，包括基础验证、复杂验证和分组验证。
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "用户注册请求")
+@UserRegistrationValid  // 自定义类级别验证
+public class UserRegistrationRequest {
+    
+    /**
+     * 用户名验证
+     * 包含非空、长度、格式、唯一性验证
+     */
+    @Schema(description = "用户名", example = "testuser", required = true)
+    @NotBlank(message = "用户名不能为空", groups = {BasicValidation.class, FullValidation.class})
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间", 
+          groups = {BasicValidation.class, FullValidation.class})
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线",
+             groups = {BasicValidation.class, FullValidation.class})
+    @UniqueUsername(message = "用户名已存在", groups = FullValidation.class)
+    private String username;
+    
+    /**
+     * 邮箱验证
+     * 包含非空、格式、唯一性验证
+     */
+    @Schema(description = "邮箱地址", example = "test@example.com", required = true)
+    @NotBlank(message = "邮箱不能为空", groups = {BasicValidation.class, FullValidation.class})
+    @Email(message = "邮箱格式不正确", groups = {BasicValidation.class, FullValidation.class})
+    @Size(max = 100, message = "邮箱长度不能超过100个字符",
+          groups = {BasicValidation.class, FullValidation.class})
+    @UniqueEmail(message = "邮箱已存在", groups = FullValidation.class)
+    private String email;
+    
+    /**
+     * 密码验证
+     * 包含非空、长度、复杂度验证
+     */
+    @Schema(description = "登录密码", example = "SecurePass123!", required = true)
+    @NotBlank(message = "密码不能为空", groups = {BasicValidation.class, FullValidation.class})
+    @Size(min = 8, max = 128, message = "密码长度必须在8-128个字符之间",
+          groups = {BasicValidation.class, FullValidation.class})
+    @StrongPassword(message = "密码强度不足", groups = FullValidation.class)
+    private String password;
+    
+    /**
+     * 确认密码验证
+     * 必须与密码一致
+     */
+    @Schema(description = "确认密码", example = "SecurePass123!", required = true)
+    @NotBlank(message = "确认密码不能为空", groups = {BasicValidation.class, FullValidation.class})
+    private String confirmPassword;
+    
+    /**
+     * 真实姓名验证
+     * 可选字段，但如果提供需要符合格式
+     */
+    @Schema(description = "真实姓名", example = "张三")
+    @Size(max = 50, message = "姓名长度不能超过50个字符",
+          groups = {BasicValidation.class, FullValidation.class})
+    @Pattern(regexp = "^[\\u4e00-\\u9fa5a-zA-Z\\s]+$", message = "姓名只能包含中文、英文字母和空格",
+             groups = {BasicValidation.class, FullValidation.class})
+    private String name;
+    
+    /**
+     * 手机号验证
+     * 可选字段，但如果提供需要符合格式
+     */
+    @Schema(description = "手机号码", example = "13812345678")
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确",
+             groups = {BasicValidation.class, FullValidation.class})
+    private String phone;
+    
+    /**
+     * 年龄验证
+     * 范围验证
+     */
+    @Schema(description = "年龄", example = "25")
+    @Min(value = 16, message = "年龄不能小于16岁", groups = {BasicValidation.class, FullValidation.class})
+    @Max(value = 120, message = "年龄不能大于120岁", groups = {BasicValidation.class, FullValidation.class})
+    private Integer age;
+    
+    /**
+     * 生日验证
+     * 过去时间验证
+     */
+    @Schema(description = "生日", example = "1990-01-01")
+    @Past(message = "生日必须是过去的日期", groups = {BasicValidation.class, FullValidation.class})
+    private LocalDate birthday;
+    
+    /**
+     * 地址信息验证
+     * 嵌套对象验证
+     */
+    @Schema(description = "地址信息")
+    @Valid
+    @NotNull(message = "地址信息不能为空", groups = FullValidation.class)
+    private AddressRequest address;
+    
+    /**
+     * 兴趣爱好验证
+     * 集合验证
+     */
+    @Schema(description = "兴趣爱好列表")
+    @Size(max = 10, message = "兴趣爱好不能超过10个", groups = FullValidation.class)
+    private List<@NotBlank(message = "兴趣爱好不能为空") 
+                  @Size(max = 20, message = "单个兴趣爱好长度不能超过20个字符") 
+                  String> hobbies;
+    
+    /**
+     * 同意条款验证
+     * 布尔值验证
+     */
+    @Schema(description = "是否同意用户协议", example = "true", required = true)
+    @AssertTrue(message = "必须同意用户协议", groups = {BasicValidation.class, FullValidation.class})
+    private Boolean agreeToTerms;
+    
+    /**
+     * 邀请码验证
+     * 条件验证 - 如果提供了邀请码，需要验证格式
+     */
+    @Schema(description = "邀请码", example = "INV123456")
+    @InvitationCodeValid(message = "邀请码格式不正确", groups = FullValidation.class)
+    private String invitationCode;
+    
+    /**
+     * 验证分组接口
+     */
+    public interface BasicValidation {}
+    public interface FullValidation {}
+}
+
+/**
+ * 地址请求DTO - 嵌套对象验证示例
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "地址信息")
+public class AddressRequest {
+    
+    @Schema(description = "省份", example = "北京市", required = true)
+    @NotBlank(message = "省份不能为空")
+    @Size(max = 20, message = "省份名称不能超过20个字符")
+    private String province;
+    
+    @Schema(description = "城市", example = "北京市", required = true)
+    @NotBlank(message = "城市不能为空")
+    @Size(max = 20, message = "城市名称不能超过20个字符")
+    private String city;
+    
+    @Schema(description = "区县", example = "朝阳区", required = true)
+    @NotBlank(message = "区县不能为空")
+    @Size(max = 20, message = "区县名称不能超过20个字符")
+    private String district;
+    
+    @Schema(description = "详细地址", example = "某某街道123号", required = true)
+    @NotBlank(message = "详细地址不能为空")
+    @Size(max = 200, message = "详细地址不能超过200个字符")
+    private String detail;
+    
+    @Schema(description = "邮政编码", example = "100000")
+    @Pattern(regexp = "^\\d{6}$", message = "邮政编码必须是6位数字")
+    private String zipCode;
+}
+
+/**
+ * 用户更新请求DTO - 部分验证示例
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "用户更新请求")
+public class UserUpdateRequest {
+    
+    @Schema(description = "真实姓名", example = "张三")
+    @Size(max = 50, message = "姓名长度不能超过50个字符")
+    @Pattern(regexp = "^[\\u4e00-\\u9fa5a-zA-Z\\s]+$", message = "姓名只能包含中文、英文字母和空格")
+    private String name;
+    
+    @Schema(description = "手机号码", example = "13812345678")
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    @Schema(description = "年龄", example = "25")
+    @Min(value = 16, message = "年龄不能小于16岁")
+    @Max(value = 120, message = "年龄不能大于120岁")
+    private Integer age;
+    
+    @Schema(description = "生日", example = "1990-01-01")
+    @Past(message = "生日必须是过去的日期")
+    private LocalDate birthday;
+    
+    @Schema(description = "地址信息")
+    @Valid
+    private AddressRequest address;
+    
+    /**
+     * 检查是否有任何字段需要更新
+     * 业务验证方法
+     */
+    @AssertTrue(message = "至少需要更新一个字段")
+    private boolean hasUpdates() {
+        return name != null || phone != null || age != null || 
+               birthday != null || address != null;
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 自定义验证器实现
+```java
+/* [AI-BLOCK-START] - 生成工具: 数据验证规范 v2.0 */
+/**
+ * 强密码验证注解
+ * 
+ * 验证密码是否符合强密码要求：包含大小写字母、数字和特殊字符。
+ */
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = StrongPasswordValidator.class)
+@Documented
+public @interface StrongPassword {
+    
+    String message() default "密码必须包含大小写字母、数字和特殊字符";
+    
+    Class<?>[] groups() default {};
+    
+    Class<? extends Payload>[] payload() default {};
+    
+    /**
+     * 是否允许空值
+     */
+    boolean allowNull() default false;
+    
+    /**
+     * 最小长度
+     */
+    int minLength() default 8;
+    
+    /**
+     * 是否要求包含大写字母
+     */
+    boolean requireUppercase() default true;
+    
+    /**
+     * 是否要求包含小写字母
+     */
+    boolean requireLowercase() default true;
+    
+    /**
+     * 是否要求包含数字
+     */
+    boolean requireDigit() default true;
+    
+    /**
+     * 是否要求包含特殊字符
+     */
+    boolean requireSpecialChar() default true;
+    
+    /**
+     * 允许的特殊字符
+     */
+    String specialChars() default "@$!%*?&";
+}
+
+/**
+ * 强密码验证器
+ */
+@Component
+public class StrongPasswordValidator implements ConstraintValidator<StrongPassword, String> {
+    
+    private boolean allowNull;
+    private int minLength;
+    private boolean requireUppercase;
+    private boolean requireLowercase;
+    private boolean requireDigit;
+    private boolean requireSpecialChar;
+    private String specialChars;
+    
+    @Override
+    public void initialize(StrongPassword constraintAnnotation) {
+        this.allowNull = constraintAnnotation.allowNull();
+        this.minLength = constraintAnnotation.minLength();
+        this.requireUppercase = constraintAnnotation.requireUppercase();
+        this.requireLowercase = constraintAnnotation.requireLowercase();
+        this.requireDigit = constraintAnnotation.requireDigit();
+        this.requireSpecialChar = constraintAnnotation.requireSpecialChar();
+        this.specialChars = constraintAnnotation.specialChars();
+    }
+    
+    @Override
+    public boolean isValid(String password, ConstraintValidatorContext context) {
+        // 空值处理
+        if (password == null) {
+            return allowNull;
+        }
+        
+        // 长度检查
+        if (password.length() < minLength) {
+            addCustomMessage(context, String.format("密码长度不能少于%d位", minLength));
+            return false;
+        }
+        
+        List<String> errors = new ArrayList<>();
+        
+        // 大写字母检查
+        if (requireUppercase && !password.matches(".*[A-Z].*")) {
+            errors.add("至少包含一个大写字母");
+        }
+        
+        // 小写字母检查
+        if (requireLowercase && !password.matches(".*[a-z].*")) {
+            errors.add("至少包含一个小写字母");
+        }
+        
+        // 数字检查
+        if (requireDigit && !password.matches(".*\\d.*")) {
+            errors.add("至少包含一个数字");
+        }
+        
+        // 特殊字符检查
+        if (requireSpecialChar) {
+            String specialCharPattern = "[" + Pattern.quote(specialChars) + "]";
+            if (!password.matches(".*" + specialCharPattern + ".*")) {
+                errors.add("至少包含一个特殊字符(" + specialChars + ")");
+            }
+        }
+        
+        // 常见弱密码检查
+        if (isCommonWeakPassword(password)) {
+            errors.add("不能使用常见的弱密码");
+        }
+        
+        if (!errors.isEmpty()) {
+            addCustomMessage(context, "密码强度不足: " + String.join(", ", errors));
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 检查是否是常见的弱密码
+     */
+    private boolean isCommonWeakPassword(String password) {
+        Set<String> commonWeakPasswords = Set.of(
+            "12345678", "password", "123456789", "12345678910",
+            "qwerty", "abc123", "Password123", "admin123",
+            "123123123", "password123", "qwerty123"
+        );
+        
+        return commonWeakPasswords.contains(password.toLowerCase());
+    }
+    
+    /**
+     * 添加自定义错误消息
+     */
+    private void addCustomMessage(ConstraintValidatorContext context, String message) {
+        context.disableDefaultConstraintViolation();
+        context.buildConstraintViolationWithTemplate(message)
+               .addConstraintViolation();
+    }
+}
+
+/**
+ * 用户名唯一性验证注解
+ */
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = UniqueUsernameValidator.class)
+@Documented
+public @interface UniqueUsername {
+    
+    String message() default "用户名已存在";
+    
+    Class<?>[] groups() default {};
+    
+    Class<? extends Payload>[] payload() default {};
+    
+    /**
+     * 是否忽略大小写
+     */
+    boolean ignoreCase() default false;
+    
+    /**
+     * 是否允许空值
+     */
+    boolean allowNull() default true;
+}
+
+/**
+ * 用户名唯一性验证器
+ */
+@Component
+public class UniqueUsernameValidator implements ConstraintValidator<UniqueUsername, String> {
+    
+    private final UserRepository userRepository;
+    
+    private boolean ignoreCase;
+    private boolean allowNull;
+    
+    public UniqueUsernameValidator(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
+    @Override
+    public void initialize(UniqueUsername constraintAnnotation) {
+        this.ignoreCase = constraintAnnotation.ignoreCase();
+        this.allowNull = constraintAnnotation.allowNull();
+    }
+    
+    @Override
+    public boolean isValid(String username, ConstraintValidatorContext context) {
+        if (username == null) {
+            return allowNull;
+        }
+        
+        // 检查用户名是否已存在
+        boolean exists;
+        if (ignoreCase) {
+            exists = userRepository.existsByUsernameIgnoreCaseAndDeletedFalse(username);
+        } else {
+            exists = userRepository.existsByUsernameAndDeletedFalse(username);
+        }
+        
+        return !exists;
+    }
+}
+
+/**
+ * 邮箱唯一性验证注解
+ */
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = UniqueEmailValidator.class)
+@Documented
+public @interface UniqueEmail {
+    
+    String message() default "邮箱已存在";
+    
+    Class<?>[] groups() default {};
+    
+    Class<? extends Payload>[] payload() default {};
+}
+
+/**
+ * 邮箱唯一性验证器
+ */
+@Component
+public class UniqueEmailValidator implements ConstraintValidator<UniqueEmail, String> {
+    
+    private final UserRepository userRepository;
+    
+    public UniqueEmailValidator(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
+    @Override
+    public boolean isValid(String email, ConstraintValidatorContext context) {
+        if (email == null) {
+            return true;  // 由@NotBlank等注解处理空值
+        }
+        
+        return !userRepository.existsByEmailIgnoreCaseAndDeletedFalse(email);
+    }
+}
+
+/**
+ * 邀请码验证注解
+ */
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = InvitationCodeValidator.class)
+@Documented
+public @interface InvitationCodeValid {
+    
+    String message() default "邀请码格式不正确";
+    
+    Class<?>[] groups() default {};
+    
+    Class<? extends Payload>[] payload() default {};
+}
+
+/**
+ * 邀请码验证器
+ */
+@Component
+public class InvitationCodeValidator implements ConstraintValidator<InvitationCodeValid, String> {
+    
+    private final InvitationCodeService invitationCodeService;
+    
+    public InvitationCodeValidator(InvitationCodeService invitationCodeService) {
+        this.invitationCodeService = invitationCodeService;
+    }
+    
+    @Override
+    public boolean isValid(String invitationCode, ConstraintValidatorContext context) {
+        if (invitationCode == null || invitationCode.trim().isEmpty()) {
+            return true;  // 邀请码是可选的
+        }
+        
+        // 格式验证
+        if (!invitationCode.matches("^INV[A-Z0-9]{6}$")) {
+            addCustomMessage(context, "邀请码格式必须为INV开头加6位字母数字");
+            return false;
+        }
+        
+        // 业务验证 - 检查邀请码是否有效
+        if (!invitationCodeService.isValidInvitationCode(invitationCode)) {
+            addCustomMessage(context, "邀请码不存在或已过期");
+            return false;
+        }
+        
+        return true;
+    }
+    
+    private void addCustomMessage(ConstraintValidatorContext context, String message) {
+        context.disableDefaultConstraintViolation();
+        context.buildConstraintViolationWithTemplate(message)
+               .addConstraintViolation();
+    }
+}
+
+/**
+ * 用户注册信息完整性验证注解
+ */
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = UserRegistrationValidator.class)
+@Documented
+public @interface UserRegistrationValid {
+    
+    String message() default "用户注册信息验证失败";
+    
+    Class<?>[] groups() default {};
+    
+    Class<? extends Payload>[] payload() default {};
+}
+
+/**
+ * 用户注册信息验证器
+ */
+@Component
+public class UserRegistrationValidator implements ConstraintValidator<UserRegistrationValid, UserRegistrationRequest> {
+    
+    @Override
+    public boolean isValid(UserRegistrationRequest request, ConstraintValidatorContext context) {
+        if (request == null) {
+            return true;
+        }
+        
+        List<String> errors = new ArrayList<>();
+        
+        // 密码确认验证
+        if (!Objects.equals(request.getPassword(), request.getConfirmPassword())) {
+            errors.add("密码和确认密码不一致");
+        }
+        
+        // 年龄和生日一致性验证
+        if (request.getAge() != null && request.getBirthday() != null) {
+            int calculatedAge = Period.between(request.getBirthday(), LocalDate.now()).getYears();
+            if (Math.abs(calculatedAge - request.getAge()) > 1) {
+                errors.add("年龄与生日不一致");
+            }
+        }
+        
+        // 业务规则验证
+        if (request.getUsername() != null && request.getEmail() != null) {
+            String emailPrefix = request.getEmail().split("@")[0];
+            if (request.getUsername().equalsIgnoreCase(emailPrefix)) {
+                errors.add("用户名不能与邮箱前缀相同");
+            }
+        }
+        
+        if (!errors.isEmpty()) {
+            // 禁用默认消息，添加自定义消息
+            context.disableDefaultConstraintViolation();
+            
+            for (String error : errors) {
+                context.buildConstraintViolationWithTemplate(error)
+                       .addConstraintViolation();
+            }
+            
+            return false;
+        }
+        
+        return true;
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 验证服务和方法级验证
+```java
+/* [AI-BLOCK-START] - 生成工具: 数据验证规范 v2.0 */
+/**
+ * 用户验证服务
+ * 
+ * 提供用户相关的复杂验证逻辑，包括业务规则验证和跨域验证。
+ */
+@Service
+@Validated
+@Slf4j
+public class UserValidationService {
+    
+    private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
+    private final RoleRepository roleRepository;
+    
+    public UserValidationService(UserRepository userRepository,
+                               DepartmentRepository departmentRepository,
+                               RoleRepository roleRepository) {
+        this.userRepository = userRepository;
+        this.departmentRepository = departmentRepository;
+        this.roleRepository = roleRepository;
+    }
+    
+    /**
+     * 验证用户创建请求
+     * 方法级验证示例
+     * 
+     * @param request 用户创建请求
+     * @return 验证结果
+     */
+    @Valid
+    public ValidationResult validateUserCreation(
+            @Valid @NotNull(message = "用户创建请求不能为空") UserRegistrationRequest request) {
+        
+        List<ValidationError> errors = new ArrayList<>();
+        
+        // 业务规则验证
+        validateBusinessRules(request, errors);
+        
+        // 数据一致性验证
+        validateDataConsistency(request, errors);
+        
+        // 权限验证
+        validatePermissions(request, errors);
+        
+        return ValidationResult.builder()
+            .valid(errors.isEmpty())
+            .errors(errors)
+            .build();
+    }
+    
+    /**
+     * 验证用户更新请求
+     * 
+     * @param userId 用户ID
+     * @param request 更新请求
+     * @return 验证结果
+     */
+    @Valid
+    public ValidationResult validateUserUpdate(
+            @NotNull @Min(1) Long userId,
+            @Valid @NotNull UserUpdateRequest request) {
+        
+        List<ValidationError> errors = new ArrayList<>();
+        
+        // 检查用户是否存在
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            errors.add(ValidationError.builder()
+                .field("userId")
+                .message("用户不存在")
+                .rejectedValue(userId)
+                .build());
+            return ValidationResult.builder()
+                .valid(false)
+                .errors(errors)
+                .build();
+        }
+        
+        User existingUser = userOpt.get();
+        
+        // 验证更新权限
+        validateUpdatePermissions(existingUser, request, errors);
+        
+        // 验证业务规则
+        validateUpdateBusinessRules(existingUser, request, errors);
+        
+        return ValidationResult.builder()
+            .valid(errors.isEmpty())
+            .errors(errors)
+            .build();
+    }
+    
+    /**
+     * 批量验证用户数据
+     * 
+     * @param requests 用户请求列表
+     * @return 批量验证结果
+     */
+    public BatchValidationResult validateUsersBatch(
+            @NotEmpty(message = "用户列表不能为空") 
+            @Size(max = 1000, message = "批量验证用户数不能超过1000个")
+            List<@Valid UserRegistrationRequest> requests) {
+        
+        Map<Integer, ValidationResult> results = new HashMap<>();
+        int successCount = 0;
+        int failureCount = 0;
+        
+        for (int i = 0; i < requests.size(); i++) {
+            UserRegistrationRequest request = requests.get(i);
+            ValidationResult result = validateUserCreation(request);
+            results.put(i, result);
+            
+            if (result.isValid()) {
+                successCount++;
+            } else {
+                failureCount++;
+            }
+        }
+        
+        return BatchValidationResult.builder()
+            .totalCount(requests.size())
+            .successCount(successCount)
+            .failureCount(failureCount)
+            .results(results)
+            .build();
+    }
+    
+    /**
+     * 验证密码强度
+     * 
+     * @param password 密码
+     * @return 密码强度等级
+     */
+    public PasswordStrength validatePasswordStrength(
+            @NotBlank(message = "密码不能为空") String password) {
+        
+        int score = 0;
+        List<String> suggestions = new ArrayList<>();
+        
+        // 长度检查
+        if (password.length() >= 8) {
+            score += 1;
+        } else {
+            suggestions.add("密码长度至少8位");
+        }
+        
+        if (password.length() >= 12) {
+            score += 1;
+        } else {
+            suggestions.add("建议密码长度12位以上");
+        }
+        
+        // 字符类型检查
+        if (password.matches(".*[a-z].*")) {
+            score += 1;
+        } else {
+            suggestions.add("包含小写字母");
+        }
+        
+        if (password.matches(".*[A-Z].*")) {
+            score += 1;
+        } else {
+            suggestions.add("包含大写字母");
+        }
+        
+        if (password.matches(".*\\d.*")) {
+            score += 1;
+        } else {
+            suggestions.add("包含数字");
+        }
+        
+        if (password.matches(".*[@$!%*?&].*")) {
+            score += 1;
+        } else {
+            suggestions.add("包含特殊字符");
+        }
+        
+        // 复杂度检查
+        if (!hasRepeatingChars(password)) {
+            score += 1;
+        } else {
+            suggestions.add("避免重复字符");
+        }
+        
+        if (!hasSequentialChars(password)) {
+            score += 1;
+        } else {
+            suggestions.add("避免连续字符");
+        }
+        
+        // 确定强度等级
+        PasswordStrengthLevel level;
+        if (score <= 2) {
+            level = PasswordStrengthLevel.WEAK;
+        } else if (score <= 5) {
+            level = PasswordStrengthLevel.MEDIUM;
+        } else if (score <= 7) {
+            level = PasswordStrengthLevel.STRONG;
+        } else {
+            level = PasswordStrengthLevel.VERY_STRONG;
+        }
+        
+        return PasswordStrength.builder()
+            .level(level)
+            .score(score)
+            .maxScore(8)
+            .suggestions(suggestions)
+            .build();
+    }
+    
+    /**
+     * 验证邮箱格式和域名
+     * 
+     * @param email 邮箱地址
+     * @return 验证结果
+     */
+    public EmailValidationResult validateEmail(
+            @NotBlank @Email String email) {
+        
+        List<String> warnings = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        
+        // 基础格式验证（由@Email注解处理）
+        
+        // 域名验证
+        String domain = email.substring(email.indexOf('@') + 1);
+        
+        // 检查是否是一次性邮箱
+        if (isDisposableEmail(domain)) {
+            warnings.add("检测到一次性邮箱域名");
+        }
+        
+        // 检查域名是否在黑名单中
+        if (isBlacklistedDomain(domain)) {
+            errors.add("该邮箱域名不被支持");
+        }
+        
+        // 检查邮箱长度
+        String localPart = email.substring(0, email.indexOf('@'));
+        if (localPart.length() > 64) {
+            errors.add("邮箱用户名部分过长");
+        }
+        
+        if (domain.length() > 253) {
+            errors.add("邮箱域名部分过长");
+        }
+        
+        return EmailValidationResult.builder()
+            .valid(errors.isEmpty())
+            .email(email)
+            .domain(domain)
+            .errors(errors)
+            .warnings(warnings)
+            .build();
+    }
+    
+    /**
+     * 验证业务规则
+     */
+    private void validateBusinessRules(UserRegistrationRequest request, List<ValidationError> errors) {
+        // 部门存在性验证
+        if (request.getAddress() != null && request.getAddress().getProvince() != null) {
+            // 验证省份城市匹配性
+            if (!isValidProvinceCity(request.getAddress().getProvince(), request.getAddress().getCity())) {
+                errors.add(ValidationError.builder()
+                    .field("address.city")
+                    .message("城市与省份不匹配")
+                    .rejectedValue(request.getAddress().getCity())
+                    .build());
+            }
+        }
+        
+        // 年龄和生日一致性
+        if (request.getAge() != null && request.getBirthday() != null) {
+            int calculatedAge = Period.between(request.getBirthday(), LocalDate.now()).getYears();
+            if (Math.abs(calculatedAge - request.getAge()) > 1) {
+                errors.add(ValidationError.builder()
+                    .field("age")
+                    .message("年龄与生日不一致")
+                    .rejectedValue(request.getAge())
+                    .build());
+            }
+        }
+    }
+    
+    /**
+     * 验证数据一致性
+     */
+    private void validateDataConsistency(UserRegistrationRequest request, List<ValidationError> errors) {
+        // 密码一致性
+        if (!Objects.equals(request.getPassword(), request.getConfirmPassword())) {
+            errors.add(ValidationError.builder()
+                .field("confirmPassword")
+                .message("密码和确认密码不一致")
+                .rejectedValue("***")
+                .build());
+        }
+    }
+    
+    /**
+     * 验证权限
+     */
+    private void validatePermissions(UserRegistrationRequest request, List<ValidationError> errors) {
+        // 这里可以添加权限相关的验证逻辑
+        // 例如：验证邀请码的权限级别等
+    }
+    
+    /**
+     * 验证更新权限
+     */
+    private void validateUpdatePermissions(User existingUser, UserUpdateRequest request, List<ValidationError> errors) {
+        // 检查当前用户是否有权限更新目标用户
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()) {
+            String currentUsername = authentication.getName();
+            boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN"));
+            
+            if (!isAdmin && !existingUser.getUsername().equals(currentUsername)) {
+                errors.add(ValidationError.builder()
+                    .field("userId")
+                    .message("没有权限更新该用户信息")
+                    .rejectedValue(existingUser.getId())
+                    .build());
+            }
+        }
+    }
+    
+    /**
+     * 验证更新业务规则
+     */
+    private void validateUpdateBusinessRules(User existingUser, UserUpdateRequest request, List<ValidationError> errors) {
+        // 状态检查
+        if (existingUser.getStatus() == UserStatus.LOCKED) {
+            errors.add(ValidationError.builder()
+                .field("userId")
+                .message("锁定用户不能更新信息")
+                .rejectedValue(existingUser.getId())
+                .build());
+        }
+        
+        // 手机号唯一性检查（如果更新了手机号）
+        if (request.getPhone() != null && !request.getPhone().equals(existingUser.getPhone())) {
+            if (userRepository.existsByPhoneAndIdNotAndDeletedFalse(request.getPhone(), existingUser.getId())) {
+                errors.add(ValidationError.builder()
+                    .field("phone")
+                    .message("手机号已被其他用户使用")
+                    .rejectedValue(request.getPhone())
+                    .build());
+            }
+        }
+    }
+    
+    // 辅助方法
+    private boolean hasRepeatingChars(String password) {
+        return password.matches(".*(.)\\1{2,}.*");
+    }
+    
+    private boolean hasSequentialChars(String password) {
+        for (int i = 0; i < password.length() - 2; i++) {
+            char c1 = password.charAt(i);
+            char c2 = password.charAt(i + 1);
+            char c3 = password.charAt(i + 2);
+            if (c2 == c1 + 1 && c3 == c2 + 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    private boolean isDisposableEmail(String domain) {
+        Set<String> disposableDomains = Set.of(
+            "10minutemail.com", "tempmail.org", "guerrillamail.com",
+            "mailinator.com", "yopmail.com"
+        );
+        return disposableDomains.contains(domain.toLowerCase());
+    }
+    
+    private boolean isBlacklistedDomain(String domain) {
+        // 这里可以从配置或数据库中读取黑名单
+        return false;
+    }
+    
+    private boolean isValidProvinceCity(String province, String city) {
+        // 这里可以实现省份城市匹配验证逻辑
+        return true;
+    }
+}
+
+/**
+ * 验证结果
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ValidationResult {
+    
+    private boolean valid;
+    private List<ValidationError> errors;
+    
+    public static ValidationResult success() {
+        return ValidationResult.builder()
+            .valid(true)
+            .errors(Collections.emptyList())
+            .build();
+    }
+    
+    public static ValidationResult failure(List<ValidationError> errors) {
+        return ValidationResult.builder()
+            .valid(false)
+            .errors(errors)
+            .build();
+    }
+}
+
+/**
+ * 验证错误
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ValidationError {
+    
+    private String field;
+    private String message;
+    private Object rejectedValue;
+    private String errorCode;
+}
+
+/**
+ * 批量验证结果
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BatchValidationResult {
+    
+    private int totalCount;
+    private int successCount;
+    private int failureCount;
+    private Map<Integer, ValidationResult> results;
+}
+
+/**
+ * 密码强度
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PasswordStrength {
+    
+    private PasswordStrengthLevel level;
+    private int score;
+    private int maxScore;
+    private List<String> suggestions;
+}
+
+/**
+ * 密码强度等级
+ */
+public enum PasswordStrengthLevel {
+    WEAK("弱"),
+    MEDIUM("中等"),
+    STRONG("强"),
+    VERY_STRONG("很强");
+    
+    private final String description;
+    
+    PasswordStrengthLevel(String description) {
+        this.description = description;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+}
+
+/**
+ * 邮箱验证结果
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class EmailValidationResult {
+    
+    private boolean valid;
+    private String email;
+    private String domain;
+    private List<String> errors;
+    private List<String> warnings;
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此数据验证规范提供了完整的数据验证体系，包括标准注解使用、自定义验证器、方法级验证和复杂业务规则验证*
+description:
+globs:
+alwaysApply: false
+---

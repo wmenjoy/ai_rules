@@ -1,0 +1,766 @@
+# 服务层规范 (模块层规则)
+> 业务逻辑封装、事务管理和异常处理的标准化规范
+
+## 基础规范
+
+### 服务层职责定义
+- **业务逻辑封装**：核心业务规则和流程的实现
+- **事务边界管理**：定义事务的开始、提交和回滚边界
+- **数据转换协调**：DTO与Entity之间的数据转换
+- **异常处理和转换**：将底层异常转换为业务异常
+- **外部服务集成**：调用外部API和第三方服务
+
+### 服务类设计原则
+- **接口分离**：定义Service接口，实现类以Impl结尾
+- **单一职责**：每个Service专注于一个业务领域
+- **依赖注入**：使用构造器注入，避免字段注入
+- **无状态设计**：Service类不保存状态信息
+- **线程安全**：确保多线程环境下的安全性
+
+### 事务管理策略
+- **读写分离**：查询方法使用@Transactional(readOnly = true)
+- **传播行为**：明确定义事务传播行为
+- **隔离级别**：根据业务需求设置适当的隔离级别
+- **超时设置**：为长时间运行的事务设置超时
+- **异常回滚**：指定需要回滚的异常类型
+
+### 异步处理规范
+- **@Async注解**：异步方法使用@Async标识
+- **线程池配置**：使用专门的线程池执行异步任务
+- **异常处理**：异步方法的异常处理机制
+- **返回值类型**：使用CompletableFuture包装异步返回值
+
+## 强制行为
+
+### 服务类标准结构
+- **@Service注解**：标识服务层组件
+- **@Transactional注解**：类级别设置默认事务属性
+- **@Slf4j注解**：集成日志框架
+- **final字段**：依赖的Repository和其他Service声明为final
+
+### 业务方法设计
+- **参数验证**：方法入口进行参数有效性检查
+- **业务规则验证**：执行业务逻辑前验证业务规则
+- **数据转换**：使用Converter进行DTO和Entity转换
+- **日志记录**：关键业务操作记录日志
+
+### 异常处理要求
+- **异常转换**：将技术异常转换为业务异常
+- **异常链保持**：保持原始异常信息，便于问题排查
+- **日志记录**：异常发生时记录详细的上下文信息
+- **资源清理**：异常发生时确保资源正确释放
+
+### 缓存使用规范
+- **@Cacheable注解**：查询方法使用缓存
+- **@CacheEvict注解**：更新删除时清理缓存
+- **缓存Key设计**：使用业务相关的缓存Key
+- **缓存过期策略**：设置合理的缓存过期时间
+
+## 禁止行为
+
+### 服务设计禁令
+- **禁止在Service中处理HTTP请求响应**：不直接操作HttpServletRequest/Response
+- **禁止在Service中编写业务无关的逻辑**：如日志格式化、权限检查等
+- **禁止Service直接返回Entity**：必须转换为DTO返回
+- **禁止在Service中硬编码配置**：配置信息通过@Value或配置类注入
+- **禁止Service之间的循环依赖**：合理拆分或使用事件机制
+
+### 事务使用禁令
+- **禁止事务方法调用同类的事务方法**：Spring AOP代理机制限制
+- **禁止在事务中执行长时间操作**：避免长事务锁定资源
+- **禁止忽略事务异常**：事务方法中的异常必须正确处理
+- **禁止在事务中调用外部服务**：避免外部服务影响事务
+- **禁止嵌套事务的不当使用**：明确事务传播行为
+
+### 性能相关禁令
+- **禁止在循环中调用Repository方法**：使用批量操作
+- **禁止N+1查询问题**：使用JOIN FETCH或分别查询
+- **禁止在Service中进行复杂计算**：使用异步或专门的计算服务
+- **禁止返回大量数据**：使用分页或流式处理
+- **禁止不必要的数据查询**：只查询需要的字段
+
+### 安全相关禁令
+- **禁止在Service中进行权限检查**：权限检查在Controller层
+- **禁止在日志中记录敏感信息**：密码、身份证等信息要脱敏
+- **禁止暴露内部实现细节**：异常信息不暴露技术细节
+- **禁止不安全的外部调用**：验证外部服务的SSL证书
+- **禁止在Service中直接使用用户输入**：必须经过验证和转换
+
+## 示例代码
+
+### 标准的Service接口和实现
+```java
+/* [AI-BLOCK-START] - 生成工具: 服务层规范 v2.0 */
+/**
+ * 用户服务接口
+ * 
+ * 定义用户相关的业务操作，包括用户的创建、查询、更新和删除。
+ */
+public interface UserService {
+    
+    /**
+     * 创建用户
+     * 
+     * @param request 用户创建请求
+     * @return 创建的用户信息
+     * @throws BusinessException 当用户名已存在或其他业务规则违反时
+     */
+    UserResponse createUser(CreateUserRequest request);
+    
+    /**
+     * 根据ID查询用户
+     * 
+     * @param id 用户ID
+     * @return 用户信息
+     * @throws ResourceNotFoundException 当用户不存在时
+     */
+    UserResponse findUserById(Long id);
+    
+    /**
+     * 分页查询用户
+     * 
+     * @param pageable 分页参数
+     * @param criteria 查询条件
+     * @return 分页用户列表
+     */
+    PageResponse<UserResponse> findUsers(Pageable pageable, UserSearchCriteria criteria);
+    
+    /**
+     * 更新用户信息
+     * 
+     * @param id 用户ID
+     * @param request 更新请求
+     * @return 更新后的用户信息
+     * @throws ResourceNotFoundException 当用户不存在时
+     */
+    UserResponse updateUser(Long id, UpdateUserRequest request);
+    
+    /**
+     * 删除用户
+     * 
+     * @param id 用户ID
+     * @throws ResourceNotFoundException 当用户不存在时
+     */
+    void deleteUser(Long id);
+    
+    /**
+     * 激活用户
+     * 
+     * @param id 用户ID
+     * @throws ResourceNotFoundException 当用户不存在时
+     * @throws BusinessException 当用户状态不允许激活时
+     */
+    void activateUser(Long id);
+    
+    /**
+     * 批量操作用户
+     * 
+     * @param request 批量操作请求
+     * @return 操作结果
+     */
+    BatchOperationResult batchOperation(BatchUserOperationRequest request);
+}
+
+/**
+ * 用户服务实现类
+ */
+@Service
+@Transactional(readOnly = true)
+@Slf4j
+public class UserServiceImpl implements UserService {
+    
+    private final UserRepository userRepository;
+    private final UserConverter userConverter;
+    private final EmailService emailService;
+    private final UserEventPublisher userEventPublisher;
+    
+    /**
+     * 构造器注入依赖
+     */
+    public UserServiceImpl(UserRepository userRepository,
+                          UserConverter userConverter,
+                          EmailService emailService,
+                          UserEventPublisher userEventPublisher) {
+        this.userRepository = userRepository;
+        this.userConverter = userConverter;
+        this.emailService = emailService;
+        this.userEventPublisher = userEventPublisher;
+    }
+    
+    /**
+     * 创建用户 - 写操作事务
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class, timeout = 30)
+    @CacheEvict(value = "users", allEntries = true)
+    public UserResponse createUser(CreateUserRequest request) {
+        log.info("Creating user: username={}, email={}", request.getUsername(), request.getEmail());
+        
+        try {
+            // 1. 参数验证
+            validateCreateUserRequest(request);
+            
+            // 2. 业务规则检查
+            checkBusinessRules(request);
+            
+            // 3. 创建实体
+            User user = userConverter.toEntity(request);
+            user.setStatus(UserStatus.PENDING);
+            user.setCreateTime(LocalDateTime.now());
+            
+            // 4. 保存用户
+            User savedUser = userRepository.save(user);
+            
+            // 5. 异步发送激活邮件
+            sendActivationEmailAsync(savedUser);
+            
+            // 6. 发布用户创建事件
+            userEventPublisher.publishUserCreatedEvent(savedUser);
+            
+            // 7. 转换并返回
+            UserResponse response = userConverter.toResponse(savedUser);
+            
+            log.info("User created successfully: id={}, username={}", 
+                savedUser.getId(), savedUser.getUsername());
+            
+            return response;
+            
+        } catch (BusinessException e) {
+            log.warn("Business error creating user: {}", e.getMessage());
+            throw e;
+        } catch (DataAccessException e) {
+            log.error("Database error creating user: {}", request.getUsername(), e);
+            throw new BusinessException(ErrorCode.USER_CREATE_FAILED, "用户创建失败", e);
+        } catch (Exception e) {
+            log.error("Unexpected error creating user: {}", request.getUsername(), e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "系统错误", e);
+        }
+    }
+    
+    /**
+     * 查询用户 - 只读事务
+     */
+    @Override
+    @Cacheable(value = "users", key = "#id", unless = "#result == null")
+    public UserResponse findUserById(Long id) {
+        log.debug("Finding user by id: {}", id);
+        
+        User user = userRepository.findById(id)
+            .filter(u -> !u.isDeleted())
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + id));
+            
+        return userConverter.toResponse(user);
+    }
+    
+    /**
+     * 分页查询用户
+     */
+    @Override
+    public PageResponse<UserResponse> findUsers(Pageable pageable, UserSearchCriteria criteria) {
+        log.debug("Finding users: page={}, size={}, criteria={}", 
+            pageable.getPageNumber(), pageable.getPageSize(), criteria);
+        
+        try {
+            // 构建查询规格
+            Specification<User> spec = UserSpecifications.buildSpecification(criteria);
+            
+            // 执行分页查询
+            Page<User> userPage = userRepository.findAll(spec, pageable);
+            
+            // 转换为响应对象
+            List<UserResponse> userResponses = userPage.getContent().stream()
+                .map(userConverter::toResponse)
+                .collect(Collectors.toList());
+            
+            return PageResponse.<UserResponse>builder()
+                .content(userResponses)
+                .pageInfo(PageResponse.PageInfo.builder()
+                    .page(userPage.getNumber())
+                    .size(userPage.getSize())
+                    .total(userPage.getTotalElements())
+                    .totalPages(userPage.getTotalPages())
+                    .first(userPage.isFirst())
+                    .last(userPage.isLast())
+                    .hasNext(userPage.hasNext())
+                    .hasPrevious(userPage.hasPrevious())
+                    .build())
+                .build();
+                
+        } catch (Exception e) {
+            log.error("Error finding users", e);
+            throw new BusinessException(ErrorCode.USER_QUERY_FAILED, "用户查询失败", e);
+        }
+    }
+    
+    /**
+     * 更新用户信息
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "users", key = "#id")
+    public UserResponse updateUser(Long id, UpdateUserRequest request) {
+        log.info("Updating user: id={}", id);
+        
+        try {
+            // 查找用户
+            User user = findUserEntityById(id);
+            
+            // 验证更新权限
+            validateUpdatePermission(user, request);
+            
+            // 更新字段
+            updateUserFields(user, request);
+            
+            // 保存更新
+            User updatedUser = userRepository.save(user);
+            
+            // 发布用户更新事件
+            userEventPublisher.publishUserUpdatedEvent(updatedUser);
+            
+            log.info("User updated successfully: id={}", id);
+            
+            return userConverter.toResponse(updatedUser);
+            
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error updating user: id={}", id, e);
+            throw new BusinessException(ErrorCode.USER_UPDATE_FAILED, "用户更新失败", e);
+        }
+    }
+    
+    /**
+     * 删除用户（软删除）
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "users", key = "#id")
+    public void deleteUser(Long id) {
+        log.info("Deleting user: id={}", id);
+        
+        try {
+            User user = findUserEntityById(id);
+            
+            // 验证删除权限
+            validateDeletePermission(user);
+            
+            // 软删除
+            user.markAsDeleted();
+            user.setStatus(UserStatus.DELETED);
+            
+            userRepository.save(user);
+            
+            // 发布用户删除事件
+            userEventPublisher.publishUserDeletedEvent(user);
+            
+            log.info("User deleted successfully: id={}", id);
+            
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error deleting user: id={}", id, e);
+            throw new BusinessException(ErrorCode.USER_DELETE_FAILED, "用户删除失败", e);
+        }
+    }
+    
+    /**
+     * 激活用户
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "users", key = "#id")
+    public void activateUser(Long id) {
+        log.info("Activating user: id={}", id);
+        
+        try {
+            User user = findUserEntityById(id);
+            
+            // 验证激活条件
+            if (user.getStatus() == UserStatus.ACTIVE) {
+                throw new BusinessException(ErrorCode.USER_ALREADY_ACTIVE, "用户已经是激活状态");
+            }
+            
+            if (user.getStatus() == UserStatus.DELETED) {
+                throw new BusinessException(ErrorCode.USER_DELETED, "已删除的用户不能激活");
+            }
+            
+            // 激活用户
+            user.setStatus(UserStatus.ACTIVE);
+            userRepository.save(user);
+            
+            // 发送欢迎邮件
+            sendWelcomeEmailAsync(user);
+            
+            // 发布激活事件
+            userEventPublisher.publishUserActivatedEvent(user);
+            
+            log.info("User activated successfully: id={}", id);
+            
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error activating user: id={}", id, e);
+            throw new BusinessException(ErrorCode.USER_ACTIVATE_FAILED, "用户激活失败", e);
+        }
+    }
+    
+    /**
+     * 批量操作用户
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BatchOperationResult batchOperation(BatchUserOperationRequest request) {
+        log.info("Batch operation: action={}, userCount={}", 
+            request.getAction(), request.getUserIds().size());
+        
+        try {
+            List<Long> userIds = request.getUserIds();
+            BatchOperationAction action = request.getAction();
+            
+            // 验证批量操作权限
+            validateBatchOperationPermission(action, userIds);
+            
+            // 执行批量操作
+            BatchOperationResult result = executeBatchOperation(action, userIds);
+            
+            // 清除相关缓存
+            clearUserCaches(userIds);
+            
+            log.info("Batch operation completed: action={}, success={}, failed={}", 
+                action, result.getSuccessCount(), result.getFailureCount());
+            
+            return result;
+            
+        } catch (Exception e) {
+            log.error("Error in batch operation: action={}", request.getAction(), e);
+            throw new BusinessException(ErrorCode.BATCH_OPERATION_FAILED, "批量操作失败", e);
+        }
+    }
+    
+    /**
+     * 异步发送激活邮件
+     */
+    @Async("emailTaskExecutor")
+    public CompletableFuture<Void> sendActivationEmailAsync(User user) {
+        try {
+            emailService.sendActivationEmail(user.getEmail(), user.getUsername(), 
+                generateActivationToken(user));
+            log.info("Activation email sent to: {}", user.getEmail());
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("Failed to send activation email to: {}", user.getEmail(), e);
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    /**
+     * 异步发送欢迎邮件
+     */
+    @Async("emailTaskExecutor")
+    public CompletableFuture<Void> sendWelcomeEmailAsync(User user) {
+        try {
+            emailService.sendWelcomeEmail(user.getEmail(), user.getUsername());
+            log.info("Welcome email sent to: {}", user.getEmail());
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("Failed to send welcome email to: {}", user.getEmail(), e);
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    // 私有辅助方法
+    
+    private void validateCreateUserRequest(CreateUserRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("用户创建请求不能为空");
+        }
+        
+        if (StringUtils.isBlank(request.getUsername())) {
+            throw new BusinessException(ErrorCode.INVALID_USERNAME, "用户名不能为空");
+        }
+        
+        if (StringUtils.isBlank(request.getEmail())) {
+            throw new BusinessException(ErrorCode.INVALID_EMAIL, "邮箱不能为空");
+        }
+    }
+    
+    private void checkBusinessRules(CreateUserRequest request) {
+        // 检查用户名唯一性
+        if (userRepository.existsByUsernameAndDeletedFalse(request.getUsername())) {
+            throw new BusinessException(ErrorCode.USERNAME_EXISTS, "用户名已存在: " + request.getUsername());
+        }
+        
+        // 检查邮箱唯一性
+        if (userRepository.existsByEmailAndDeletedFalse(request.getEmail())) {
+            throw new BusinessException(ErrorCode.EMAIL_EXISTS, "邮箱已存在: " + request.getEmail());
+        }
+    }
+    
+    private User findUserEntityById(Long id) {
+        return userRepository.findById(id)
+            .filter(u -> !u.isDeleted())
+            .orElseThrow(() -> new ResourceNotFoundException("用户不存在: " + id));
+    }
+    
+    private void updateUserFields(User user, UpdateUserRequest request) {
+        if (StringUtils.hasText(request.getName())) {
+            user.setName(request.getName());
+        }
+        if (StringUtils.hasText(request.getPhone())) {
+            user.setPhone(request.getPhone());
+        }
+        // 更多字段更新...
+    }
+    
+    private String generateActivationToken(User user) {
+        // 生成激活令牌的逻辑
+        return UUID.randomUUID().toString();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 事务管理最佳实践
+```java
+/* [AI-BLOCK-START] - 生成工具: 服务层规范 v2.0 */
+@Service
+@Transactional(readOnly = true)
+@Slf4j
+public class OrderServiceImpl implements OrderService {
+    
+    private final OrderRepository orderRepository;
+    private final InventoryService inventoryService;
+    private final PaymentService paymentService;
+    private final NotificationService notificationService;
+    
+    /**
+     * 复杂业务流程的事务管理示例
+     * 订单处理流程：库存检查 -> 创建订单 -> 扣减库存 -> 发送通知
+     */
+    @Transactional(
+        rollbackFor = Exception.class,
+        timeout = 60,
+        isolation = Isolation.READ_COMMITTED
+    )
+    public OrderResponse processOrder(CreateOrderRequest request) {
+        log.info("Processing order: userId={}, productIds={}", 
+            request.getUserId(), request.getOrderItems().stream()
+                .map(item -> item.getProductId())
+                .collect(Collectors.toList()));
+        
+        try {
+            // 1. 参数验证
+            validateOrderRequest(request);
+            
+            // 2. 库存检查（在同一事务中）
+            List<InventoryCheckResult> inventoryResults = inventoryService.checkAvailability(
+                request.getOrderItems());
+            
+            if (inventoryResults.stream().anyMatch(result -> !result.isAvailable())) {
+                throw new BusinessException(ErrorCode.INSUFFICIENT_INVENTORY, "库存不足");
+            }
+            
+            // 3. 创建订单
+            Order order = createOrderEntity(request);
+            Order savedOrder = orderRepository.save(order);
+            
+            // 4. 扣减库存（同一事务）
+            inventoryService.reserveInventory(request.getOrderItems(), savedOrder.getId());
+            
+            // 5. 异步发送通知（不影响主事务）
+            sendOrderNotificationAsync(savedOrder);
+            
+            log.info("Order processed successfully: orderId={}", savedOrder.getId());
+            
+            return orderConverter.toResponse(savedOrder);
+            
+        } catch (BusinessException e) {
+            log.warn("Business error processing order: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error processing order", e);
+            throw new BusinessException(ErrorCode.ORDER_PROCESS_FAILED, "订单处理失败", e);
+        }
+    }
+    
+    /**
+     * 嵌套事务处理示例
+     * 支付处理需要独立的事务，不影响主订单流程
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public PaymentResult processPayment(Long orderId, PaymentRequest request) {
+        log.info("Processing payment: orderId={}, amount={}", orderId, request.getAmount());
+        
+        try {
+            // 1. 查询订单
+            Order order = findOrderById(orderId);
+            
+            // 2. 验证支付条件
+            validatePaymentConditions(order, request);
+            
+            // 3. 调用支付服务（使用REQUIRES_NEW传播级别）
+            PaymentResult paymentResult = paymentService.processPaymentInNewTransaction(
+                order, request);
+            
+            // 4. 根据支付结果更新订单状态
+            if (paymentResult.isSuccess()) {
+                order.setStatus(OrderStatus.PAID);
+                order.setPaymentTime(LocalDateTime.now());
+                orderRepository.save(order);
+                
+                // 5. 异步处理后续流程
+                processPostPaymentAsync(order, paymentResult);
+            } else {
+                // 支付失败，记录失败原因但不回滚订单
+                log.warn("Payment failed: orderId={}, reason={}", 
+                    orderId, paymentResult.getFailureReason());
+            }
+            
+            return paymentResult;
+            
+        } catch (Exception e) {
+            log.error("Error processing payment: orderId={}", orderId, e);
+            throw new BusinessException(ErrorCode.PAYMENT_PROCESS_FAILED, "支付处理失败", e);
+        }
+    }
+    
+    /**
+     * 只读事务示例
+     * 复杂查询使用只读事务优化性能
+     */
+    @Transactional(readOnly = true)
+    public OrderStatisticsResponse getOrderStatistics(Long userId, 
+                                                     LocalDateTime startTime, 
+                                                     LocalDateTime endTime) {
+        log.debug("Getting order statistics: userId={}, period={} to {}", 
+            userId, startTime, endTime);
+        
+        try {
+            // 1. 基础统计查询
+            OrderStatistics basicStats = orderRepository.getBasicStatistics(
+                userId, startTime, endTime);
+            
+            // 2. 详细分类统计
+            List<CategoryStatistics> categoryStats = orderRepository.getCategoryStatistics(
+                userId, startTime, endTime);
+            
+            // 3. 趋势数据
+            List<DailyStatistics> trendData = orderRepository.getDailyTrendStatistics(
+                userId, startTime, endTime);
+            
+            return OrderStatisticsResponse.builder()
+                .basicStatistics(basicStats)
+                .categoryStatistics(categoryStats)
+                .trendData(trendData)
+                .build();
+                
+        } catch (Exception e) {
+            log.error("Error getting order statistics: userId={}", userId, e);
+            throw new BusinessException(ErrorCode.STATISTICS_QUERY_FAILED, "统计查询失败", e);
+        }
+    }
+    
+    /**
+     * 异步方法示例
+     */
+    @Async("orderTaskExecutor")
+    @Transactional(
+        propagation = Propagation.REQUIRES_NEW,
+        rollbackFor = Exception.class
+    )
+    public CompletableFuture<Void> sendOrderNotificationAsync(Order order) {
+        try {
+            // 异步处理使用新事务，确保独立性
+            log.info("Sending order notification: orderId={}", order.getId());
+            
+            // 发送邮件通知
+            notificationService.sendOrderConfirmationEmail(order);
+            
+            // 发送短信通知
+            notificationService.sendOrderConfirmationSms(order);
+            
+            // 更新通知状态
+            order.setNotificationSent(true);
+            orderRepository.save(order);
+            
+            log.info("Order notification sent successfully: orderId={}", order.getId());
+            
+            return CompletableFuture.completedFuture(null);
+            
+        } catch (Exception e) {
+            log.error("Failed to send order notification: orderId={}", order.getId(), e);
+            
+            // 异步方法异常不影响主流程，但需要记录和处理
+            handleNotificationFailure(order, e);
+            
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    /**
+     * 批量操作的事务处理
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchOperationResult batchUpdateOrderStatus(List<Long> orderIds, 
+                                                      OrderStatus newStatus) {
+        log.info("Batch updating order status: orderCount={}, newStatus={}", 
+            orderIds.size(), newStatus);
+        
+        BatchOperationResult result = new BatchOperationResult();
+        
+        // 分批处理，避免长事务
+        int batchSize = 100;
+        for (int i = 0; i < orderIds.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, orderIds.size());
+            List<Long> batchIds = orderIds.subList(i, endIndex);
+            
+            try {
+                // 批量更新
+                int updatedCount = orderRepository.batchUpdateStatus(batchIds, newStatus);
+                result.addSuccess(updatedCount);
+                
+                // 强制刷新到数据库
+                orderRepository.flush();
+                
+                log.debug("Batch {} completed: processed={}, updated={}", 
+                    (i / batchSize + 1), batchIds.size(), updatedCount);
+                    
+            } catch (Exception e) {
+                log.error("Error in batch {}: orderIds={}", (i / batchSize + 1), batchIds, e);
+                result.addFailure(batchIds.size(), e.getMessage());
+            }
+        }
+        
+        log.info("Batch update completed: success={}, failed={}", 
+            result.getSuccessCount(), result.getFailureCount());
+        
+        return result;
+    }
+    
+    private void handleNotificationFailure(Order order, Exception e) {
+        // 记录通知失败，可以后续重试
+        try {
+            NotificationFailureLog failureLog = NotificationFailureLog.builder()
+                .orderId(order.getId())
+                .failureReason(e.getMessage())
+                .failureTime(LocalDateTime.now())
+                .retryCount(0)
+                .build();
+                
+            notificationFailureRepository.save(failureLog);
+            
+        } catch (Exception ex) {
+            log.error("Failed to save notification failure log", ex);
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此服务层规范确保业务逻辑的正确封装、事务的有效管理和系统的稳定运行*
+description:
+globs:
+alwaysApply: false
+---

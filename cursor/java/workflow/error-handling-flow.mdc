@@ -1,0 +1,2383 @@
+# 企业级错误处理流程规范
+
+## 基础规范
+
+### 错误处理原则
+- **统一响应格式**: 所有错误都应返回统一的响应格式
+- **分层处理**: 不同层次的错误采用不同的处理策略
+- **快速失败**: 尽早发现和处理错误，避免错误传播
+- **智能恢复**: 根据错误类型自动选择恢复策略
+- **可观测性**: 完善的日志记录、监控告警和错误追踪
+- **用户友好**: 向不同类型用户返回适当详细程度的错误信息
+
+### 企业级错误码体系设计
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+public enum ErrorCode {
+    
+    // =========================== 系统级错误 (1000-1999) ===========================
+    SYSTEM_ERROR("1000", "系统内部错误"),
+    DATABASE_ERROR("1001", "数据库错误"),
+    DATABASE_CONNECTION_ERROR("1002", "数据库连接失败"),
+    DATABASE_TIMEOUT_ERROR("1003", "数据库操作超时"),
+    DATABASE_CONSTRAINT_ERROR("1004", "数据库约束违反"),
+    DATABASE_DEADLOCK_ERROR("1005", "数据库死锁"),
+    
+    NETWORK_ERROR("1010", "网络错误"),
+    NETWORK_TIMEOUT_ERROR("1011", "网络超时"),
+    NETWORK_CONNECTION_REFUSED("1012", "网络连接被拒绝"),
+    NETWORK_DNS_ERROR("1013", "DNS解析失败"),
+    
+    CACHE_ERROR("1020", "缓存错误"),
+    CACHE_CONNECTION_ERROR("1021", "缓存连接失败"),
+    CACHE_TIMEOUT_ERROR("1022", "缓存操作超时"),
+    CACHE_MEMORY_ERROR("1023", "缓存内存不足"),
+    
+    MESSAGE_QUEUE_ERROR("1030", "消息队列错误"),
+    MESSAGE_SEND_ERROR("1031", "消息发送失败"),
+    MESSAGE_CONSUME_ERROR("1032", "消息消费失败"),
+    MESSAGE_SERIALIZE_ERROR("1033", "消息序列化失败"),
+    
+    FILE_SYSTEM_ERROR("1040", "文件系统错误"),
+    FILE_NOT_FOUND_ERROR("1041", "文件不存在"),
+    FILE_PERMISSION_ERROR("1042", "文件权限错误"),
+    FILE_SIZE_LIMIT_ERROR("1043", "文件大小超限"),
+    STORAGE_FULL_ERROR("1044", "存储空间不足"),
+    
+    THREAD_POOL_ERROR("1050", "线程池错误"),
+    TASK_REJECTED_ERROR("1051", "任务被拒绝"),
+    THREAD_INTERRUPTED_ERROR("1052", "线程被中断"),
+    
+    MEMORY_ERROR("1060", "内存错误"),
+    OUT_OF_MEMORY_ERROR("1061", "内存不足"),
+    MEMORY_LEAK_ERROR("1062", "内存泄漏检测"),
+    
+    // =========================== 认证授权错误 (2000-2999) ===========================
+    AUTHENTICATION_FAILED("2000", "认证失败"),
+    INVALID_CREDENTIALS("2001", "用户名或密码错误"),
+    INVALID_TOKEN("2002", "无效的令牌"),
+    TOKEN_EXPIRED("2003", "令牌已过期"),
+    TOKEN_MALFORMED("2004", "令牌格式错误"),
+    
+    AUTHORIZATION_FAILED("2010", "授权失败"),
+    ACCESS_DENIED("2011", "访问被拒绝"),
+    INSUFFICIENT_PERMISSIONS("2012", "权限不足"),
+    ROLE_NOT_FOUND("2013", "角色不存在"),
+    PERMISSION_DENIED("2014", "操作权限被拒绝"),
+    
+    ACCOUNT_ERROR("2020", "账户错误"),
+    ACCOUNT_LOCKED("2021", "账户已锁定"),
+    ACCOUNT_DISABLED("2022", "账户已禁用"),
+    ACCOUNT_EXPIRED("2023", "账户已过期"),
+    ACCOUNT_NOT_ACTIVATED("2024", "账户未激活"),
+    
+    SESSION_ERROR("2030", "会话错误"),
+    SESSION_EXPIRED("2031", "会话已过期"),
+    SESSION_INVALID("2032", "无效的会话"),
+    CONCURRENT_SESSION_LIMIT("2033", "并发会话数超限"),
+    
+    MFA_ERROR("2040", "多因素认证错误"),
+    MFA_CODE_INVALID("2041", "验证码无效"),
+    MFA_CODE_EXPIRED("2042", "验证码已过期"),
+    MFA_ATTEMPTS_EXCEEDED("2043", "验证码尝试次数超限"),
+    
+    // =========================== 业务逻辑错误 (3000-3999) ===========================
+    VALIDATION_ERROR("3000", "参数验证失败"),
+    REQUIRED_PARAMETER_MISSING("3001", "缺少必需参数"),
+    PARAMETER_TYPE_ERROR("3002", "参数类型错误"),
+    PARAMETER_FORMAT_ERROR("3003", "参数格式错误"),
+    PARAMETER_RANGE_ERROR("3004", "参数值超出范围"),
+    
+    RESOURCE_ERROR("3010", "资源错误"),
+    RESOURCE_NOT_FOUND("3011", "资源不存在"),
+    RESOURCE_ALREADY_EXISTS("3012", "资源已存在"),
+    RESOURCE_CONFLICT("3013", "资源冲突"),
+    RESOURCE_LOCKED("3014", "资源已被锁定"),
+    RESOURCE_EXPIRED("3015", "资源已过期"),
+    
+    BUSINESS_RULE_ERROR("3020", "业务规则错误"),
+    BUSINESS_RULE_VIOLATION("3021", "业务规则违反"),
+    WORKFLOW_STATE_ERROR("3022", "工作流状态错误"),
+    OPERATION_NOT_ALLOWED("3023", "操作不被允许"),
+    PRECONDITION_FAILED("3024", "前置条件不满足"),
+    
+    QUOTA_ERROR("3030", "配额错误"),
+    QUOTA_EXCEEDED("3031", "配额超限"),
+    RATE_LIMIT_EXCEEDED("3032", "请求频率超限"),
+    CONCURRENT_LIMIT_EXCEEDED("3033", "并发数超限"),
+    
+    DATA_INTEGRITY_ERROR("3040", "数据完整性错误"),
+    DATA_CONSISTENCY_ERROR("3041", "数据一致性错误"),
+    DATA_VERSION_CONFLICT("3042", "数据版本冲突"),
+    OPTIMISTIC_LOCK_ERROR("3043", "乐观锁冲突"),
+    
+    // =========================== 用户管理错误 (4000-4999) ===========================
+    USER_ERROR("4000", "用户错误"),
+    USER_NOT_FOUND("4001", "用户不存在"),
+    DUPLICATE_USERNAME("4002", "用户名已存在"),
+    DUPLICATE_EMAIL("4003", "邮箱已存在"),
+    DUPLICATE_PHONE("4004", "手机号已存在"),
+    
+    PASSWORD_ERROR("4010", "密码错误"),
+    INVALID_PASSWORD("4011", "密码格式错误"),
+    PASSWORD_TOO_WEAK("4012", "密码强度不足"),
+    PASSWORD_MISMATCH("4013", "密码不匹配"),
+    PASSWORD_EXPIRED("4014", "密码已过期"),
+    PASSWORD_REUSED("4015", "密码不能重复使用"),
+    
+    USER_PROFILE_ERROR("4020", "用户资料错误"),
+    INVALID_EMAIL_FORMAT("4021", "邮箱格式错误"),
+    INVALID_PHONE_FORMAT("4022", "手机号格式错误"),
+    INVALID_ID_NUMBER("4023", "身份证号格式错误"),
+    
+    USER_STATUS_ERROR("4030", "用户状态错误"),
+    USER_STATUS_INVALID("4031", "用户状态异常"),
+    USER_REGISTRATION_FAILED("4032", "用户注册失败"),
+    USER_VERIFICATION_FAILED("4033", "用户验证失败"),
+    
+    // =========================== 订单业务错误 (5000-5999) ===========================
+    ORDER_ERROR("5000", "订单错误"),
+    ORDER_NOT_FOUND("5001", "订单不存在"),
+    ORDER_STATUS_INVALID("5002", "订单状态异常"),
+    ORDER_CANNOT_CANCEL("5003", "订单无法取消"),
+    ORDER_CANNOT_MODIFY("5004", "订单无法修改"),
+    ORDER_EXPIRED("5005", "订单已过期"),
+    
+    INVENTORY_ERROR("5010", "库存错误"),
+    INSUFFICIENT_STOCK("5011", "库存不足"),
+    STOCK_LOCKED("5012", "库存已被锁定"),
+    PRODUCT_UNAVAILABLE("5013", "商品不可用"),
+    PRODUCT_DISCONTINUED("5014", "商品已下架"),
+    
+    PAYMENT_ERROR("5020", "支付错误"),
+    PAYMENT_FAILED("5021", "支付失败"),
+    PAYMENT_TIMEOUT("5022", "支付超时"),
+    PAYMENT_CANCELLED("5023", "支付已取消"),
+    INSUFFICIENT_BALANCE("5024", "余额不足"),
+    PAYMENT_METHOD_INVALID("5025", "支付方式无效"),
+    
+    SHIPPING_ERROR("5030", "配送错误"),
+    SHIPPING_ADDRESS_INVALID("5031", "配送地址无效"),
+    SHIPPING_METHOD_UNAVAILABLE("5032", "配送方式不可用"),
+    SHIPPING_AREA_UNSUPPORTED("5033", "配送区域不支持"),
+    
+    COUPON_ERROR("5040", "优惠券错误"),
+    COUPON_NOT_FOUND("5041", "优惠券不存在"),
+    COUPON_EXPIRED("5042", "优惠券已过期"),
+    COUPON_USED("5043", "优惠券已使用"),
+    COUPON_CONDITIONS_NOT_MET("5044", "优惠券使用条件不满足"),
+    
+    // =========================== 外部服务错误 (6000-6999) ===========================
+    EXTERNAL_SERVICE_ERROR("6000", "外部服务错误"),
+    EXTERNAL_SERVICE_UNAVAILABLE("6001", "外部服务不可用"),
+    EXTERNAL_SERVICE_TIMEOUT("6002", "外部服务超时"),
+    EXTERNAL_SERVICE_RATE_LIMITED("6003", "外部服务限流"),
+    
+    PAYMENT_SERVICE_ERROR("6010", "支付服务错误"),
+    PAYMENT_GATEWAY_ERROR("6011", "支付网关错误"),
+    PAYMENT_CHANNEL_ERROR("6012", "支付渠道错误"),
+    
+    NOTIFICATION_ERROR("6020", "通知服务错误"),
+    SMS_SERVICE_ERROR("6021", "短信服务错误"),
+    EMAIL_SERVICE_ERROR("6022", "邮件服务错误"),
+    PUSH_SERVICE_ERROR("6023", "推送服务错误"),
+    
+    THIRD_PARTY_API_ERROR("6030", "第三方API错误"),
+    API_KEY_INVALID("6031", "API密钥无效"),
+    API_QUOTA_EXCEEDED("6032", "API配额超限"),
+    API_VERSION_DEPRECATED("6033", "API版本已废弃"),
+    
+    LOGISTICS_SERVICE_ERROR("6040", "物流服务错误"),
+    TRACKING_SERVICE_ERROR("6041", "物流追踪服务错误"),
+    
+    // =========================== 客户端错误 (7000-7999) ===========================
+    CLIENT_ERROR("7000", "客户端错误"),
+    INVALID_REQUEST_FORMAT("7001", "请求格式错误"),
+    MISSING_REQUIRED_HEADER("7002", "缺少必需的请求头"),
+    INVALID_CONTENT_TYPE("7003", "无效的内容类型"),
+    REQUEST_TOO_LARGE("7004", "请求体过大"),
+    
+    API_VERSION_ERROR("7010", "API版本错误"),
+    UNSUPPORTED_API_VERSION("7011", "不支持的API版本"),
+    API_DEPRECATED("7012", "API已废弃"),
+    
+    CLIENT_RATE_LIMIT_ERROR("7020", "客户端限流错误"),
+    TOO_MANY_REQUESTS("7021", "请求过于频繁"),
+    CLIENT_QUOTA_EXCEEDED("7022", "客户端配额超限"),
+    
+    // =========================== 文件处理错误 (8000-8999) ===========================
+    FILE_UPLOAD_ERROR("8000", "文件上传错误"),
+    FILE_TYPE_NOT_SUPPORTED("8001", "文件类型不支持"),
+    FILE_SIZE_EXCEEDED("8002", "文件大小超限"),
+    FILE_CORRUPTED("8003", "文件已损坏"),
+    
+    FILE_PROCESSING_ERROR("8010", "文件处理错误"),
+    IMAGE_PROCESSING_ERROR("8011", "图片处理错误"),
+    VIDEO_PROCESSING_ERROR("8012", "视频处理错误"),
+    DOCUMENT_PARSING_ERROR("8013", "文档解析错误"),
+    
+    FILE_STORAGE_ERROR("8020", "文件存储错误"),
+    STORAGE_QUOTA_EXCEEDED("8021", "存储配额超限"),
+    FILE_BACKUP_ERROR("8022", "文件备份失败"),
+    
+    // =========================== 数据同步错误 (9000-9999) ===========================
+    DATA_SYNC_ERROR("9000", "数据同步错误"),
+    SYNC_CONFLICT("9001", "同步冲突"),
+    SYNC_TIMEOUT("9002", "同步超时"),
+    SYNC_SOURCE_UNAVAILABLE("9003", "同步源不可用"),
+    
+    DATA_MIGRATION_ERROR("9010", "数据迁移错误"),
+    MIGRATION_ROLLBACK_FAILED("9011", "迁移回滚失败"),
+    SCHEMA_VERSION_MISMATCH("9012", "数据库架构版本不匹配"),
+    
+    BATCH_PROCESSING_ERROR("9020", "批量处理错误"),
+    PARTIAL_SUCCESS("9021", "部分成功"),
+    BATCH_SIZE_EXCEEDED("9022", "批量大小超限"),
+    BATCH_TIMEOUT("9023", "批量处理超时");
+    
+    private final String code;
+    private final String message;
+    
+    ErrorCode(String code, String message) {
+        this.code = code;
+        this.message = message;
+    }
+    
+    public String getCode() {
+        return code;
+    }
+    
+    public String getMessage() {
+        return message;
+    }
+    
+    // 根据错误码查找枚举
+    public static ErrorCode fromCode(String code) {
+        for (ErrorCode errorCode : values()) {
+            if (errorCode.getCode().equals(code)) {
+                return errorCode;
+            }
+        }
+        throw new IllegalArgumentException("未知错误码: " + code);
+    }
+    
+    // 判断错误级别
+    public ErrorLevel getLevel() {
+        int codeNum = Integer.parseInt(code);
+        if (codeNum < 2000) {
+            return ErrorLevel.CRITICAL;  // 系统级错误
+        } else if (codeNum < 3000) {
+            return ErrorLevel.WARNING;   // 认证授权错误
+        } else if (codeNum < 6000) {
+            return ErrorLevel.INFO;      // 业务逻辑错误
+        } else if (codeNum < 7000) {
+            return ErrorLevel.WARNING;   // 外部服务错误
+        } else {
+            return ErrorLevel.INFO;      // 客户端错误
+        }
+    }
+    
+    // 判断是否可重试
+    public boolean isRetryable() {
+        int codeNum = Integer.parseInt(code);
+        // 系统级错误（部分可重试）、外部服务错误通常可重试
+        if (codeNum >= 1000 && codeNum < 2000) {
+            // 数据库连接、网络、缓存错误可重试
+            return codeNum >= 1001 && codeNum <= 1030;
+        } else if (codeNum >= 6000 && codeNum < 7000) {
+            // 外部服务错误可重试
+            return true;
+        }
+        return false;
+    }
+    
+    // 获取业务域
+    public BusinessDomain getDomain() {
+        int codeNum = Integer.parseInt(code);
+        if (codeNum < 2000) return BusinessDomain.SYSTEM;
+        else if (codeNum < 3000) return BusinessDomain.SECURITY;
+        else if (codeNum < 4000) return BusinessDomain.BUSINESS;
+        else if (codeNum < 5000) return BusinessDomain.USER;
+        else if (codeNum < 6000) return BusinessDomain.ORDER;
+        else if (codeNum < 7000) return BusinessDomain.EXTERNAL;
+        else if (codeNum < 8000) return BusinessDomain.CLIENT;
+        else if (codeNum < 9000) return BusinessDomain.FILE;
+        else return BusinessDomain.DATA;
+    }
+    
+    public enum ErrorLevel {
+        CRITICAL, WARNING, INFO
+    }
+    
+    public enum BusinessDomain {
+        SYSTEM, SECURITY, BUSINESS, USER, ORDER, EXTERNAL, CLIENT, FILE, DATA
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 强制行为
+
+### 增强的错误响应格式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ErrorResponse {
+    
+    /**
+     * 错误码
+     */
+    private String code;
+    
+    /**
+     * 错误消息
+     */
+    private String message;
+    
+    /**
+     * 详细描述
+     */
+    private String detail;
+    
+    /**
+     * 时间戳
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime timestamp;
+    
+    /**
+     * 请求路径
+     */
+    private String path;
+    
+    /**
+     * 请求ID（用于追踪）
+     */
+    private String requestId;
+    
+    /**
+     * 分布式追踪ID
+     */
+    private String traceId;
+    
+    /**
+     * 错误详细信息
+     */
+    private Map<String, Object> details;
+    
+    /**
+     * 字段验证错误
+     */
+    private List<FieldError> fieldErrors;
+    
+    /**
+     * 堆栈跟踪（仅开发环境）
+     */
+    private String stackTrace;
+    
+    /**
+     * 建议操作
+     */
+    private String suggestion;
+    
+    /**
+     * 错误级别
+     */
+    private String level;
+    
+    /**
+     * 业务域
+     */
+    private String domain;
+    
+    /**
+     * 是否可重试
+     */
+    private Boolean retryable;
+    
+    /**
+     * 重试建议（秒）
+     */
+    private Integer retryAfter;
+    
+    /**
+     * 帮助链接
+     */
+    private String helpUrl;
+    
+    /**
+     * 错误来源
+     */
+    private String source;
+    
+    /**
+     * 相关错误（关联的其他错误）
+     */
+    private List<RelatedError> relatedErrors;
+    
+    // 静态工厂方法
+    public static ErrorResponse of(ErrorCode errorCode) {
+        return ErrorResponse.builder()
+            .code(errorCode.getCode())
+            .message(errorCode.getMessage())
+            .level(errorCode.getLevel().name())
+            .domain(errorCode.getDomain().name())
+            .retryable(errorCode.isRetryable())
+            .timestamp(LocalDateTime.now())
+            .build();
+    }
+    
+    public static ErrorResponse of(ErrorCode errorCode, String detail) {
+        return ErrorResponse.builder()
+            .code(errorCode.getCode())
+            .message(errorCode.getMessage())
+            .detail(detail)
+            .level(errorCode.getLevel().name())
+            .domain(errorCode.getDomain().name())
+            .retryable(errorCode.isRetryable())
+            .timestamp(LocalDateTime.now())
+            .build();
+    }
+    
+    public static ErrorResponse of(String code, String message) {
+        return ErrorResponse.builder()
+            .code(code)
+            .message(message)
+            .timestamp(LocalDateTime.now())
+            .build();
+    }
+    
+    public static ErrorResponse validation(List<FieldError> fieldErrors) {
+        return ErrorResponse.builder()
+            .code(ErrorCode.VALIDATION_ERROR.getCode())
+            .message(ErrorCode.VALIDATION_ERROR.getMessage())
+            .fieldErrors(fieldErrors)
+            .level(ErrorCode.VALIDATION_ERROR.getLevel().name())
+            .domain(ErrorCode.VALIDATION_ERROR.getDomain().name())
+            .retryable(false)
+            .timestamp(LocalDateTime.now())
+            .build();
+    }
+    
+    // 链式方法
+    public ErrorResponse withPath(String path) {
+        this.path = path;
+        return this;
+    }
+    
+    public ErrorResponse withRequestId(String requestId) {
+        this.requestId = requestId;
+        return this;
+    }
+    
+    public ErrorResponse withTraceId(String traceId) {
+        this.traceId = traceId;
+        return this;
+    }
+    
+    public ErrorResponse withDetail(String key, Object value) {
+        if (details == null) {
+            details = new HashMap<>();
+        }
+        details.put(key, value);
+        return this;
+    }
+    
+    public ErrorResponse withSuggestion(String suggestion) {
+        this.suggestion = suggestion;
+        return this;
+    }
+    
+    public ErrorResponse withStackTrace(String stackTrace) {
+        this.stackTrace = stackTrace;
+        return this;
+    }
+    
+    public ErrorResponse withSource(String source) {
+        this.source = source;
+        return this;
+    }
+    
+    public ErrorResponse withRetryAfter(Integer retryAfter) {
+        this.retryAfter = retryAfter;
+        return this;
+    }
+    
+    public ErrorResponse withHelpUrl(String helpUrl) {
+        this.helpUrl = helpUrl;
+        return this;
+    }
+    
+    public ErrorResponse withRelatedError(String code, String message) {
+        if (relatedErrors == null) {
+            relatedErrors = new ArrayList<>();
+        }
+        relatedErrors.add(new RelatedError(code, message));
+        return this;
+    }
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FieldError {
+        private String field;
+        private Object rejectedValue;
+        private String message;
+        private String code;
+    }
+    
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RelatedError {
+        private String code;
+        private String message;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 智能错误恢复管理器
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+@Slf4j
+public class ErrorRecoveryManager {
+    
+    @Autowired
+    private RetryTemplateFactory retryTemplateFactory;
+    
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+    
+    @Autowired
+    private FallbackService fallbackService;
+    
+    @Autowired
+    private CompensationService compensationService;
+    
+    /**
+     * 执行带有智能恢复的操作
+     */
+    public <T> T executeWithRecovery(String operationName, 
+                                   Supplier<T> operation, 
+                                   ErrorRecoveryStrategy strategy) {
+        
+        // 1. 检查熔断器状态
+        CircuitBreaker circuitBreaker = circuitBreakerRegistry.circuitBreaker(operationName);
+        
+        return circuitBreaker.executeSupplier(() -> {
+            try {
+                // 2. 执行重试逻辑
+                return executeWithRetry(operation, strategy);
+                
+            } catch (Exception ex) {
+                // 3. 尝试降级处理
+                T fallbackResult = tryFallback(operationName, ex, strategy);
+                if (fallbackResult != null) {
+                    return fallbackResult;
+                }
+                
+                // 4. 执行补偿逻辑
+                tryCompensation(operationName, ex, strategy);
+                
+                throw ex;
+            }
+        });
+    }
+    
+    /**
+     * 执行重试逻辑
+     */
+    private <T> T executeWithRetry(Supplier<T> operation, ErrorRecoveryStrategy strategy) {
+        RetryTemplate retryTemplate = retryTemplateFactory.createRetryTemplate(strategy);
+        
+        return retryTemplate.execute(context -> {
+            try {
+                return operation.get();
+            } catch (Exception ex) {
+                log.warn("操作执行失败，尝试次数: {}, 错误: {}", 
+                    context.getRetryCount() + 1, ex.getMessage());
+                
+                // 记录重试指标
+                recordRetryMetrics(context, ex);
+                
+                throw ex;
+            }
+        });
+    }
+    
+    /**
+     * 尝试降级处理
+     */
+    private <T> T tryFallback(String operationName, Exception ex, ErrorRecoveryStrategy strategy) {
+        if (strategy.isFallbackEnabled()) {
+            try {
+                log.info("尝试降级处理: {}", operationName);
+                return fallbackService.getFallbackResult(operationName, ex);
+            } catch (Exception fallbackEx) {
+                log.error("降级处理失败: {}", operationName, fallbackEx);
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 尝试补偿处理
+     */
+    private void tryCompensation(String operationName, Exception ex, ErrorRecoveryStrategy strategy) {
+        if (strategy.isCompensationEnabled() && isCompensationNeeded(ex)) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    log.info("执行补偿操作: {}", operationName);
+                    compensationService.compensate(operationName, ex);
+                } catch (Exception compensationEx) {
+                    log.error("补偿操作失败: {}", operationName, compensationEx);
+                }
+            });
+        }
+    }
+    
+    private boolean isCompensationNeeded(Exception ex) {
+        // 判断是否需要补偿：通常是业务操作部分成功的情况
+        return ex instanceof BusinessException || 
+               ex instanceof DataIntegrityViolationException ||
+               ex instanceof ExternalServiceException;
+    }
+    
+    private void recordRetryMetrics(RetryContext context, Exception ex) {
+        // 记录重试指标到监控系统
+        String errorType = ex.getClass().getSimpleName();
+        Metrics.counter("retry.attempts", 
+            "error_type", errorType,
+            "retry_count", String.valueOf(context.getRetryCount() + 1))
+            .increment();
+    }
+}
+
+/**
+ * 错误恢复策略
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ErrorRecoveryStrategy {
+    
+    // 重试配置
+    private boolean retryEnabled = true;
+    private int maxAttempts = 3;
+    private long initialDelay = 1000L;
+    private long maxDelay = 10000L;
+    private double backoffMultiplier = 2.0;
+    private Set<Class<? extends Exception>> retryableExceptions;
+    
+    // 熔断器配置
+    private boolean circuitBreakerEnabled = true;
+    private int failureThreshold = 5;
+    private long circuitBreakerTimeout = 60000L;
+    
+    // 降级配置
+    private boolean fallbackEnabled = true;
+    private String fallbackMethod;
+    
+    // 补偿配置
+    private boolean compensationEnabled = false;
+    private String compensationMethod;
+    
+    // 超时配置
+    private long operationTimeout = 30000L;
+    
+    public static ErrorRecoveryStrategy defaultStrategy() {
+        return ErrorRecoveryStrategy.builder()
+            .retryEnabled(true)
+            .maxAttempts(3)
+            .initialDelay(1000L)
+            .circuitBreakerEnabled(true)
+            .fallbackEnabled(true)
+            .build();
+    }
+    
+    public static ErrorRecoveryStrategy quickFailStrategy() {
+        return ErrorRecoveryStrategy.builder()
+            .retryEnabled(false)
+            .circuitBreakerEnabled(true)
+            .fallbackEnabled(true)
+            .operationTimeout(5000L)
+            .build();
+    }
+    
+    public static ErrorRecoveryStrategy persistentRetryStrategy() {
+        return ErrorRecoveryStrategy.builder()
+            .retryEnabled(true)
+            .maxAttempts(10)
+            .initialDelay(2000L)
+            .maxDelay(30000L)
+            .circuitBreakerEnabled(false)
+            .fallbackEnabled(true)
+            .build();
+    }
+}
+
+/**
+ * 重试模板工厂
+ */
+@Component
+public class RetryTemplateFactory {
+    
+    public RetryTemplate createRetryTemplate(ErrorRecoveryStrategy strategy) {
+        RetryTemplate retryTemplate = new RetryTemplate();
+        
+        // 设置重试策略
+        ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
+        backOffPolicy.setInitialInterval(strategy.getInitialDelay());
+        backOffPolicy.setMaxInterval(strategy.getMaxDelay());
+        backOffPolicy.setMultiplier(strategy.getBackoffMultiplier());
+        retryTemplate.setBackOffPolicy(backOffPolicy);
+        
+        // 设置重试条件
+        SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
+        retryPolicy.setMaxAttempts(strategy.getMaxAttempts());
+        
+        Map<Class<? extends Throwable>, Boolean> retryableExceptions = new HashMap<>();
+        if (strategy.getRetryableExceptions() != null) {
+            strategy.getRetryableExceptions().forEach(ex -> retryableExceptions.put(ex, true));
+        } else {
+            // 默认可重试的异常
+            retryableExceptions.put(SystemException.class, true);
+            retryableExceptions.put(ExternalServiceException.class, true);
+            retryableExceptions.put(DataAccessException.class, true);
+            retryableExceptions.put(TimeoutException.class, true);
+        }
+        
+        retryPolicy.setRetryableExceptions(retryableExceptions);
+        retryTemplate.setRetryPolicy(retryPolicy);
+        
+        return retryTemplate;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 分布式错误追踪服务
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+public class DistributedErrorTracker {
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private MeterRegistry meterRegistry;
+    
+    @Autowired
+    private TracingService tracingService;
+    
+    private static final String ERROR_TRACE_PREFIX = "error:trace:";
+    private static final String ERROR_CORRELATION_PREFIX = "error:correlation:";
+    
+    /**
+     * 追踪错误在分布式系统中的传播
+     */
+    public void trackDistributedError(DistributedErrorEvent event) {
+        try {
+            // 1. 记录错误事件
+            recordErrorEvent(event);
+            
+            // 2. 更新错误传播链
+            updateErrorPropagationChain(event);
+            
+            // 3. 分析错误模式
+            analyzeErrorPattern(event);
+            
+            // 4. 触发分布式告警
+            checkDistributedErrorThreshold(event);
+            
+        } catch (Exception ex) {
+            log.error("分布式错误追踪失败", ex);
+        }
+    }
+    
+    /**
+     * 记录错误事件
+     */
+    private void recordErrorEvent(DistributedErrorEvent event) {
+        String traceKey = ERROR_TRACE_PREFIX + event.getTraceId();
+        
+        ErrorTraceInfo traceInfo = ErrorTraceInfo.builder()
+            .traceId(event.getTraceId())
+            .spanId(event.getSpanId())
+            .serviceName(event.getServiceName())
+            .operationName(event.getOperationName())
+            .errorCode(event.getErrorCode())
+            .errorMessage(event.getErrorMessage())
+            .timestamp(LocalDateTime.now())
+            .details(event.getDetails())
+            .build();
+        
+        // 存储到Redis，TTL 24小时
+        redisTemplate.opsForList().leftPush(traceKey, traceInfo);
+        redisTemplate.expire(traceKey, Duration.ofHours(24));
+        
+        // 记录指标
+        meterRegistry.counter("distributed.error.events",
+            "service", event.getServiceName(),
+            "operation", event.getOperationName(),
+            "error_code", event.getErrorCode())
+            .increment();
+    }
+    
+    /**
+     * 更新错误传播链
+     */
+    private void updateErrorPropagationChain(DistributedErrorEvent event) {
+        if (event.getParentSpanId() != null) {
+            String correlationKey = ERROR_CORRELATION_PREFIX + event.getTraceId();
+            
+            ErrorCorrelation correlation = ErrorCorrelation.builder()
+                .parentSpanId(event.getParentSpanId())
+                .childSpanId(event.getSpanId())
+                .serviceName(event.getServiceName())
+                .propagationTime(LocalDateTime.now())
+                .build();
+            
+            redisTemplate.opsForList().leftPush(correlationKey, correlation);
+            redisTemplate.expire(correlationKey, Duration.ofHours(24));
+        }
+    }
+    
+    /**
+     * 分析错误模式
+     */
+    private void analyzeErrorPattern(DistributedErrorEvent event) {
+        // 分析同一服务的错误频率
+        String serviceErrorKey = "error:pattern:service:" + event.getServiceName();
+        Long serviceErrorCount = redisTemplate.opsForValue().increment(serviceErrorKey);
+        redisTemplate.expire(serviceErrorKey, Duration.ofMinutes(5));
+        
+        // 分析同一操作的错误频率
+        String operationErrorKey = "error:pattern:operation:" + 
+            event.getServiceName() + ":" + event.getOperationName();
+        Long operationErrorCount = redisTemplate.opsForValue().increment(operationErrorKey);
+        redisTemplate.expire(operationErrorKey, Duration.ofMinutes(5));
+        
+        // 分析错误码的分布
+        String errorCodeKey = "error:pattern:code:" + event.getErrorCode();
+        Long errorCodeCount = redisTemplate.opsForValue().increment(errorCodeKey);
+        redisTemplate.expire(errorCodeKey, Duration.ofMinutes(5));
+        
+        // 检查是否需要触发模式告警
+        checkErrorPatternAlerts(event, serviceErrorCount, operationErrorCount, errorCodeCount);
+    }
+    
+    /**
+     * 检查错误模式告警
+     */
+    private void checkErrorPatternAlerts(DistributedErrorEvent event, 
+                                       Long serviceErrorCount, 
+                                       Long operationErrorCount, 
+                                       Long errorCodeCount) {
+        
+        // 服务级别错误激增
+        if (serviceErrorCount > 10) {
+            sendPatternAlert("SERVICE_ERROR_SPIKE", 
+                String.format("服务 %s 在5分钟内出现 %d 个错误", 
+                    event.getServiceName(), serviceErrorCount));
+        }
+        
+        // 操作级别错误激增
+        if (operationErrorCount > 5) {
+            sendPatternAlert("OPERATION_ERROR_SPIKE", 
+                String.format("操作 %s.%s 在5分钟内出现 %d 个错误", 
+                    event.getServiceName(), event.getOperationName(), operationErrorCount));
+        }
+        
+        // 特定错误码激增
+        if (errorCodeCount > 8) {
+            sendPatternAlert("ERROR_CODE_SPIKE", 
+                String.format("错误码 %s 在5分钟内出现 %d 次", 
+                    event.getErrorCode(), errorCodeCount));
+        }
+    }
+    
+    /**
+     * 检查分布式错误阈值
+     */
+    private void checkDistributedErrorThreshold(DistributedErrorEvent event) {
+        String traceErrorKey = "error:trace:count:" + event.getTraceId();
+        Long traceErrorCount = redisTemplate.opsForValue().increment(traceErrorKey);
+        redisTemplate.expire(traceErrorKey, Duration.ofMinutes(10));
+        
+        // 同一个trace中错误过多，可能是级联失败
+        if (traceErrorCount > 3) {
+            sendDistributedAlert("CASCADE_FAILURE", 
+                String.format("追踪 %s 中出现 %d 个错误，可能发生级联失败", 
+                    event.getTraceId(), traceErrorCount));
+        }
+    }
+    
+    /**
+     * 获取错误传播链
+     */
+    public List<ErrorTraceInfo> getErrorPropagationChain(String traceId) {
+        String traceKey = ERROR_TRACE_PREFIX + traceId;
+        List<Object> traceEvents = redisTemplate.opsForList().range(traceKey, 0, -1);
+        
+        return traceEvents.stream()
+            .map(obj -> (ErrorTraceInfo) obj)
+            .sorted(Comparator.comparing(ErrorTraceInfo::getTimestamp))
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 分析错误根因
+     */
+    public ErrorRootCauseAnalysis analyzeRootCause(String traceId) {
+        List<ErrorTraceInfo> propagationChain = getErrorPropagationChain(traceId);
+        
+        if (propagationChain.isEmpty()) {
+            return ErrorRootCauseAnalysis.builder()
+                .traceId(traceId)
+                .rootCause("未找到错误信息")
+                .build();
+        }
+        
+        // 找到第一个错误作为根因
+        ErrorTraceInfo rootError = propagationChain.get(0);
+        
+        // 分析错误传播路径
+        List<String> propagationPath = propagationChain.stream()
+            .map(ErrorTraceInfo::getServiceName)
+            .distinct()
+            .collect(Collectors.toList());
+        
+        // 统计影响范围
+        Map<String, Long> affectedServices = propagationChain.stream()
+            .collect(Collectors.groupingBy(
+                ErrorTraceInfo::getServiceName, 
+                Collectors.counting()));
+        
+        return ErrorRootCauseAnalysis.builder()
+            .traceId(traceId)
+            .rootCause(rootError.getErrorMessage())
+            .rootService(rootError.getServiceName())
+            .rootOperation(rootError.getOperationName())
+            .rootErrorCode(rootError.getErrorCode())
+            .propagationPath(propagationPath)
+            .affectedServices(affectedServices)
+            .totalErrors(propagationChain.size())
+            .firstErrorTime(rootError.getTimestamp())
+            .lastErrorTime(propagationChain.get(propagationChain.size() - 1).getTimestamp())
+            .build();
+    }
+    
+    private void sendPatternAlert(String alertType, String message) {
+        String alertKey = "alert:pattern:" + alertType;
+        if (!Boolean.TRUE.equals(redisTemplate.hasKey(alertKey))) {
+            // 发送告警逻辑
+            log.warn("错误模式告警: {}", message);
+            redisTemplate.opsForValue().set(alertKey, "sent", Duration.ofMinutes(5));
+        }
+    }
+    
+    private void sendDistributedAlert(String alertType, String message) {
+        String alertKey = "alert:distributed:" + alertType;
+        if (!Boolean.TRUE.equals(redisTemplate.hasKey(alertKey))) {
+            // 发送告警逻辑
+            log.error("分布式错误告警: {}", message);
+            redisTemplate.opsForValue().set(alertKey, "sent", Duration.ofMinutes(5));
+        }
+    }
+}
+
+// 分布式错误事件
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class DistributedErrorEvent {
+    private String traceId;
+    private String spanId;
+    private String parentSpanId;
+    private String serviceName;
+    private String operationName;
+    private String errorCode;
+    private String errorMessage;
+    private Map<String, Object> details;
+}
+
+// 错误追踪信息
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ErrorTraceInfo {
+    private String traceId;
+    private String spanId;
+    private String serviceName;
+    private String operationName;
+    private String errorCode;
+    private String errorMessage;
+    private LocalDateTime timestamp;
+    private Map<String, Object> details;
+}
+
+// 错误关联信息
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ErrorCorrelation {
+    private String parentSpanId;
+    private String childSpanId;
+    private String serviceName;
+    private LocalDateTime propagationTime;
+}
+
+// 错误根因分析结果
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ErrorRootCauseAnalysis {
+    private String traceId;
+    private String rootCause;
+    private String rootService;
+    private String rootOperation;
+    private String rootErrorCode;
+    private List<String> propagationPath;
+    private Map<String, Long> affectedServices;
+    private Integer totalErrors;
+    private LocalDateTime firstErrorTime;
+    private LocalDateTime lastErrorTime;
+}
+// [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 错误处理反模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：暴露敏感信息
+@RestController
+public class BadErrorController {
+    
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<String> handleError(Exception ex) {
+        // 禁止：直接返回异常堆栈给客户端
+        return ResponseEntity.status(500).body(ex.toString());
+    }
+    
+    @GetMapping("/user/{id}")
+    public User getUser(@PathVariable Long id) {
+        try {
+            return userService.findById(id);
+        } catch (SQLException ex) {
+            // 禁止：暴露数据库结构信息
+            throw new RuntimeException("查询失败: " + ex.getSQLState() + " - " + ex.getMessage());
+        }
+    }
+}
+
+// ❌ 禁止：不一致的错误响应格式
+@RestController
+public class InconsistentErrorController {
+    
+    @GetMapping("/users")
+    public Object getUsers() {
+        try {
+            return userService.getAllUsers();
+        } catch (Exception ex) {
+            // 禁止：不同接口返回不同的错误格式
+            return Map.of("error", ex.getMessage());
+        }
+    }
+    
+    @GetMapping("/orders")
+    public Object getOrders() {
+        try {
+            return orderService.getAllOrders();
+        } catch (Exception ex) {
+            // 禁止：另一种错误格式
+            return ResponseEntity.badRequest().body("订单查询失败");
+        }
+    }
+}
+
+// ❌ 禁止：错误信息不明确
+@Service
+public class BadErrorMessageService {
+    
+    public void processOrder(Order order) {
+        if (order == null) {
+            throw new RuntimeException("错误");  // 禁止：错误信息过于简单
+        }
+        
+        if (order.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("金额错误");  // 禁止：没有具体说明什么错误
+        }
+        
+        try {
+            paymentService.pay(order);
+        } catch (PaymentException ex) {
+            throw new RuntimeException("处理失败");  // 禁止：丢失原始错误信息
+        }
+    }
+}
+
+// ❌ 禁止：错误码混乱
+public enum BadErrorCode {
+    ERROR1("E001", "错误1"),    // 禁止：没有意义的错误码
+    ERROR2("E002", "错误2"),
+    USER_ERROR("U001", "用户错误"),  // 禁止：分类不清晰
+    DB_ERROR("D001", "数据库错误"),
+    SOME_ERROR("X999", "某种错误");  // 禁止：随意编号
+}
+// [AI-BLOCK-END]
+```
+
+### 监控告警反模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：告警风暴
+@Service
+public class BadAlertService {
+    
+    public void handleError(Exception ex) {
+        // 禁止：每个错误都发送告警
+        alertService.sendAlert("系统错误: " + ex.getMessage());
+    }
+    
+    public void checkSystemHealth() {
+        if (systemMetrics.getCpuUsage() > 80) {
+            // 禁止：没有告警频率限制
+            alertService.sendAlert("CPU使用率过高");
+        }
+        
+        if (systemMetrics.getMemoryUsage() > 90) {
+            // 禁止：重复发送同样的告警
+            alertService.sendAlert("内存使用率过高");
+        }
+    }
+}
+
+// ❌ 禁止：缺乏错误分类
+@Component
+public class BadErrorLogger {
+    
+    public void logError(Exception ex) {
+        // 禁止：所有错误都用相同级别记录
+        log.error("发生错误", ex);
+    }
+    
+    public void logBusinessError(BusinessException ex) {
+        // 禁止：业务错误使用ERROR级别
+        log.error("业务错误: {}", ex.getMessage(), ex);
+    }
+    
+    public void logValidationError(ValidationException ex) {
+        // 禁止：验证错误使用ERROR级别
+        log.error("验证错误: {}", ex.getMessage(), ex);
+    }
+}
+
+// ❌ 禁止：忽略错误恢复
+@Service
+public class BadRecoveryService {
+    
+    public void processData() {
+        try {
+            dataProcessor.process();
+        } catch (Exception ex) {
+            log.error("数据处理失败", ex);
+            // 禁止：不尝试恢复或降级处理
+            return;
+        }
+    }
+    
+    public String callExternalService() {
+        try {
+            return externalService.call();
+        } catch (Exception ex) {
+            // 禁止：外部服务失败时不提供备用方案
+            throw new RuntimeException("外部服务调用失败");
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 业务场景错误处理示例
+
+### 用户管理错误处理
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@RestController
+@RequestMapping("/api/users")
+@Validated
+@Slf4j
+public class UserController {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private ErrorRecoveryManager errorRecoveryManager;
+    
+    /**
+     * 用户注册 - 完整错误处理
+     */
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<UserDTO>> registerUser(
+            @Valid @RequestBody UserRegistrationDTO registrationDto,
+            HttpServletRequest request) {
+        
+        String requestId = RequestContext.getRequestId();
+        String traceId = RequestContext.getTraceId();
+        
+        try {
+            log.info("开始用户注册 [{}]: email={}", requestId, registrationDto.getEmail());
+            
+            // 执行业务逻辑，带智能恢复
+            UserDTO user = errorRecoveryManager.executeWithRecovery(
+                "user-registration",
+                () -> userService.registerUser(registrationDto),
+                ErrorRecoveryStrategy.defaultStrategy()
+            );
+            
+            log.info("用户注册成功 [{}]: userId={}", requestId, user.getId());
+            
+            return ResponseEntity.ok(ApiResponse.success(user));
+            
+        } catch (DuplicateEmailException ex) {
+            log.warn("邮箱已存在 [{}]: email={}", requestId, registrationDto.getEmail());
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL.getCode(), 
+                "该邮箱已被注册", Map.of("email", registrationDto.getEmail()));
+            
+        } catch (WeakPasswordException ex) {
+            log.warn("密码强度不足 [{}]: email={}", requestId, registrationDto.getEmail());
+            throw new BusinessException(ErrorCode.PASSWORD_TOO_WEAK.getCode(), 
+                "密码强度不足，请包含大小写字母、数字和特殊字符", 
+                Map.of("requirements", ex.getPasswordRequirements()));
+            
+        } catch (ExternalServiceException ex) {
+            log.error("用户注册外部服务异常 [{}]: service={}", requestId, ex.getServiceName(), ex);
+            
+            // 根据外部服务类型决定处理策略
+            if ("email-verification".equals(ex.getServiceName())) {
+                // 邮件验证服务失败，用户仍可注册，后续补发验证邮件
+                UserDTO user = userService.registerUserWithoutEmailVerification(registrationDto);
+                log.info("用户注册成功但邮件验证失败 [{}]: userId={}", requestId, user.getId());
+                
+                return ResponseEntity.ok(ApiResponse.success(user)
+                    .withWarning("注册成功，但验证邮件发送失败，请稍后重新发送"));
+            } else {
+                throw ex;
+            }
+        }
+    }
+    
+    /**
+     * 用户信息更新 - 乐观锁处理
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserDTO>> updateUser(
+            @PathVariable Long id,
+            @Valid @RequestBody UserUpdateDTO updateDto,
+            HttpServletRequest request) {
+        
+        String requestId = RequestContext.getRequestId();
+        
+        try {
+            // 重试策略：乐观锁冲突时重试
+            ErrorRecoveryStrategy strategy = ErrorRecoveryStrategy.builder()
+                .retryEnabled(true)
+                .maxAttempts(5)
+                .initialDelay(100L)
+                .maxDelay(1000L)
+                .retryableExceptions(Set.of(OptimisticLockingFailureException.class))
+                .build();
+            
+            UserDTO user = errorRecoveryManager.executeWithRecovery(
+                "user-update",
+                () -> userService.updateUser(id, updateDto),
+                strategy
+            );
+            
+            return ResponseEntity.ok(ApiResponse.success(user));
+            
+        } catch (UserNotFoundException ex) {
+            log.warn("用户不存在 [{}]: userId={}", requestId, id);
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND.getCode(), 
+                "用户不存在", Map.of("userId", id));
+        }
+    }
+    
+    /**
+     * 批量用户导入 - 部分成功处理
+     */
+    @PostMapping("/batch-import")
+    public ResponseEntity<ApiResponse<BatchImportResult>> batchImportUsers(
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest request) {
+        
+        String requestId = RequestContext.getRequestId();
+        
+        try {
+            log.info("开始批量导入用户 [{}]: fileName={}", requestId, file.getOriginalFilename());
+            
+            BatchImportResult result = userService.batchImportUsers(file);
+            
+            // 根据结果判断响应状态
+            if (result.getFailedCount() == 0) {
+                return ResponseEntity.ok(ApiResponse.success(result, "所有用户导入成功"));
+            } else if (result.getSuccessCount() > 0) {
+                return ResponseEntity.ok(ApiResponse.success(result, 
+                    String.format("部分导入成功：%d 成功，%d 失败", 
+                        result.getSuccessCount(), result.getFailedCount())));
+            } else {
+                return ResponseEntity.badRequest().body(ApiResponse.error(
+                    ErrorCode.BATCH_PROCESSING_ERROR.getCode(), 
+                    "批量导入失败", result));
+            }
+            
+        } catch (InvalidFileFormatException ex) {
+            log.warn("文件格式错误 [{}]: {}", requestId, ex.getMessage());
+            throw new BusinessException(ErrorCode.FILE_TYPE_NOT_SUPPORTED.getCode(), 
+                "不支持的文件格式，请使用Excel或CSV文件");
+                
+        } catch (FileSizeExceededException ex) {
+            log.warn("文件大小超限 [{}]: size={}", requestId, ex.getActualSize());
+            throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED.getCode(), 
+                "文件大小超过限制，最大支持10MB");
+        }
+    }
+}
+
+@Service
+@Transactional
+@Slf4j
+public class UserService {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private EmailService emailService;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    
+    public UserDTO registerUser(UserRegistrationDTO registrationDto) {
+        // 1. 检查邮箱是否已存在
+        if (userRepository.existsByEmail(registrationDto.getEmail())) {
+            throw new DuplicateEmailException("邮箱已存在: " + registrationDto.getEmail());
+        }
+        
+        // 2. 验证密码强度
+        PasswordValidationResult validationResult = 
+            passwordValidator.validate(registrationDto.getPassword());
+        if (!validationResult.isValid()) {
+            throw new WeakPasswordException("密码强度不足", validationResult.getRequirements());
+        }
+        
+        // 3. 创建用户
+        User user = User.builder()
+            .email(registrationDto.getEmail())
+            .username(registrationDto.getUsername())
+            .password(passwordEncoder.encode(registrationDto.getPassword()))
+            .status(UserStatus.PENDING_VERIFICATION)
+            .createdAt(LocalDateTime.now())
+            .build();
+        
+        try {
+            user = userRepository.save(user);
+            log.info("用户创建成功: userId={}", user.getId());
+        } catch (DataIntegrityViolationException ex) {
+            if (ex.getMessage().contains("email")) {
+                throw new DuplicateEmailException("邮箱已存在: " + registrationDto.getEmail());
+            } else if (ex.getMessage().contains("username")) {
+                throw new DuplicateUsernameException("用户名已存在: " + registrationDto.getUsername());
+            } else {
+                throw new SystemException(ErrorCode.DATABASE_CONSTRAINT_ERROR.getCode(), 
+                    "user-service", "用户创建失败：数据约束违反", ex);
+            }
+        }
+        
+        // 4. 发送验证邮件
+        try {
+            emailService.sendVerificationEmail(user);
+            log.info("验证邮件发送成功: userId={}", user.getId());
+        } catch (Exception ex) {
+            log.error("验证邮件发送失败: userId={}", user.getId(), ex);
+            throw new ExternalServiceException("email-verification", "sendVerificationEmail", 
+                "验证邮件发送失败", ex);
+        }
+        
+        return UserMapper.toDTO(user);
+    }
+    
+    public BatchImportResult batchImportUsers(MultipartFile file) {
+        BatchImportResult result = new BatchImportResult();
+        List<ImportError> errors = new ArrayList<>();
+        
+        try {
+            List<UserRegistrationDTO> users = parseUsersFromFile(file);
+            log.info("解析到 {} 个用户待导入", users.size());
+            
+            for (int i = 0; i < users.size(); i++) {
+                UserRegistrationDTO userDto = users.get(i);
+                try {
+                    UserDTO createdUser = registerUser(userDto);
+                    result.incrementSuccess();
+                    result.addSuccessUser(createdUser);
+                    
+                } catch (BusinessException ex) {
+                    log.warn("用户导入失败 [行{}]: {}", i + 1, ex.getMessage());
+                    result.incrementFailed();
+                    errors.add(new ImportError(i + 1, userDto.getEmail(), ex.getMessage()));
+                    
+                } catch (Exception ex) {
+                    log.error("用户导入异常 [行{}]: {}", i + 1, ex.getMessage(), ex);
+                    result.incrementFailed();
+                    errors.add(new ImportError(i + 1, userDto.getEmail(), "系统错误"));
+                }
+            }
+            
+            result.setErrors(errors);
+            log.info("批量导入完成: 成功={}, 失败={}", result.getSuccessCount(), result.getFailedCount());
+            
+        } catch (Exception ex) {
+            log.error("批量导入文件解析失败", ex);
+            throw new BusinessException(ErrorCode.FILE_PROCESSING_ERROR.getCode(), 
+                "文件解析失败: " + ex.getMessage());
+        }
+        
+        return result;
+    }
+    
+    private List<UserRegistrationDTO> parseUsersFromFile(MultipartFile file) {
+        String filename = file.getOriginalFilename();
+        if (filename == null) {
+            throw new InvalidFileFormatException("文件名不能为空");
+        }
+        
+        try {
+            if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
+                return ExcelParser.parseUsers(file.getInputStream());
+            } else if (filename.endsWith(".csv")) {
+                return CsvParser.parseUsers(file.getInputStream());
+            } else {
+                throw new InvalidFileFormatException("不支持的文件格式: " + filename);
+            }
+        } catch (IOException ex) {
+            throw new FileProcessingException("文件读取失败", ex);
+        }
+    }
+}
+
+// 批量导入结果
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BatchImportResult {
+    private int successCount = 0;
+    private int failedCount = 0;
+    private List<UserDTO> successUsers = new ArrayList<>();
+    private List<ImportError> errors = new ArrayList<>();
+    
+    public void incrementSuccess() {
+        successCount++;
+    }
+    
+    public void incrementFailed() {
+        failedCount++;
+    }
+    
+    public void addSuccessUser(UserDTO user) {
+        if (successUsers == null) {
+            successUsers = new ArrayList<>();
+        }
+        successUsers.add(user);
+    }
+}
+
+@Data
+@AllArgsConstructor
+public class ImportError {
+    private int rowNumber;
+    private String email;
+    private String errorMessage;
+}
+// [AI-BLOCK-END]
+```
+
+### 文件处理错误处理
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@RestController
+@RequestMapping("/api/files")
+@Slf4j
+public class FileController {
+    
+    @Autowired
+    private FileService fileService;
+    
+    @Autowired
+    private ErrorRecoveryManager errorRecoveryManager;
+    
+    /**
+     * 文件上传 - 多重验证和恢复
+     */
+    @PostMapping("/upload")
+    public ResponseEntity<ApiResponse<FileUploadResult>> uploadFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "category", defaultValue = "document") String category,
+            HttpServletRequest request) {
+        
+        String requestId = RequestContext.getRequestId();
+        
+        try {
+            log.info("开始文件上传 [{}]: fileName={}, size={}", 
+                requestId, file.getOriginalFilename(), file.getSize());
+            
+            // 预检查
+            validateFileUpload(file, category);
+            
+            // 执行上传，带重试机制
+            ErrorRecoveryStrategy strategy = ErrorRecoveryStrategy.builder()
+                .retryEnabled(true)
+                .maxAttempts(3)
+                .initialDelay(1000L)
+                .fallbackEnabled(true)
+                .retryableExceptions(Set.of(StorageException.class, NetworkException.class))
+                .build();
+            
+            FileUploadResult result = errorRecoveryManager.executeWithRecovery(
+                "file-upload",
+                () -> fileService.uploadFile(file, category),
+                strategy
+            );
+            
+            log.info("文件上传成功 [{}]: fileId={}", requestId, result.getFileId());
+            
+            return ResponseEntity.ok(ApiResponse.success(result));
+            
+        } catch (FileSizeExceededException ex) {
+            log.warn("文件大小超限 [{}]: size={}, limit={}", 
+                requestId, ex.getActualSize(), ex.getMaxSize());
+            
+            throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED.getCode(),
+                String.format("文件大小超过限制，最大允许 %s", formatFileSize(ex.getMaxSize())),
+                Map.of(
+                    "actualSize", ex.getActualSize(),
+                    "maxSize", ex.getMaxSize(),
+                    "fileName", file.getOriginalFilename()
+                ));
+                
+        } catch (UnsupportedFileTypeException ex) {
+            log.warn("不支持的文件类型 [{}]: type={}", requestId, ex.getFileType());
+            
+            throw new BusinessException(ErrorCode.FILE_TYPE_NOT_SUPPORTED.getCode(),
+                "不支持的文件类型，支持的格式：" + String.join(", ", ex.getSupportedTypes()),
+                Map.of(
+                    "fileType", ex.getFileType(),
+                    "supportedTypes", ex.getSupportedTypes()
+                ));
+                
+        } catch (VirusDetectedException ex) {
+            log.error("检测到病毒文件 [{}]: fileName={}, virus={}", 
+                requestId, file.getOriginalFilename(), ex.getVirusName());
+            
+            throw new BusinessException(ErrorCode.FILE_CORRUPTED.getCode(),
+                "文件安全检查失败，请检查文件内容",
+                Map.of("fileName", file.getOriginalFilename()));
+                
+        } catch (StorageQuotaExceededException ex) {
+            log.warn("存储配额超限 [{}]: used={}, limit={}", 
+                requestId, ex.getUsedSpace(), ex.getQuotaLimit());
+            
+            throw new BusinessException(ErrorCode.STORAGE_QUOTA_EXCEEDED.getCode(),
+                "存储空间不足，请清理不需要的文件或联系管理员",
+                Map.of(
+                    "usedSpace", ex.getUsedSpace(),
+                    "quotaLimit", ex.getQuotaLimit()
+                ));
+        }
+    }
+    
+    /**
+     * 文件处理 - 异步处理错误
+     */
+    @PostMapping("/{fileId}/process")
+    public ResponseEntity<ApiResponse<ProcessingJobDTO>> processFile(
+            @PathVariable String fileId,
+            @RequestParam("operation") String operation,
+            @RequestBody(required = false) Map<String, Object> params,
+            HttpServletRequest request) {
+        
+        String requestId = RequestContext.getRequestId();
+        
+        try {
+            log.info("开始文件处理 [{}]: fileId={}, operation={}", 
+                requestId, fileId, operation);
+            
+            // 检查文件是否存在
+            FileMetadata fileMetadata = fileService.getFileMetadata(fileId);
+            if (fileMetadata == null) {
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND.getCode(),
+                    "文件不存在", Map.of("fileId", fileId));
+            }
+            
+            // 检查文件状态
+            if (fileMetadata.getStatus() == FileStatus.PROCESSING) {
+                throw new BusinessException(ErrorCode.RESOURCE_LOCKED.getCode(),
+                    "文件正在处理中，请稍后再试", Map.of("fileId", fileId));
+            }
+            
+            // 提交异步处理任务
+            ProcessingJobDTO job = fileService.submitProcessingJob(fileId, operation, params);
+            
+            log.info("文件处理任务已提交 [{}]: jobId={}", requestId, job.getJobId());
+            
+            return ResponseEntity.accepted().body(ApiResponse.success(job, "处理任务已提交"));
+            
+        } catch (UnsupportedOperationException ex) {
+            log.warn("不支持的操作 [{}]: operation={}, fileType={}", 
+                requestId, operation, ex.getFileType());
+            
+            throw new BusinessException(ErrorCode.OPERATION_NOT_ALLOWED.getCode(),
+                String.format("文件类型 %s 不支持 %s 操作", ex.getFileType(), operation),
+                Map.of(
+                    "operation", operation,
+                    "fileType", ex.getFileType(),
+                    "supportedOperations", ex.getSupportedOperations()
+                ));
+        }
+    }
+    
+    /**
+     * 文件下载 - 带限流和降级
+     */
+    @GetMapping("/{fileId}/download")
+    public ResponseEntity<Resource> downloadFile(
+            @PathVariable String fileId,
+            @RequestParam(value = "version", required = false) String version,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        
+        String requestId = RequestContext.getRequestId();
+        
+        try {
+            log.info("开始文件下载 [{}]: fileId={}, version={}", 
+                requestId, fileId, version);
+            
+            // 检查下载权限
+            fileService.checkDownloadPermission(fileId);
+            
+            // 执行下载，带降级处理
+            ErrorRecoveryStrategy strategy = ErrorRecoveryStrategy.builder()
+                .retryEnabled(true)
+                .maxAttempts(2)
+                .fallbackEnabled(true)
+                .operationTimeout(30000L)
+                .build();
+            
+            FileDownloadResult downloadResult = errorRecoveryManager.executeWithRecovery(
+                "file-download",
+                () -> fileService.downloadFile(fileId, version),
+                strategy
+            );
+            
+            // 设置响应头
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, 
+                "attachment; filename=\"" + downloadResult.getFileName() + "\"");
+            headers.add(HttpHeaders.CONTENT_TYPE, downloadResult.getContentType());
+            headers.add(HttpHeaders.CONTENT_LENGTH, String.valueOf(downloadResult.getFileSize()));
+            
+            return ResponseEntity.ok()
+                .headers(headers)
+                .body(downloadResult.getResource());
+                
+        } catch (FileNotFoundException ex) {
+            log.warn("文件不存在 [{}]: fileId={}", requestId, fileId);
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND.getCode(),
+                "文件不存在或已被删除", Map.of("fileId", fileId));
+                
+        } catch (AccessDeniedException ex) {
+            log.warn("文件下载权限不足 [{}]: fileId={}, userId={}", 
+                requestId, fileId, ex.getUserId());
+            throw new BusinessException(ErrorCode.ACCESS_DENIED.getCode(),
+                "没有权限下载该文件", Map.of("fileId", fileId));
+                
+        } catch (RateLimitExceededException ex) {
+            log.warn("下载频率超限 [{}]: fileId={}, userId={}", 
+                requestId, fileId, ex.getUserId());
+            
+            response.setHeader("Retry-After", String.valueOf(ex.getRetryAfter()));
+            throw new BusinessException(ErrorCode.RATE_LIMIT_EXCEEDED.getCode(),
+                "下载频率过高，请稍后重试", 
+                Map.of("retryAfter", ex.getRetryAfter()));
+        }
+    }
+    
+    private void validateFileUpload(MultipartFile file, String category) {
+        if (file.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST_FORMAT.getCode(),
+                "文件不能为空");
+        }
+        
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || originalFilename.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST_FORMAT.getCode(),
+                "文件名不能为空");
+        }
+        
+        // 检查文件名长度
+        if (originalFilename.length() > 255) {
+            throw new BusinessException(ErrorCode.PARAMETER_RANGE_ERROR.getCode(),
+                "文件名过长，最大支持255个字符");
+        }
+        
+        // 检查文件名是否包含非法字符
+        if (originalFilename.matches(".*[<>:\"/\\\\|?*].*")) {
+            throw new BusinessException(ErrorCode.PARAMETER_FORMAT_ERROR.getCode(),
+                "文件名包含非法字符");
+        }
+    }
+    
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " B";
+        if (size < 1024 * 1024) return (size / 1024) + " KB";
+        if (size < 1024 * 1024 * 1024) return (size / (1024 * 1024)) + " MB";
+        return (size / (1024 * 1024 * 1024)) + " GB";
+    }
+}
+
+@Service
+@Slf4j
+public class FileService {
+    
+    @Autowired
+    private FileStorageService storageService;
+    
+    @Autowired
+    private FileMetadataRepository metadataRepository;
+    
+    @Autowired
+    private VirusScanner virusScanner;
+    
+    @Autowired
+    private ProcessingJobService processingJobService;
+    
+    @Value("${file.upload.max-size:10485760}") // 10MB
+    private long maxFileSize;
+    
+    @Value("${file.upload.allowed-types}")
+    private List<String> allowedFileTypes;
+    
+    public FileUploadResult uploadFile(MultipartFile file, String category) {
+        String fileName = file.getOriginalFilename();
+        long fileSize = file.getSize();
+        
+        try {
+            // 1. 文件大小检查
+            if (fileSize > maxFileSize) {
+                throw new FileSizeExceededException(fileSize, maxFileSize);
+            }
+            
+            // 2. 文件类型检查
+            String fileType = FileTypeDetector.detect(file);
+            if (!allowedFileTypes.contains(fileType)) {
+                throw new UnsupportedFileTypeException(fileType, allowedFileTypes);
+            }
+            
+            // 3. 病毒扫描
+            VirusScanResult scanResult = virusScanner.scan(file.getInputStream());
+            if (scanResult.isInfected()) {
+                throw new VirusDetectedException(scanResult.getVirusName());
+            }
+            
+            // 4. 检查存储配额
+            checkStorageQuota(fileSize);
+            
+            // 5. 生成文件ID和路径
+            String fileId = generateFileId();
+            String storagePath = generateStoragePath(fileId, category);
+            
+            // 6. 上传到存储服务
+            StorageResult storageResult;
+            try {
+                storageResult = storageService.store(file.getInputStream(), storagePath, fileSize);
+            } catch (StorageException ex) {
+                log.error("文件存储失败: fileName={}", fileName, ex);
+                throw ex;
+            }
+            
+            // 7. 保存元数据
+            FileMetadata metadata = FileMetadata.builder()
+                .fileId(fileId)
+                .fileName(fileName)
+                .fileSize(fileSize)
+                .fileType(fileType)
+                .category(category)
+                .storagePath(storagePath)
+                .checksum(storageResult.getChecksum())
+                .status(FileStatus.AVAILABLE)
+                .uploadTime(LocalDateTime.now())
+                .build();
+            
+            metadataRepository.save(metadata);
+            
+            log.info("文件上传成功: fileId={}, fileName={}", fileId, fileName);
+            
+            return FileUploadResult.builder()
+                .fileId(fileId)
+                .fileName(fileName)
+                .fileSize(fileSize)
+                .fileType(fileType)
+                .checksum(storageResult.getChecksum())
+                .uploadTime(LocalDateTime.now())
+                .build();
+                
+        } catch (IOException ex) {
+            log.error("文件处理IO错误: fileName={}", fileName, ex);
+            throw new FileProcessingException("文件处理失败", ex);
+        }
+    }
+    
+    public ProcessingJobDTO submitProcessingJob(String fileId, String operation, Map<String, Object> params) {
+        FileMetadata metadata = getFileMetadata(fileId);
+        
+        // 检查操作是否支持
+        if (!isOperationSupported(metadata.getFileType(), operation)) {
+            throw new UnsupportedOperationException(operation, metadata.getFileType(), 
+                getSupportedOperations(metadata.getFileType()));
+        }
+        
+        // 更新文件状态为处理中
+        metadata.setStatus(FileStatus.PROCESSING);
+        metadataRepository.save(metadata);
+        
+        // 创建处理任务
+        ProcessingJob job = ProcessingJob.builder()
+            .jobId(generateJobId())
+            .fileId(fileId)
+            .operation(operation)
+            .parameters(params)
+            .status(JobStatus.PENDING)
+            .createdTime(LocalDateTime.now())
+            .build();
+        
+        // 提交到异步处理队列
+        processingJobService.submitJob(job);
+        
+        return ProcessingJobMapper.toDTO(job);
+    }
+    
+    private void checkStorageQuota(long fileSize) {
+        long currentUsage = getCurrentStorageUsage();
+        long quotaLimit = getStorageQuotaLimit();
+        
+        if (currentUsage + fileSize > quotaLimit) {
+            throw new StorageQuotaExceededException(currentUsage, quotaLimit);
+        }
+    }
+    
+    private boolean isOperationSupported(String fileType, String operation) {
+        Map<String, List<String>> supportedOps = Map.of(
+            "image", List.of("resize", "crop", "watermark", "format-convert"),
+            "video", List.of("transcode", "thumbnail", "trim"),
+            "document", List.of("pdf-convert", "text-extract", "ocr"),
+            "audio", List.of("transcode", "trim", "normalize")
+        );
+        
+        return supportedOps.getOrDefault(fileType, Collections.emptyList()).contains(operation);
+    }
+    
+    private List<String> getSupportedOperations(String fileType) {
+        Map<String, List<String>> supportedOps = Map.of(
+            "image", List.of("resize", "crop", "watermark", "format-convert"),
+            "video", List.of("transcode", "thumbnail", "trim"),
+            "document", List.of("pdf-convert", "text-extract", "ocr"),
+            "audio", List.of("transcode", "trim", "normalize")
+        );
+        
+        return supportedOps.getOrDefault(fileType, Collections.emptyList());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 异步处理错误处理
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+@Slf4j
+public class AsyncErrorHandler {
+    
+    @Autowired
+    private ErrorReportingService errorReportingService;
+    
+    @Autowired
+    private NotificationService notificationService;
+    
+    @Autowired
+    private TaskRecoveryService taskRecoveryService;
+    
+    /**
+     * 异步任务异常处理
+     */
+    @Async
+    @Retryable(value = {Exception.class}, maxAttempts = 3, backoff = @Backoff(delay = 2000))
+    public CompletableFuture<Void> handleAsyncException(AsyncTaskContext context, Exception exception) {
+        String taskId = context.getTaskId();
+        String taskType = context.getTaskType();
+        
+        try {
+            log.error("异步任务异常 [{}]: type={}, error={}", taskId, taskType, exception.getMessage(), exception);
+            
+            // 1. 记录错误详情
+            AsyncErrorDetail errorDetail = AsyncErrorDetail.builder()
+                .taskId(taskId)
+                .taskType(taskType)
+                .errorMessage(exception.getMessage())
+                .stackTrace(getStackTrace(exception))
+                .retryCount(context.getRetryCount())
+                .timestamp(LocalDateTime.now())
+                .build();
+            
+            errorReportingService.reportAsyncError(errorDetail);
+            
+            // 2. 判断是否需要恢复
+            if (shouldAttemptRecovery(exception, context)) {
+                attemptTaskRecovery(context, exception);
+            } else {
+                markTaskAsFailed(context, exception);
+            }
+            
+            // 3. 发送通知
+            sendErrorNotification(context, exception);
+            
+        } catch (Exception ex) {
+            log.error("异步错误处理失败: taskId={}", taskId, ex);
+        }
+        
+        return CompletableFuture.completedFuture(null);
+    }
+    
+    /**
+     * 尝试任务恢复
+     */
+    private void attemptTaskRecovery(AsyncTaskContext context, Exception exception) {
+        String taskId = context.getTaskId();
+        
+        try {
+            log.info("尝试恢复异步任务: taskId={}", taskId);
+            
+            RecoveryStrategy strategy = determineRecoveryStrategy(exception);
+            boolean recovered = taskRecoveryService.recoverTask(context, strategy);
+            
+            if (recovered) {
+                log.info("异步任务恢复成功: taskId={}", taskId);
+                updateTaskStatus(taskId, TaskStatus.RECOVERED);
+            } else {
+                log.warn("异步任务恢复失败: taskId={}", taskId);
+                markTaskAsFailed(context, exception);
+            }
+            
+        } catch (Exception ex) {
+            log.error("任务恢复过程异常: taskId={}", taskId, ex);
+            markTaskAsFailed(context, exception);
+        }
+    }
+    
+    /**
+     * 标记任务失败
+     */
+    private void markTaskAsFailed(AsyncTaskContext context, Exception exception) {
+        String taskId = context.getTaskId();
+        
+        try {
+            updateTaskStatus(taskId, TaskStatus.FAILED);
+            
+            // 记录失败原因
+            TaskFailureRecord failureRecord = TaskFailureRecord.builder()
+                .taskId(taskId)
+                .failureReason(exception.getMessage())
+                .failureTime(LocalDateTime.now())
+                .retryCount(context.getRetryCount())
+                .build();
+            
+            taskRecoveryService.recordFailure(failureRecord);
+            
+            log.error("异步任务最终失败: taskId={}", taskId);
+            
+        } catch (Exception ex) {
+            log.error("标记任务失败时异常: taskId={}", taskId, ex);
+        }
+    }
+    
+    /**
+     * 发送错误通知
+     */
+    private void sendErrorNotification(AsyncTaskContext context, Exception exception) {
+        try {
+            String taskId = context.getTaskId();
+            String userId = context.getUserId();
+            
+            if (userId != null) {
+                NotificationMessage notification = NotificationMessage.builder()
+                    .userId(userId)
+                    .type(NotificationType.TASK_FAILED)
+                    .title("任务执行失败")
+                    .message(String.format("您的任务 %s 执行失败：%s", 
+                        context.getTaskName(), getSimpleErrorMessage(exception)))
+                    .data(Map.of(
+                        "taskId", taskId,
+                        "taskType", context.getTaskType(),
+                        "errorCode", getErrorCode(exception)
+                    ))
+                    .build();
+                
+                notificationService.sendNotification(notification);
+            }
+            
+        } catch (Exception ex) {
+            log.error("发送错误通知失败: taskId={}", context.getTaskId(), ex);
+        }
+    }
+    
+    /**
+     * 判断是否应该尝试恢复
+     */
+    private boolean shouldAttemptRecovery(Exception exception, AsyncTaskContext context) {
+        // 超过最大重试次数
+        if (context.getRetryCount() >= context.getMaxRetries()) {
+            return false;
+        }
+        
+        // 不可恢复的异常
+        if (exception instanceof ValidationException || 
+            exception instanceof SecurityException ||
+            exception instanceof IllegalArgumentException) {
+            return false;
+        }
+        
+        // 可恢复的异常
+        if (exception instanceof ExternalServiceException ||
+            exception instanceof NetworkException ||
+            exception instanceof TemporaryResourceException) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * 确定恢复策略
+     */
+    private RecoveryStrategy determineRecoveryStrategy(Exception exception) {
+        if (exception instanceof ExternalServiceException) {
+            return RecoveryStrategy.RETRY_WITH_BACKOFF;
+        } else if (exception instanceof NetworkException) {
+            return RecoveryStrategy.RETRY_WITH_CIRCUIT_BREAKER;
+        } else if (exception instanceof ResourceLimitException) {
+            return RecoveryStrategy.DELAY_AND_RETRY;
+        } else {
+            return RecoveryStrategy.SIMPLE_RETRY;
+        }
+    }
+    
+    private String getSimpleErrorMessage(Exception exception) {
+        if (exception instanceof BusinessException) {
+            return ((BusinessException) exception).getUserMessage();
+        } else if (exception instanceof ExternalServiceException) {
+            return "外部服务暂时不可用";
+        } else {
+            return "系统暂时繁忙，请稍后重试";
+        }
+    }
+    
+    private String getErrorCode(Exception exception) {
+        if (exception instanceof BusinessException) {
+            return ((BusinessException) exception).getErrorCode();
+        } else if (exception instanceof SystemException) {
+            return ((SystemException) exception).getErrorCode();
+        } else {
+            return ErrorCode.SYSTEM_ERROR.getCode();
+        }
+    }
+    
+    private String getStackTrace(Exception exception) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        exception.printStackTrace(pw);
+        return sw.toString();
+    }
+    
+    private void updateTaskStatus(String taskId, TaskStatus status) {
+        // 更新任务状态的实现
+    }
+}
+
+/**
+ * 消息队列错误处理
+ */
+@Component
+@Slf4j
+public class MessageQueueErrorHandler {
+    
+    @Autowired
+    private DeadLetterQueueService deadLetterQueueService;
+    
+    @Autowired
+    private MessageRecoveryService messageRecoveryService;
+    
+    /**
+     * 消息处理异常处理
+     */
+    @RabbitListener(queues = "order.processing.queue")
+    public void handleOrderMessage(
+            @Payload OrderMessage message,
+            @Header Map<String, Object> headers,
+            Channel channel,
+            @Header(AmqpHeaders.DELIVERY_TAG) long deliveryTag) {
+        
+        String messageId = (String) headers.get("messageId");
+        Integer retryCount = (Integer) headers.getOrDefault("retryCount", 0);
+        
+        try {
+            log.info("处理订单消息: messageId={}, orderId={}", messageId, message.getOrderId());
+            
+            // 处理业务逻辑
+            orderService.processOrder(message);
+            
+            // 手动确认消息
+            channel.basicAck(deliveryTag, false);
+            
+            log.info("订单消息处理成功: messageId={}", messageId);
+            
+        } catch (BusinessException ex) {
+            log.warn("订单消息业务异常: messageId={}, error={}", messageId, ex.getMessage());
+            
+            // 业务异常不重试，直接丢弃或发送到死信队列
+            handleBusinessError(message, ex, channel, deliveryTag);
+            
+        } catch (ExternalServiceException ex) {
+            log.error("订单消息外部服务异常: messageId={}, service={}", 
+                messageId, ex.getServiceName(), ex);
+            
+            // 外部服务异常，尝试重试
+            handleRetryableError(message, ex, headers, channel, deliveryTag, retryCount);
+            
+        } catch (Exception ex) {
+            log.error("订单消息处理异常: messageId={}", messageId, ex);
+            
+            // 系统异常，尝试重试
+            handleSystemError(message, ex, headers, channel, deliveryTag, retryCount);
+        }
+    }
+    
+    /**
+     * 处理业务异常
+     */
+    private void handleBusinessError(OrderMessage message, BusinessException ex, 
+                                   Channel channel, long deliveryTag) {
+        try {
+            // 记录业务异常
+            MessageErrorLog errorLog = MessageErrorLog.builder()
+                .messageId(message.getMessageId())
+                .messageType("OrderMessage")
+                .errorType("BusinessException")
+                .errorMessage(ex.getMessage())
+                .errorCode(ex.getErrorCode())
+                .timestamp(LocalDateTime.now())
+                .build();
+            
+            messageRecoveryService.logMessageError(errorLog);
+            
+            // 发送到业务异常队列（用于人工处理）
+            deadLetterQueueService.sendToBusinessErrorQueue(message, ex);
+            
+            // 确认消息（不重试）
+            channel.basicAck(deliveryTag, false);
+            
+        } catch (Exception e) {
+            log.error("处理业务异常时发生错误", e);
+            rejectMessage(channel, deliveryTag, false);
+        }
+    }
+    
+    /**
+     * 处理可重试异常
+     */
+    private void handleRetryableError(OrderMessage message, Exception ex, 
+                                    Map<String, Object> headers,
+                                    Channel channel, long deliveryTag, int retryCount) {
+        try {
+            int maxRetries = getMaxRetries(ex);
+            
+            if (retryCount < maxRetries) {
+                // 增加重试计数
+                headers.put("retryCount", retryCount + 1);
+                headers.put("lastError", ex.getMessage());
+                headers.put("retryTime", LocalDateTime.now().toString());
+                
+                // 计算延迟时间（指数退避）
+                long delayMillis = calculateRetryDelay(retryCount);
+                
+                // 发送到延迟队列
+                messageRecoveryService.scheduleRetry(message, headers, delayMillis);
+                
+                // 确认原消息
+                channel.basicAck(deliveryTag, false);
+                
+                log.info("消息已安排重试: messageId={}, retryCount={}, delay={}ms", 
+                    message.getMessageId(), retryCount + 1, delayMillis);
+                
+            } else {
+                // 超过最大重试次数，发送到死信队列
+                deadLetterQueueService.sendToDeadLetterQueue(message, ex, retryCount);
+                
+                // 确认消息
+                channel.basicAck(deliveryTag, false);
+                
+                log.error("消息重试次数已达上限，发送到死信队列: messageId={}, retryCount={}", 
+                    message.getMessageId(), retryCount);
+            }
+            
+        } catch (Exception e) {
+            log.error("处理可重试异常时发生错误", e);
+            rejectMessage(channel, deliveryTag, false);
+        }
+    }
+    
+    /**
+     * 处理系统异常
+     */
+    private void handleSystemError(OrderMessage message, Exception ex, 
+                                 Map<String, Object> headers,
+                                 Channel channel, long deliveryTag, int retryCount) {
+        try {
+            // 系统异常通常需要立即重试，但次数限制更严格
+            int maxRetries = 3;
+            
+            if (retryCount < maxRetries) {
+                headers.put("retryCount", retryCount + 1);
+                headers.put("lastError", ex.getMessage());
+                
+                // 系统异常使用较短的延迟
+                long delayMillis = 1000L * (retryCount + 1);
+                
+                messageRecoveryService.scheduleRetry(message, headers, delayMillis);
+                channel.basicAck(deliveryTag, false);
+                
+                log.warn("系统异常消息重试: messageId={}, retryCount={}", 
+                    message.getMessageId(), retryCount + 1);
+                
+            } else {
+                // 发送到死信队列，需要人工干预
+                deadLetterQueueService.sendToDeadLetterQueue(message, ex, retryCount);
+                channel.basicAck(deliveryTag, false);
+                
+                // 发送告警
+                alertService.sendAlert(AlertMessage.builder()
+                    .level(AlertLevel.CRITICAL)
+                    .title("消息处理系统异常")
+                    .message(String.format("消息 %s 处理失败，已发送到死信队列", message.getMessageId()))
+                    .build());
+                
+                log.error("系统异常消息发送到死信队列: messageId={}", message.getMessageId());
+            }
+            
+        } catch (Exception e) {
+            log.error("处理系统异常时发生错误", e);
+            rejectMessage(channel, deliveryTag, false);
+        }
+    }
+    
+    private void rejectMessage(Channel channel, long deliveryTag, boolean requeue) {
+        try {
+            channel.basicReject(deliveryTag, requeue);
+        } catch (Exception e) {
+            log.error("拒绝消息时发生异常", e);
+        }
+    }
+    
+    private int getMaxRetries(Exception ex) {
+        if (ex instanceof ExternalServiceException) {
+            return 5; // 外部服务异常允许更多重试
+        } else if (ex instanceof NetworkException) {
+            return 3; // 网络异常中等重试
+        } else {
+            return 2; // 其他异常较少重试
+        }
+    }
+    
+    private long calculateRetryDelay(int retryCount) {
+        // 指数退避：1s, 2s, 4s, 8s, 16s
+        return Math.min(1000L * (1L << retryCount), 30000L); // 最大30秒
+    }
+}
+
+// 异步任务上下文
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AsyncTaskContext {
+    private String taskId;
+    private String taskType;
+    private String taskName;
+    private String userId;
+    private int retryCount;
+    private int maxRetries;
+    private Map<String, Object> parameters;
+    private LocalDateTime startTime;
+}
+
+// 异步错误详情
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AsyncErrorDetail {
+    private String taskId;
+    private String taskType;
+    private String errorMessage;
+    private String stackTrace;
+    private int retryCount;
+    private LocalDateTime timestamp;
+}
+
+// 恢复策略枚举
+public enum RecoveryStrategy {
+    SIMPLE_RETRY,              // 简单重试
+    RETRY_WITH_BACKOFF,        // 带退避的重试
+    RETRY_WITH_CIRCUIT_BREAKER, // 带熔断器的重试
+    DELAY_AND_RETRY,           // 延迟重试
+    MANUAL_INTERVENTION        // 需要人工干预
+}
+
+// 任务状态枚举
+public enum TaskStatus {
+    PENDING,     // 待处理
+    RUNNING,     // 运行中
+    COMPLETED,   // 已完成
+    FAILED,      // 失败
+    RECOVERED,   // 已恢复
+    CANCELLED    // 已取消
+}
+// [AI-BLOCK-END]
+```

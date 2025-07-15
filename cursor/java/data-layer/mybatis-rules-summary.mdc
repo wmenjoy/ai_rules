@@ -1,0 +1,334 @@
+# MyBatis/MyBatis-Plus 规范汇总 (数据层规则)
+> MyBatis和MyBatis-Plus的核心使用规范和关键要点
+
+## 🎯 核心规范要点
+
+### 1. 必须配置的插件
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+@MapperScan(basePackages = "com.example.mapper")
+public class MyBatisPlusConfig {
+    
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        
+        // 必须配置：分页插件
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        
+        // 必须配置：乐观锁插件
+        interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
+        
+        // 必须配置：防攻击插件
+        interceptor.addInnerInterceptor(new BlockAttackInnerInterceptor());
+        
+        return interceptor;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 2. 实体类必须规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@TableName("users")
+public class User extends BaseEntity {
+    
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+    
+    @TableField("username")
+    @NotBlank(message = "用户名不能为空")
+    private String username;
+    
+    @Version
+    @TableField("version")
+    private Integer version;
+    
+    @TableLogic
+    @TableField("deleted")
+    private Integer deleted;
+}
+
+// 基础实体类
+@Data
+public abstract class BaseEntity {
+    
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+    
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+    
+    @TableField(value = "create_by", fill = FieldFill.INSERT)
+    private String createBy;
+    
+    @TableField(value = "update_by", fill = FieldFill.INSERT_UPDATE)
+    private String updateBy;
+}
+// [AI-BLOCK-END]
+```
+
+### 3. Mapper接口必须规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+    
+    // 简单查询：使用注解
+    @Select("SELECT * FROM users WHERE username = #{username} AND deleted = 0")
+    User selectByUsername(@Param("username") String username);
+    
+    // 复杂查询：使用XML映射
+    IPage<User> selectUserPage(IPage<User> page, @Param("query") UserQueryDTO queryDTO);
+    
+    // 批量操作：使用XML映射
+    int insertBatch(@Param("users") List<User> users);
+    
+    // 统计查询：使用XML映射
+    UserStatisticsVO selectUserStatistics(@Param("deptId") Long deptId);
+}
+// [AI-BLOCK-END]
+```
+
+### 4. Service层必须规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Transactional(rollbackFor = Exception.class)
+public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+    
+    // 使用条件构造器进行查询
+    @Override
+    public IPage<User> getUserPage(UserQueryDTO queryDTO, int pageNum, int pageSize) {
+        Page<User> page = new Page<>(pageNum, pageSize);
+        
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.like(StringUtils.isNotBlank(queryDTO.getUsername()), 
+                         User::getUsername, queryDTO.getUsername())
+                   .eq(queryDTO.getStatus() != null, 
+                       User::getStatus, queryDTO.getStatus())
+                   .orderByDesc(User::getCreateTime);
+        
+        return this.page(page, queryWrapper);
+    }
+    
+    // 使用条件构造器进行更新
+    @Override
+    public boolean updateUser(Long userId, UserUpdateDTO updateDTO) {
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(User::getId, userId);
+        
+        if (StringUtils.isNotBlank(updateDTO.getEmail())) {
+            updateWrapper.set(User::getEmail, updateDTO.getEmail());
+        }
+        
+        return this.update(updateWrapper);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 核心配置要求
+
+### 1. 应用配置文件
+```yaml
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+mybatis-plus:
+  global-config:
+    db-config:
+      id-type: ASSIGN_ID
+      table-underline: true
+      column-underline: true
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+    lazy-loading-enabled: true
+    default-statement-timeout: 30
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+# [AI-BLOCK-END]
+```
+
+### 2. 自动填充配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+public class CustomMetaObjectHandler implements MetaObjectHandler {
+    
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "createBy", String.class, getCurrentUserId());
+        this.strictInsertFill(metaObject, "updateBy", String.class, getCurrentUserId());
+    }
+    
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+        this.strictUpdateFill(metaObject, "updateBy", String.class, getCurrentUserId());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## ⚠️ 关键禁止行为
+
+### 1. 配置禁令
+- **禁止跳过分页插件配置**
+- **禁止不配置逻辑删除**
+- **禁止不配置自动填充**
+- **禁止硬编码数据库配置**
+
+### 2. 实体类禁令
+- **禁止不继承BaseEntity**
+- **禁止不使用@TableName注解**
+- **禁止不配置@TableLogic**
+- **禁止不配置@Version（重要实体）**
+
+### 3. Mapper接口禁令
+- **禁止不继承BaseMapper**
+- **禁止直接使用字符串字段名**
+- **禁止多参数不使用@Param**
+- **禁止复杂查询使用注解**
+
+### 4. Service层禁令
+- **禁止不使用条件构造器**
+- **禁止不配置事务注解**
+- **禁止不处理异常**
+- **禁止不清理缓存**
+
+### 5. 性能禁令
+- **禁止不使用分页**
+- **禁止查询全部字段**
+- **禁止N+1查询**
+- **禁止不使用索引字段**
+
+## 🚀 最佳实践要点
+
+### 1. 查询优化
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ✅ 正确：使用Lambda表达式
+LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+queryWrapper.eq(User::getStatus, 1)
+           .like(User::getUsername, "admin")
+           .orderByDesc(User::getCreateTime);
+
+// ❌ 错误：使用字符串字段名
+QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+queryWrapper.eq("status", 1)
+           .like("username", "admin")
+           .orderByDesc("create_time");
+// [AI-BLOCK-END]
+```
+
+### 2. 批量操作
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ✅ 正确：使用批量保存
+List<User> users = buildUserList();
+userService.saveBatch(users, 1000); // 每批1000条
+
+// ❌ 错误：循环单条保存
+for (User user : users) {
+    userService.save(user);
+}
+// [AI-BLOCK-END]
+```
+
+### 3. 分页查询
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ✅ 正确：使用分页插件
+Page<User> page = new Page<>(pageNum, pageSize);
+IPage<User> result = userService.page(page, queryWrapper);
+
+// ❌ 错误：不使用分页
+List<User> allUsers = userService.list(queryWrapper);
+// [AI-BLOCK-END]
+```
+
+### 4. 缓存使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ✅ 正确：先查缓存，再查数据库
+public User getUserById(Long userId) {
+    String cacheKey = "user:id:" + userId;
+    User cachedUser = (User) redisTemplate.opsForValue().get(cacheKey);
+    if (cachedUser != null) {
+        return cachedUser;
+    }
+    
+    User user = userMapper.selectById(userId);
+    if (user != null) {
+        redisTemplate.opsForValue().set(cacheKey, user, Duration.ofMinutes(30));
+    }
+    return user;
+}
+// [AI-BLOCK-END]
+```
+
+## 📊 性能监控要点
+
+### 1. SQL性能监控
+- 监控慢SQL（>1秒）
+- 监控SQL执行频率
+- 监控数据库连接池状态
+- 监控缓存命中率
+
+### 2. 关键指标
+- 查询响应时间 < 100ms
+- 批量操作每批 ≤ 1000条
+- 分页大小 ≤ 100条
+- 连接池使用率 < 80%
+
+## 🔧 代码生成规范
+
+### 1. 代码生成器配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Test
+public void generateCode() {
+    AutoGenerator generator = new AutoGenerator();
+    
+    // 全局配置
+    GlobalConfig globalConfig = new GlobalConfig();
+    globalConfig.setOutputDir(System.getProperty("user.dir") + "/src/main/java");
+    globalConfig.setAuthor("系统生成");
+    globalConfig.setServiceName("%sService");
+    globalConfig.setIdType(IdType.ASSIGN_ID);
+    
+    // 策略配置
+    StrategyConfig strategyConfig = new StrategyConfig();
+    strategyConfig.setEntityLombokModel(true);
+    strategyConfig.setRestControllerStyle(true);
+    strategyConfig.setLogicDeleteFieldName("deleted");
+    strategyConfig.setVersionFieldName("version");
+    
+    generator.setGlobalConfig(globalConfig);
+    generator.setStrategy(strategyConfig);
+    generator.execute();
+}
+// [AI-BLOCK-END]
+```
+
+这个规范汇总文档提供了MyBatis和MyBatis-Plus使用的核心要点，包括：
+
+1. **必须配置的插件**：分页、乐观锁、防攻击插件
+2. **实体类规范**：继承BaseEntity、使用注解、配置逻辑删除
+3. **Mapper接口规范**：继承BaseMapper、使用Lambda表达式、XML映射
+4. **Service层规范**：条件构造器、事务管理、缓存策略
+5. **性能优化**：分页查询、批量操作、缓存使用
+6. **禁止行为**：明确列出不允许的做法
+
+所有代码示例都使用了AI-BLOCK标记，便于AI工具识别和应用。
+description:
+globs:
+alwaysApply: false
+---

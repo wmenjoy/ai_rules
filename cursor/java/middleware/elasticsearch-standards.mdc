@@ -1,0 +1,1182 @@
+# Elasticsearch 搜索引擎规范 (中间件层规则)
+> Elasticsearch搜索引擎的标准化使用规范和最佳实践
+
+## 基础规范
+
+### 技术栈版本要求
+- **Elasticsearch**: 7.17.x+
+- **Spring Data Elasticsearch**: 4.4.x+
+- **Elasticsearch Java Client**: 7.17.x+
+- **Elasticsearch Rest High Level Client**: 7.17.x+
+
+### 设计原则
+- **索引设计优化**: 合理设计索引结构和映射
+- **查询性能优先**: 优化查询语句和聚合操作
+- **数据一致性**: 确保ES与主数据库的数据一致性
+- **集群稳定性**: 保证集群的高可用和稳定性
+- **安全防护**: 实现访问控制和数据安全
+
+## 强制行为
+
+### 1. 项目配置规范
+
+#### 依赖管理
+```xml
+<!-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet -->
+<dependencies>
+    <!-- Spring Data Elasticsearch -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+    </dependency>
+    
+    <!-- Elasticsearch Java Client -->
+    <dependency>
+        <groupId>org.elasticsearch.client</groupId>
+        <artifactId>elasticsearch-rest-high-level-client</artifactId>
+        <version>7.17.9</version>
+    </dependency>
+    
+    <!-- Elasticsearch Java API Client -->
+    <dependency>
+        <groupId>co.elastic.clients</groupId>
+        <artifactId>elasticsearch-java</artifactId>
+        <version>7.17.9</version>
+    </dependency>
+    
+    <!-- Jackson支持 -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+</dependencies>
+<!-- [AI-BLOCK-END] -->
+```
+
+#### 配置文件
+```yaml
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# application.yml
+spring:
+  elasticsearch:
+    # 集群配置
+    uris: ${ES_URIS:http://localhost:9200,http://localhost:9201,http://localhost:9202}
+    username: ${ES_USERNAME:elastic}
+    password: ${ES_PASSWORD:password}
+    connection-timeout: 30s
+    socket-timeout: 30s
+    # 连接池配置
+    max-connections: 100
+    max-connections-per-route: 50
+  data:
+    elasticsearch:
+      # 仓库配置
+      repositories:
+        enabled: true
+
+# 自定义ES配置
+elasticsearch:
+  cluster:
+    name: ${ES_CLUSTER_NAME:elasticsearch-cluster}
+    nodes: ${ES_NODES:localhost:9300,localhost:9301,localhost:9302}
+  index:
+    # 默认分片配置
+    number-of-shards: 3
+    number-of-replicas: 1
+    # 刷新间隔
+    refresh-interval: 1s
+    # 最大结果窗口
+    max-result-window: 10000
+  search:
+    # 默认查询大小
+    default-size: 20
+    # 最大查询大小
+    max-size: 1000
+    # 超时时间
+    timeout: 30s
+
+# 日志配置
+logging:
+  level:
+    org.springframework.data.elasticsearch: DEBUG
+    org.elasticsearch.client: DEBUG
+# [AI-BLOCK-END]
+```
+
+### 2. 客户端配置类
+
+#### Elasticsearch配置类
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+@EnableElasticsearchRepositories(basePackages = "com.example.repository.elasticsearch")
+@Slf4j
+public class ElasticsearchConfig {
+    
+    @Value("${spring.elasticsearch.uris}")
+    private String[] elasticsearchUris;
+    
+    @Value("${spring.elasticsearch.username}")
+    private String username;
+    
+    @Value("${spring.elasticsearch.password}")
+    private String password;
+    
+    @Value("${spring.elasticsearch.connection-timeout:30s}")
+    private Duration connectionTimeout;
+    
+    @Value("${spring.elasticsearch.socket-timeout:30s}")
+    private Duration socketTimeout;
+    
+    /**
+     * Elasticsearch客户端配置
+     */
+    @Bean
+    @Primary
+    public ElasticsearchClient elasticsearchClient() {
+        // 构建HTTP主机列表
+        HttpHost[] httpHosts = Arrays.stream(elasticsearchUris)
+                .map(uri -> {
+                    try {
+                        URI u = new URI(uri);
+                        return new HttpHost(u.getHost(), u.getPort(), u.getScheme());
+                    } catch (URISyntaxException e) {
+                        throw new IllegalArgumentException("Invalid Elasticsearch URI: " + uri, e);
+                    }
+                })
+                .toArray(HttpHost[]::new);
+        
+        // 构建RestClient
+        RestClientBuilder builder = RestClient.builder(httpHosts)
+                .setRequestConfigCallback(requestConfigBuilder -> {
+                    return requestConfigBuilder
+                            .setConnectTimeout((int) connectionTimeout.toMillis())
+                            .setSocketTimeout((int) socketTimeout.toMillis());
+                })
+                .setHttpClientConfigCallback(httpClientBuilder -> {
+                    // 认证配置
+                    CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+                    credentialsProvider.setCredentials(AuthScope.ANY,
+                            new UsernamePasswordCredentials(username, password));
+                    
+                    return httpClientBuilder
+                            .setDefaultCredentialsProvider(credentialsProvider)
+                            .setMaxConnTotal(100)
+                            .setMaxConnPerRoute(50);
+                });
+        
+        RestClient restClient = builder.build();
+        
+        // 构建Transport
+        ElasticsearchTransport transport = new RestClientTransport(
+                restClient, new JacksonJsonpMapper());
+        
+        return new ElasticsearchClient(transport);
+    }
+    
+    /**
+     * Rest High Level Client（兼容老版本）
+     */
+    @Bean
+    public RestHighLevelClient restHighLevelClient() {
+        HttpHost[] httpHosts = Arrays.stream(elasticsearchUris)
+                .map(uri -> {
+                    try {
+                        URI u = new URI(uri);
+                        return new HttpHost(u.getHost(), u.getPort(), u.getScheme());
+                    } catch (URISyntaxException e) {
+                        throw new IllegalArgumentException("Invalid Elasticsearch URI: " + uri, e);
+                    }
+                })
+                .toArray(HttpHost[]::new);
+        
+        RestClientBuilder builder = RestClient.builder(httpHosts)
+                .setRequestConfigCallback(requestConfigBuilder -> {
+                    return requestConfigBuilder
+                            .setConnectTimeout((int) connectionTimeout.toMillis())
+                            .setSocketTimeout((int) socketTimeout.toMillis());
+                })
+                .setHttpClientConfigCallback(httpClientBuilder -> {
+                    CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+                    credentialsProvider.setCredentials(AuthScope.ANY,
+                            new UsernamePasswordCredentials(username, password));
+                    
+                    return httpClientBuilder
+                            .setDefaultCredentialsProvider(credentialsProvider);
+                });
+        
+        return new RestHighLevelClient(builder);
+    }
+    
+    /**
+     * Elasticsearch操作模板
+     */
+    @Bean
+    public ElasticsearchOperations elasticsearchOperations() {
+        return new ElasticsearchRestTemplate(restHighLevelClient());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 3. 文档实体设计
+
+#### 标准文档实体
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 基础文档实体
+ */
+@Data
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public abstract class BaseDocument implements Serializable {
+    
+    private static final long serialVersionUID = 1L;
+    
+    /**
+     * 文档ID
+     */
+    @Id
+    private String id;
+    
+    /**
+     * 创建时间
+     */
+    @Field(type = FieldType.Date, format = DateFormat.date_time)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createTime;
+    
+    /**
+     * 更新时间
+     */
+    @Field(type = FieldType.Date, format = DateFormat.date_time)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updateTime;
+    
+    /**
+     * 创建人
+     */
+    @Field(type = FieldType.Keyword)
+    private String createBy;
+    
+    /**
+     * 更新人
+     */
+    @Field(type = FieldType.Keyword)
+    private String updateBy;
+    
+    /**
+     * 逻辑删除标记
+     */
+    @Field(type = FieldType.Boolean)
+    private Boolean deleted = false;
+    
+    /**
+     * 版本号
+     */
+    @Field(type = FieldType.Long)
+    private Long version;
+}
+
+/**
+ * 商品文档实体
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@Document(indexName = "products", shards = 3, replicas = 1)
+@Setting(settingPath = "elasticsearch/product-settings.json")
+@Mapping(mappingPath = "elasticsearch/product-mapping.json")
+public class ProductDocument extends BaseDocument {
+    
+    /**
+     * 商品名称
+     */
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
+    private String name;
+    
+    /**
+     * 商品标题
+     */
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
+    private String title;
+    
+    /**
+     * 商品描述
+     */
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
+    private String description;
+    
+    /**
+     * 商品分类ID
+     */
+    @Field(type = FieldType.Keyword)
+    private String categoryId;
+    
+    /**
+     * 商品分类名称
+     */
+    @Field(type = FieldType.Keyword)
+    private String categoryName;
+    
+    /**
+     * 商品品牌
+     */
+    @Field(type = FieldType.Keyword)
+    private String brand;
+    
+    /**
+     * 商品价格
+     */
+    @Field(type = FieldType.Double)
+    private BigDecimal price;
+    
+    /**
+     * 商品状态：1-上架，0-下架
+     */
+    @Field(type = FieldType.Integer)
+    private Integer status;
+    
+    /**
+     * 商品标签
+     */
+    @Field(type = FieldType.Keyword)
+    private List<String> tags;
+    
+    /**
+     * 商品属性
+     */
+    @Field(type = FieldType.Object)
+    private Map<String, Object> attributes;
+    
+    /**
+     * 商品图片URL
+     */
+    @Field(type = FieldType.Keyword, index = false)
+    private List<String> imageUrls;
+    
+    /**
+     * 销售数量
+     */
+    @Field(type = FieldType.Long)
+    private Long salesCount;
+    
+    /**
+     * 库存数量
+     */
+    @Field(type = FieldType.Long)
+    private Long stockCount;
+    
+    /**
+     * 评分
+     */
+    @Field(type = FieldType.Double)
+    private Double rating;
+    
+    /**
+     * 评论数量
+     */
+    @Field(type = FieldType.Long)
+    private Long commentCount;
+    
+    /**
+     * 地理位置（店铺位置）
+     */
+    @Field(type = FieldType.Geo_Point)
+    private GeoPoint location;
+    
+    /**
+     * 上架时间
+     */
+    @Field(type = FieldType.Date, format = DateFormat.date_time)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime publishTime;
+}
+
+/**
+ * 地理位置点
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class GeoPoint {
+    private Double lat;
+    private Double lon;
+}
+// [AI-BLOCK-END]
+```
+
+### 4. Repository接口设计
+
+#### 标准Repository接口
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 商品搜索Repository
+ */
+@Repository
+public interface ProductSearchRepository extends ElasticsearchRepository<ProductDocument, String> {
+    
+    /**
+     * 根据商品名称搜索
+     * @param name 商品名称
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByNameContaining(String name, Pageable pageable);
+    
+    /**
+     * 根据分类ID查询商品
+     * @param categoryId 分类ID
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByCategoryId(String categoryId, Pageable pageable);
+    
+    /**
+     * 根据品牌查询商品
+     * @param brand 品牌
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByBrand(String brand, Pageable pageable);
+    
+    /**
+     * 根据价格区间查询商品
+     * @param minPrice 最低价格
+     * @param maxPrice 最高价格
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByPriceBetween(BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable);
+    
+    /**
+     * 根据状态查询商品
+     * @param status 商品状态
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByStatusAndDeletedFalse(Integer status, Pageable pageable);
+    
+    /**
+     * 根据标签查询商品
+     * @param tag 标签
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByTagsContaining(String tag, Pageable pageable);
+    
+    /**
+     * 根据评分范围查询商品
+     * @param minRating 最低评分
+     * @param maxRating 最高评分
+     * @param pageable 分页参数
+     * @return 商品列表
+     */
+    Page<ProductDocument> findByRatingBetween(Double minRating, Double maxRating, Pageable pageable);
+}
+// [AI-BLOCK-END]
+```
+
+### 5. 搜索服务实现
+
+#### 高级搜索服务
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+public class ProductSearchService {
+    
+    private final ElasticsearchClient elasticsearchClient;
+    private final ElasticsearchOperations elasticsearchOperations;
+    private final ProductSearchRepository productSearchRepository;
+    
+    public ProductSearchService(ElasticsearchClient elasticsearchClient,
+                               ElasticsearchOperations elasticsearchOperations,
+                               ProductSearchRepository productSearchRepository) {
+        this.elasticsearchClient = elasticsearchClient;
+        this.elasticsearchOperations = elasticsearchOperations;
+        this.productSearchRepository = productSearchRepository;
+    }
+    
+    /**
+     * 多条件搜索商品
+     */
+    public SearchResponse<ProductDocument> searchProducts(ProductSearchDTO searchDTO) {
+        try {
+            // 构建搜索请求
+            SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
+                    .index("products")
+                    .size(searchDTO.getSize())
+                    .from(searchDTO.getFrom());
+            
+            // 构建查询条件
+            BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+            
+            // 关键词搜索
+            if (StringUtils.isNotBlank(searchDTO.getKeyword())) {
+                boolQueryBuilder.must(MultiMatchQuery.of(m -> m
+                        .query(searchDTO.getKeyword())
+                        .fields("name^3", "title^2", "description^1")
+                        .type(TextQueryType.BestFields)
+                        .operator(Operator.And)
+                        .fuzziness("AUTO"))._toQuery());
+            }
+            
+            // 分类过滤
+            if (StringUtils.isNotBlank(searchDTO.getCategoryId())) {
+                boolQueryBuilder.filter(TermQuery.of(t -> t
+                        .field("categoryId")
+                        .value(searchDTO.getCategoryId()))._toQuery());
+            }
+            
+            // 品牌过滤
+            if (CollectionUtils.isNotEmpty(searchDTO.getBrands())) {
+                boolQueryBuilder.filter(TermsQuery.of(t -> t
+                        .field("brand")
+                        .terms(TermsQueryField.of(tf -> tf.value(
+                                searchDTO.getBrands().stream()
+                                        .map(FieldValue::of)
+                                        .collect(Collectors.toList())))))._toQuery());
+            }
+            
+            // 价格区间过滤
+            if (searchDTO.getMinPrice() != null || searchDTO.getMaxPrice() != null) {
+                RangeQuery.Builder rangeBuilder = new RangeQuery.Builder().field("price");
+                if (searchDTO.getMinPrice() != null) {
+                    rangeBuilder.gte(JsonData.of(searchDTO.getMinPrice()));
+                }
+                if (searchDTO.getMaxPrice() != null) {
+                    rangeBuilder.lte(JsonData.of(searchDTO.getMaxPrice()));
+                }
+                boolQueryBuilder.filter(rangeBuilder.build()._toQuery());
+            }
+            
+            // 状态过滤
+            boolQueryBuilder.filter(TermQuery.of(t -> t
+                    .field("status")
+                    .value(1))._toQuery());
+            
+            // 逻辑删除过滤
+            boolQueryBuilder.filter(TermQuery.of(t -> t
+                    .field("deleted")
+                    .value(false))._toQuery());
+            
+            // 地理位置过滤
+            if (searchDTO.getLocation() != null && searchDTO.getDistance() != null) {
+                boolQueryBuilder.filter(GeoDistanceQuery.of(g -> g
+                        .field("location")
+                        .location(GeoLocation.of(gl -> gl.latlon(LatLonGeoLocation.of(ll -> ll
+                                .lat(searchDTO.getLocation().getLat())
+                                .lon(searchDTO.getLocation().getLon())))))
+                        .distance(searchDTO.getDistance()))._toQuery());
+            }
+            
+            searchBuilder.query(boolQueryBuilder.build()._toQuery());
+            
+            // 排序
+            addSortOptions(searchBuilder, searchDTO);
+            
+            // 高亮
+            addHighlightOptions(searchBuilder);
+            
+            // 聚合
+            addAggregations(searchBuilder);
+            
+            // 执行搜索
+            SearchRequest searchRequest = searchBuilder.build();
+            return elasticsearchClient.search(searchRequest, ProductDocument.class);
+            
+        } catch (Exception e) {
+            log.error("搜索商品失败", e);
+            throw new BusinessException("搜索商品失败", e);
+        }
+    }
+    
+    /**
+     * 智能搜索建议
+     */
+    public List<String> searchSuggestions(String keyword) {
+        try {
+            SearchRequest searchRequest = SearchRequest.of(s -> s
+                    .index("products")
+                    .size(0)
+                    .suggest(suggest -> suggest
+                            .suggesters("product_suggest", FieldSuggester.of(fs -> fs
+                                    .text(keyword)
+                                    .completion(completion -> completion
+                                            .field("suggest")
+                                            .size(10)
+                                            .skipDuplicates(true))))));
+            
+            SearchResponse<ProductDocument> response = elasticsearchClient.search(searchRequest, ProductDocument.class);
+            
+            return response.suggest().get("product_suggest").stream()
+                    .flatMap(suggestion -> suggestion.completion().options().stream())
+                    .map(option -> option.text())
+                    .distinct()
+                    .collect(Collectors.toList());
+                    
+        } catch (Exception e) {
+            log.error("获取搜索建议失败", e);
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 批量索引商品
+     */
+    public boolean bulkIndexProducts(List<ProductDocument> products) {
+        try {
+            BulkRequest.Builder bulkBuilder = new BulkRequest.Builder();
+            
+            for (ProductDocument product : products) {
+                bulkBuilder.operations(op -> op
+                        .index(idx -> idx
+                                .index("products")
+                                .id(product.getId())
+                                .document(product)));
+            }
+            
+            BulkResponse response = elasticsearchClient.bulk(bulkBuilder.build());
+            
+            if (response.errors()) {
+                log.warn("批量索引存在错误: {}", response.items().stream()
+                        .filter(item -> item.error() != null)
+                        .map(item -> item.error().reason())
+                        .collect(Collectors.joining(", ")));
+            }
+            
+            return !response.errors();
+            
+        } catch (Exception e) {
+            log.error("批量索引商品失败", e);
+            return false;
+        }
+    }
+    
+    /**
+     * 删除商品索引
+     */
+    public boolean deleteProductIndex(String productId) {
+        try {
+            DeleteRequest deleteRequest = DeleteRequest.of(d -> d
+                    .index("products")
+                    .id(productId));
+            
+            DeleteResponse response = elasticsearchClient.delete(deleteRequest);
+            return response.result() == Result.Deleted;
+            
+        } catch (Exception e) {
+            log.error("删除商品索引失败: productId={}", productId, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 统计分析
+     */
+    public ProductAnalyticsVO getProductAnalytics() {
+        try {
+            SearchRequest searchRequest = SearchRequest.of(s -> s
+                    .index("products")
+                    .size(0)
+                    .aggregations("category_stats", agg -> agg
+                            .terms(terms -> terms
+                                    .field("categoryName")
+                                    .size(20))
+                            .aggregations("avg_price", subAgg -> subAgg
+                                    .avg(avg -> avg.field("price")))
+                            .aggregations("total_sales", subAgg -> subAgg
+                                    .sum(sum -> sum.field("salesCount"))))
+                    .aggregations("price_range", agg -> agg
+                            .range(range -> range
+                                    .field("price")
+                                    .ranges(r -> r.to(100.0))
+                                    .ranges(r -> r.from(100.0).to(500.0))
+                                    .ranges(r -> r.from(500.0).to(1000.0))
+                                    .ranges(r -> r.from(1000.0))))
+                    .aggregations("rating_stats", agg -> agg
+                            .stats(stats -> stats.field("rating"))));
+            
+            SearchResponse<ProductDocument> response = elasticsearchClient.search(searchRequest, ProductDocument.class);
+            
+            return buildAnalyticsResult(response);
+            
+        } catch (Exception e) {
+            log.error("获取商品统计分析失败", e);
+            throw new BusinessException("获取商品统计分析失败", e);
+        }
+    }
+    
+    /**
+     * 添加排序选项
+     */
+    private void addSortOptions(SearchRequest.Builder searchBuilder, ProductSearchDTO searchDTO) {
+        if (StringUtils.isNotBlank(searchDTO.getSortBy())) {
+            SortOrder order = "desc".equalsIgnoreCase(searchDTO.getSortOrder()) 
+                    ? SortOrder.Desc : SortOrder.Asc;
+            
+            switch (searchDTO.getSortBy()) {
+                case "price":
+                    searchBuilder.sort(Sort.of(s -> s.field(FieldSort.of(f -> f
+                            .field("price").order(order)))));
+                    break;
+                case "salesCount":
+                    searchBuilder.sort(Sort.of(s -> s.field(FieldSort.of(f -> f
+                            .field("salesCount").order(order)))));
+                    break;
+                case "rating":
+                    searchBuilder.sort(Sort.of(s -> s.field(FieldSort.of(f -> f
+                            .field("rating").order(order)))));
+                    break;
+                case "publishTime":
+                    searchBuilder.sort(Sort.of(s -> s.field(FieldSort.of(f -> f
+                            .field("publishTime").order(order)))));
+                    break;
+                default:
+                    searchBuilder.sort(Sort.of(s -> s.score(ScoreSort.of(ss -> ss
+                            .order(SortOrder.Desc)))));
+                    break;
+            }
+        } else {
+            // 默认按相关性排序
+            searchBuilder.sort(Sort.of(s -> s.score(ScoreSort.of(ss -> ss
+                    .order(SortOrder.Desc)))));
+        }
+    }
+    
+    /**
+     * 添加高亮选项
+     */
+    private void addHighlightOptions(SearchRequest.Builder searchBuilder) {
+        searchBuilder.highlight(Highlight.of(h -> h
+                .fields("name", HighlightField.of(hf -> hf
+                        .preTags("<em>").postTags("</em>")))
+                .fields("title", HighlightField.of(hf -> hf
+                        .preTags("<em>").postTags("</em>")))
+                .fields("description", HighlightField.of(hf -> hf
+                        .preTags("<em>").postTags("</em>")
+                        .fragmentSize(200)
+                        .numberOfFragments(1)))));
+    }
+    
+    /**
+     * 添加聚合选项
+     */
+    private void addAggregations(SearchRequest.Builder searchBuilder) {
+        searchBuilder
+                .aggregations("brands", agg -> agg
+                        .terms(terms -> terms
+                                .field("brand")
+                                .size(20)))
+                .aggregations("categories", agg -> agg
+                        .terms(terms -> terms
+                                .field("categoryName")
+                                .size(20)))
+                .aggregations("price_ranges", agg -> agg
+                        .range(range -> range
+                                .field("price")
+                                .ranges(r -> r.to(100.0))
+                                .ranges(r -> r.from(100.0).to(500.0))
+                                .ranges(r -> r.from(500.0).to(1000.0))
+                                .ranges(r -> r.from(1000.0))));
+    }
+    
+    /**
+     * 构建分析结果
+     */
+    private ProductAnalyticsVO buildAnalyticsResult(SearchResponse<ProductDocument> response) {
+        // 实现分析结果构建逻辑
+        return ProductAnalyticsVO.builder()
+                .totalProducts(response.hits().total().value())
+                .categoryStats(extractCategoryStats(response))
+                .priceRangeStats(extractPriceRangeStats(response))
+                .ratingStats(extractRatingStats(response))
+                .build();
+    }
+    
+    private List<CategoryStatsVO> extractCategoryStats(SearchResponse<ProductDocument> response) {
+        // 提取分类统计数据
+        return Collections.emptyList();
+    }
+    
+    private List<PriceRangeStatsVO> extractPriceRangeStats(SearchResponse<ProductDocument> response) {
+        // 提取价格区间统计数据
+        return Collections.emptyList();
+    }
+    
+    private RatingStatsVO extractRatingStats(SearchResponse<ProductDocument> response) {
+        // 提取评分统计数据
+        return RatingStatsVO.builder().build();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 6. 索引管理服务
+
+#### 索引生命周期管理
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+public class ElasticsearchIndexService {
+    
+    private final ElasticsearchClient elasticsearchClient;
+    private final ElasticsearchOperations elasticsearchOperations;
+    
+    public ElasticsearchIndexService(ElasticsearchClient elasticsearchClient,
+                                   ElasticsearchOperations elasticsearchOperations) {
+        this.elasticsearchClient = elasticsearchClient;
+        this.elasticsearchOperations = elasticsearchOperations;
+    }
+    
+    /**
+     * 创建索引
+     */
+    public boolean createIndex(String indexName, String mappingJson, String settingsJson) {
+        try {
+            // 检查索引是否已存在
+            if (indexExists(indexName)) {
+                log.warn("索引已存在: {}", indexName);
+                return false;
+            }
+            
+            CreateIndexRequest.Builder builder = new CreateIndexRequest.Builder()
+                    .index(indexName);
+            
+            // 添加映射
+            if (StringUtils.isNotBlank(mappingJson)) {
+                TypeMapping mapping = TypeMapping.of(tm -> tm
+                        .withJson(new StringReader(mappingJson)));
+                builder.mappings(mapping);
+            }
+            
+            // 添加设置
+            if (StringUtils.isNotBlank(settingsJson)) {
+                IndexSettings settings = IndexSettings.of(is -> is
+                        .withJson(new StringReader(settingsJson)));
+                builder.settings(settings);
+            }
+            
+            CreateIndexResponse response = elasticsearchClient.indices().create(builder.build());
+            
+            log.info("索引创建成功: {}, acknowledged: {}", indexName, response.acknowledged());
+            return response.acknowledged();
+            
+        } catch (Exception e) {
+            log.error("创建索引失败: {}", indexName, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 删除索引
+     */
+    public boolean deleteIndex(String indexName) {
+        try {
+            if (!indexExists(indexName)) {
+                log.warn("索引不存在: {}", indexName);
+                return false;
+            }
+            
+            DeleteIndexRequest request = DeleteIndexRequest.of(d -> d.index(indexName));
+            DeleteIndexResponse response = elasticsearchClient.indices().delete(request);
+            
+            log.info("索引删除成功: {}, acknowledged: {}", indexName, response.acknowledged());
+            return response.acknowledged();
+            
+        } catch (Exception e) {
+            log.error("删除索引失败: {}", indexName, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 检查索引是否存在
+     */
+    public boolean indexExists(String indexName) {
+        try {
+            ExistsRequest request = ExistsRequest.of(e -> e.index(indexName));
+            BooleanResponse response = elasticsearchClient.indices().exists(request);
+            return response.value();
+        } catch (Exception e) {
+            log.error("检查索引存在性失败: {}", indexName, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 更新索引映射
+     */
+    public boolean updateMapping(String indexName, String mappingJson) {
+        try {
+            PutMappingRequest request = PutMappingRequest.of(pm -> pm
+                    .index(indexName)
+                    .withJson(new StringReader(mappingJson)));
+            
+            PutMappingResponse response = elasticsearchClient.indices().putMapping(request);
+            
+            log.info("索引映射更新成功: {}, acknowledged: {}", indexName, response.acknowledged());
+            return response.acknowledged();
+            
+        } catch (Exception e) {
+            log.error("更新索引映射失败: {}", indexName, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 获取索引信息
+     */
+    public IndexInfo getIndexInfo(String indexName) {
+        try {
+            GetIndexRequest request = GetIndexRequest.of(g -> g.index(indexName));
+            GetIndexResponse response = elasticsearchClient.indices().get(request);
+            
+            IndexState indexState = response.get(indexName);
+            
+            return IndexInfo.builder()
+                    .indexName(indexName)
+                    .settings(indexState.settings())
+                    .mappings(indexState.mappings())
+                    .aliases(indexState.aliases())
+                    .build();
+                    
+        } catch (Exception e) {
+            log.error("获取索引信息失败: {}", indexName, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 刷新索引
+     */
+    public boolean refreshIndex(String indexName) {
+        try {
+            RefreshRequest request = RefreshRequest.of(r -> r.index(indexName));
+            RefreshResponse response = elasticsearchClient.indices().refresh(request);
+            
+            log.debug("索引刷新成功: {}", indexName);
+            return response.shards().successful() > 0;
+            
+        } catch (Exception e) {
+            log.error("刷新索引失败: {}", indexName, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 创建索引别名
+     */
+    public boolean createAlias(String indexName, String aliasName) {
+        try {
+            UpdateAliasesRequest request = UpdateAliasesRequest.of(ua -> ua
+                    .actions(Action.of(a -> a
+                            .add(AddAction.of(add -> add
+                                    .index(indexName)
+                                    .alias(aliasName))))));
+            
+            UpdateAliasesResponse response = elasticsearchClient.indices().updateAliases(request);
+            
+            log.info("创建索引别名成功: {} -> {}, acknowledged: {}", 
+                    indexName, aliasName, response.acknowledged());
+            return response.acknowledged();
+            
+        } catch (Exception e) {
+            log.error("创建索引别名失败: {} -> {}", indexName, aliasName, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 索引重建
+     */
+    public boolean reindexData(String sourceIndex, String targetIndex) {
+        try {
+            ReindexRequest request = ReindexRequest.of(r -> r
+                    .source(src -> src.index(sourceIndex))
+                    .dest(dest -> dest.index(targetIndex))
+                    .refresh(true));
+            
+            ReindexResponse response = elasticsearchClient.reindex(request);
+            
+            log.info("索引重建成功: {} -> {}, 处理文档数: {}", 
+                    sourceIndex, targetIndex, response.total());
+            return response.total() >= 0;
+            
+        } catch (Exception e) {
+            log.error("索引重建失败: {} -> {}", sourceIndex, targetIndex, e);
+            return false;
+        }
+    }
+}
+
+/**
+ * 索引信息VO
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class IndexInfo {
+    private String indexName;
+    private IndexSettings settings;
+    private TypeMapping mappings;
+    private Map<String, Alias> aliases;
+}
+// [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 1. 配置相关禁令
+- **禁止不配置集群节点**: 必须配置多个ES节点确保高可用
+- **禁止硬编码连接信息**: 连接信息必须外部化配置
+- **禁止不配置认证**: 生产环境必须启用认证和授权
+- **禁止不配置超时**: 必须设置合理的连接和查询超时时间
+
+### 2. 索引设计禁令
+- **禁止不合理的分片设计**: 分片数量要根据数据量和查询负载设计
+- **禁止不设置副本**: 必须设置至少1个副本确保数据安全
+- **禁止不优化映射**: 字段类型和分析器必须根据查询需求优化
+- **禁止忽略索引生命周期**: 必须定期维护和优化索引
+
+### 3. 查询性能禁令
+- **禁止深度分页**: 避免使用过大的from值进行深度分页
+- **禁止不使用过滤器**: 结构化查询必须使用filter而不是query
+- **禁止返回过多字段**: 只返回需要的字段，避免_source过大
+- **禁止不设置查询超时**: 复杂查询必须设置超时时间
+
+### 4. 数据同步禁令
+- **禁止实时同步**: 避免频繁的单条数据同步操作
+- **禁止不处理同步失败**: 必须有重试和错误处理机制
+- **禁止忽略数据一致性**: 确保ES与主数据库的数据一致性
+- **禁止不监控同步状态**: 必须监控数据同步的健康状态
+
+### 5. 安全相关禁令
+- **禁止不验证输入**: 所有搜索输入必须进行安全验证
+- **禁止暴露敏感信息**: 搜索结果不能包含敏感数据
+- **禁止不限制查询权限**: 必须实现基于角色的查询权限控制
+- **禁止忽略审计日志**: 重要操作必须记录审计日志
+
+## 示例代码
+
+### 索引配置文件
+```json
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// product-settings.json
+{
+  "number_of_shards": 3,
+  "number_of_replicas": 1,
+  "refresh_interval": "1s",
+  "max_result_window": 10000,
+  "analysis": {
+    "analyzer": {
+      "ik_max_word": {
+        "type": "ik_max_word"
+      },
+      "ik_smart": {
+        "type": "ik_smart"
+      }
+    }
+  }
+}
+
+// product-mapping.json
+{
+  "properties": {
+    "name": {
+      "type": "text",
+      "analyzer": "ik_max_word",
+      "search_analyzer": "ik_smart",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "title": {
+      "type": "text",
+      "analyzer": "ik_max_word",
+      "search_analyzer": "ik_smart"
+    },
+    "description": {
+      "type": "text",
+      "analyzer": "ik_max_word",
+      "search_analyzer": "ik_smart"
+    },
+    "categoryId": {
+      "type": "keyword"
+    },
+    "categoryName": {
+      "type": "keyword"
+    },
+    "brand": {
+      "type": "keyword"
+    },
+    "price": {
+      "type": "double"
+    },
+    "status": {
+      "type": "integer"
+    },
+    "tags": {
+      "type": "keyword"
+    },
+    "attributes": {
+      "type": "object",
+      "dynamic": true
+    },
+    "imageUrls": {
+      "type": "keyword",
+      "index": false
+    },
+    "salesCount": {
+      "type": "long"
+    },
+    "stockCount": {
+      "type": "long"
+    },
+    "rating": {
+      "type": "double"
+    },
+    "commentCount": {
+      "type": "long"
+    },
+    "location": {
+      "type": "geo_point"
+    },
+    "publishTime": {
+      "type": "date",
+      "format": "yyyy-MM-dd HH:mm:ss"
+    },
+    "suggest": {
+      "type": "completion",
+      "analyzer": "ik_max_word",
+      "search_analyzer": "ik_smart",
+      "contexts": [
+        {
+          "name": "category",
+          "type": "category"
+        }
+      ]
+    }
+  }
+}
+// [AI-BLOCK-END]
+```
+
+这个Elasticsearch规范提供了完整的搜索引擎使用指南，包括配置、索引设计、查询优化、数据同步等各个方面的详细规范，确保开发团队能够正确、高效地使用Elasticsearch。
+description:
+globs:
+alwaysApply: false
+---

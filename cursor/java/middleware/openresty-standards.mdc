@@ -1,0 +1,1268 @@
+# OpenResty Web服务器规范 (中间件层规则)
+> OpenResty高性能Web平台的标准化配置和使用规范
+
+## 基础规范
+
+### 技术栈版本要求
+- **OpenResty**: 1.21.x+
+- **Nginx**: 1.21.x+ (OpenResty内置)
+- **LuaJIT**: 2.1+
+- **Lua**: 5.1/5.4
+- **Redis**: 6.0.x+ (配合使用)
+
+### 设计原则
+- **高性能优先**: 充分利用OpenResty的异步非阻塞特性
+- **模块化设计**: 使用Lua模块化组织代码
+- **安全防护**: 实现完善的安全防护机制
+- **可观测性**: 提供完整的监控和日志体系
+- **可扩展性**: 支持水平扩展和负载均衡
+
+## 强制行为
+
+### 1. 基础配置规范
+
+#### 主配置文件结构
+```nginx
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# /usr/local/openresty/nginx/conf/nginx.conf
+
+user nginx;
+worker_processes auto;
+worker_rlimit_nofile 65535;
+worker_cpu_affinity auto;
+
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 65535;
+    use epoll;
+    multi_accept on;
+    accept_mutex off;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    
+    # Lua配置
+    lua_package_path "/usr/local/openresty/lualib/?.lua;/usr/local/openresty/site/lualib/?.lua;;";
+    lua_package_cpath "/usr/local/openresty/lualib/?.so;/usr/local/openresty/site/lualib/?.so;;";
+    
+    # 共享内存字典
+    lua_shared_dict cache 100m;
+    lua_shared_dict locks 10m;
+    lua_shared_dict rate_limit 10m;
+    lua_shared_dict stats 10m;
+    lua_shared_dict config 1m;
+    
+    # 代码缓存
+    lua_code_cache on;
+    
+    # 初始化脚本
+    init_by_lua_file /usr/local/openresty/lualib/init.lua;
+    init_worker_by_lua_file /usr/local/openresty/lualib/init_worker.lua;
+    
+    # 基础配置
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    keepalive_requests 1000;
+    types_hash_max_size 2048;
+    server_tokens off;
+    
+    # 客户端配置
+    client_max_body_size 100m;
+    client_body_buffer_size 1m;
+    client_header_buffer_size 4k;
+    large_client_header_buffers 4 8k;
+    client_body_timeout 30s;
+    client_header_timeout 30s;
+    
+    # 代理配置
+    proxy_buffering on;
+    proxy_buffer_size 4k;
+    proxy_buffers 8 4k;
+    proxy_busy_buffers_size 8k;
+    proxy_temp_file_write_size 8k;
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 10s;
+    proxy_read_timeout 10s;
+    
+    # Gzip压缩
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1000;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+    
+    # 日志格式
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    '$request_time $upstream_response_time "$request_id"';
+    
+    log_format json escape=json '{'
+        '"timestamp":"$time_iso8601",'
+        '"remote_addr":"$remote_addr",'
+        '"request_method":"$request_method",'
+        '"request_uri":"$request_uri",'
+        '"status":$status,'
+        '"body_bytes_sent":$body_bytes_sent,'
+        '"request_time":$request_time,'
+        '"upstream_response_time":"$upstream_response_time",'
+        '"user_agent":"$http_user_agent",'
+        '"x_forwarded_for":"$http_x_forwarded_for",'
+        '"request_id":"$request_id"'
+    '}';
+    
+    access_log /var/log/nginx/access.log json;
+    
+    # 限流配置
+    limit_req_zone $binary_remote_addr zone=api:10m rate=100r/s;
+    limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+    limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+    
+    # 上游服务器配置
+    include /etc/nginx/conf.d/upstream.conf;
+    
+    # 虚拟主机配置
+    include /etc/nginx/conf.d/*.conf;
+}
+# [AI-BLOCK-END]
+```
+
+#### 上游服务器配置
+```nginx
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# /etc/nginx/conf.d/upstream.conf
+
+# 后端API服务器
+upstream backend_api {
+    least_conn;
+    
+    server backend1:8080 weight=3 max_fails=2 fail_timeout=30s;
+    server backend2:8080 weight=3 max_fails=2 fail_timeout=30s;
+    server backend3:8080 weight=2 max_fails=2 fail_timeout=30s;
+    
+    # 连接保持
+    keepalive 32;
+    keepalive_requests 1000;
+    keepalive_timeout 60s;
+}
+
+# 静态资源服务器
+upstream static_servers {
+    server static1:80 weight=1 max_fails=1 fail_timeout=10s;
+    server static2:80 weight=1 max_fails=1 fail_timeout=10s;
+    
+    keepalive 16;
+}
+
+# WebSocket服务器
+upstream websocket_servers {
+    ip_hash;
+    
+    server ws1:8081 weight=1 max_fails=1 fail_timeout=10s;
+    server ws2:8081 weight=1 max_fails=1 fail_timeout=10s;
+    
+    keepalive 8;
+}
+
+# 健康检查配置
+upstream backend_api_check {
+    check interval=3000 rise=2 fall=3 timeout=1000 type=http;
+    check_http_send "GET /health HTTP/1.0\r\n\r\n";
+    check_http_expect_alive http_2xx http_3xx;
+    
+    server backend1:8080;
+    server backend2:8080;
+    server backend3:8080;
+}
+# [AI-BLOCK-END]
+```
+
+### 2. 虚拟主机配置
+
+#### API网关虚拟主机
+```nginx
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# /etc/nginx/conf.d/api-gateway.conf
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.example.com;
+    
+    # 重定向到HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name api.example.com;
+    
+    # SSL配置
+    ssl_certificate /etc/ssl/certs/api.example.com.crt;
+    ssl_certificate_key /etc/ssl/private/api.example.com.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    
+    # 安全头
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    
+    # 请求ID生成
+    set $request_id $request_id;
+    
+    # 全局Lua变量
+    set $upstream_host "";
+    set $upstream_uri "";
+    
+    # 健康检查端点
+    location = /health {
+        access_by_lua_block {
+            local health = require "modules.health"
+            health.check()
+        }
+    }
+    
+    # 系统监控端点
+    location = /metrics {
+        access_by_lua_block {
+            local metrics = require "modules.metrics"
+            metrics.export()
+        }
+    }
+    
+    # API路由
+    location ~ ^/api/v([0-9]+)/(.*) {
+        set $api_version $1;
+        set $api_path $2;
+        
+        # 限流
+        limit_req zone=api burst=50 nodelay;
+        limit_conn conn_limit 20;
+        
+        # 访问控制
+        access_by_lua_block {
+            local gateway = require "modules.gateway"
+            gateway.access_control()
+        }
+        
+        # 请求重写
+        rewrite_by_lua_block {
+            local router = require "modules.router"
+            router.rewrite()
+        }
+        
+        # 代理到后端
+        proxy_pass http://backend_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+        
+        # 响应处理
+        header_filter_by_lua_block {
+            local response = require "modules.response"
+            response.filter_headers()
+        }
+        
+        body_filter_by_lua_block {
+            local response = require "modules.response"
+            response.filter_body()
+        }
+    }
+    
+    # 认证端点
+    location ~ ^/auth/(login|logout|refresh) {
+        limit_req zone=login burst=10 nodelay;
+        
+        access_by_lua_block {
+            local auth = require "modules.auth"
+            auth.handle_request()
+        }
+        
+        proxy_pass http://backend_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+    }
+    
+    # WebSocket代理
+    location /ws/ {
+        proxy_pass http://websocket_servers;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket超时配置
+        proxy_read_timeout 86400;
+        proxy_send_timeout 86400;
+    }
+    
+    # 静态文件
+    location /static/ {
+        alias /var/www/static/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        
+        # 防盗链
+        valid_referers none blocked server_names *.example.com;
+        if ($invalid_referer) {
+            return 403;
+        }
+    }
+    
+    # 文件上传
+    location /upload {
+        client_max_body_size 100m;
+        
+        access_by_lua_block {
+            local upload = require "modules.upload"
+            upload.validate()
+        }
+        
+        proxy_pass http://backend_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+    }
+    
+    # 错误页面
+    error_page 404 /404.html;
+    error_page 500 502 503 504 /50x.html;
+    
+    location = /404.html {
+        root /var/www/error;
+        internal;
+    }
+    
+    location = /50x.html {
+        root /var/www/error;
+        internal;
+    }
+    
+    # 日志记录
+    log_by_lua_block {
+        local logger = require "modules.logger"
+        logger.log_request()
+    }
+}
+# [AI-BLOCK-END]
+```
+
+### 3. Lua模块开发
+
+#### 网关核心模块
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- /usr/local/openresty/lualib/modules/gateway.lua
+
+local cjson = require "cjson"
+local redis = require "resty.redis"
+local jwt = require "resty.jwt"
+
+local _M = {}
+
+-- 配置
+local config = {
+    redis_host = os.getenv("REDIS_HOST") or "127.0.0.1",
+    redis_port = tonumber(os.getenv("REDIS_PORT")) or 6379,
+    redis_password = os.getenv("REDIS_PASSWORD"),
+    jwt_secret = os.getenv("JWT_SECRET") or "default_secret",
+    rate_limit_enabled = true,
+    auth_enabled = true
+}
+
+-- 获取Redis连接
+local function get_redis()
+    local red = redis:new()
+    red:set_timeout(1000)
+    
+    local ok, err = red:connect(config.redis_host, config.redis_port)
+    if not ok then
+        ngx.log(ngx.ERR, "Failed to connect to Redis: ", err)
+        return nil
+    end
+    
+    if config.redis_password then
+        local res, err = red:auth(config.redis_password)
+        if not res then
+            ngx.log(ngx.ERR, "Failed to authenticate Redis: ", err)
+            return nil
+        end
+    end
+    
+    return red
+end
+
+-- 释放Redis连接
+local function close_redis(red)
+    if red then
+        local ok, err = red:set_keepalive(60000, 100)
+        if not ok then
+            red:close()
+        end
+    end
+end
+
+-- 获取客户端IP
+local function get_client_ip()
+    local client_ip = ngx.var.http_x_forwarded_for
+    if client_ip then
+        client_ip = string.match(client_ip, "^[^,]+")
+    else
+        client_ip = ngx.var.remote_addr
+    end
+    return client_ip
+end
+
+-- 生成响应
+local function response(code, message, data)
+    ngx.header.content_type = "application/json; charset=utf-8"
+    ngx.status = code
+    
+    local response_body = {
+        code = code,
+        message = message,
+        data = data or {},
+        timestamp = ngx.time(),
+        request_id = ngx.var.request_id
+    }
+    
+    ngx.say(cjson.encode(response_body))
+    ngx.exit(code)
+end
+
+-- JWT验证
+local function verify_jwt(token)
+    local jwt_obj = jwt:verify(config.jwt_secret, token)
+    
+    if not jwt_obj.valid then
+        return nil, "Invalid JWT token"
+    end
+    
+    local payload = jwt_obj.payload
+    if not payload then
+        return nil, "Invalid JWT payload"
+    end
+    
+    -- 检查过期时间
+    if payload.exp and payload.exp < ngx.time() then
+        return nil, "JWT token expired"
+    end
+    
+    return payload, nil
+end
+
+-- 认证中间件
+function _M.authenticate()
+    if not config.auth_enabled then
+        return
+    end
+    
+    -- 跳过认证的路径
+    local skip_paths = {
+        "/auth/login",
+        "/auth/register",
+        "/health",
+        "/metrics"
+    }
+    
+    local uri = ngx.var.uri
+    for _, path in ipairs(skip_paths) do
+        if string.find(uri, path, 1, true) then
+            return
+        end
+    end
+    
+    -- 获取Authorization头
+    local auth_header = ngx.var.http_authorization
+    if not auth_header then
+        response(401, "Missing Authorization header")
+        return
+    end
+    
+    -- 提取JWT token
+    local token = string.match(auth_header, "Bearer%s+(.+)")
+    if not token then
+        response(401, "Invalid Authorization format")
+        return
+    end
+    
+    -- 验证JWT
+    local payload, err = verify_jwt(token)
+    if err then
+        response(401, err)
+        return
+    end
+    
+    -- 检查token是否在黑名单中
+    local red = get_redis()
+    if red then
+        local blacklisted = red:get("blacklist:token:" .. token)
+        close_redis(red)
+        
+        if blacklisted and blacklisted ~= ngx.null then
+            response(401, "Token has been revoked")
+            return
+        end
+    end
+    
+    -- 设置用户信息到请求头
+    ngx.req.set_header("X-User-ID", payload.user_id)
+    ngx.req.set_header("X-User-Role", payload.role)
+    ngx.req.set_header("X-User-Permissions", cjson.encode(payload.permissions or {}))
+    
+    -- 记录到ngx.ctx供后续使用
+    ngx.ctx.user = payload
+end
+
+-- 权限验证
+function _M.authorize()
+    local user = ngx.ctx.user
+    if not user then
+        return
+    end
+    
+    local uri = ngx.var.uri
+    local method = ngx.var.request_method
+    
+    -- 权限映射表
+    local permissions_map = {
+        ["/api/v1/users"] = {
+            GET = {"user:read"},
+            POST = {"user:create"},
+            PUT = {"user:update"},
+            DELETE = {"user:delete"}
+        },
+        ["/api/v1/orders"] = {
+            GET = {"order:read"},
+            POST = {"order:create"},
+            PUT = {"order:update"},
+            DELETE = {"order:delete"}
+        }
+    }
+    
+    -- 检查权限
+    local required_permissions = permissions_map[uri]
+    if required_permissions then
+        local method_permissions = required_permissions[method]
+        if method_permissions then
+            local user_permissions = user.permissions or {}
+            
+            for _, required_perm in ipairs(method_permissions) do
+                local has_permission = false
+                for _, user_perm in ipairs(user_permissions) do
+                    if user_perm == required_perm then
+                        has_permission = true
+                        break
+                    end
+                end
+                
+                if not has_permission then
+                    response(403, "Insufficient permissions")
+                    return
+                end
+            end
+        end
+    end
+end
+
+-- 限流中间件
+function _M.rate_limit()
+    if not config.rate_limit_enabled then
+        return
+    end
+    
+    local client_ip = get_client_ip()
+    local uri = ngx.var.uri
+    local key = "rate_limit:" .. client_ip .. ":" .. uri
+    
+    -- 限流配置
+    local limits = {
+        ["/api/v1/auth/login"] = {window = 60, max_requests = 5},
+        ["/api/v1/auth/register"] = {window = 60, max_requests = 3},
+        default = {window = 60, max_requests = 1000}
+    }
+    
+    local limit = limits[uri] or limits.default
+    
+    local red = get_redis()
+    if not red then
+        -- Redis连接失败时放行，避免影响正常请求
+        return
+    end
+    
+    -- 执行限流脚本
+    local script = [[
+        local key = KEYS[1]
+        local window = tonumber(ARGV[1])
+        local max_requests = tonumber(ARGV[2])
+        local current_time = tonumber(ARGV[3])
+        
+        local current_count = redis.call('GET', key)
+        if current_count == false then
+            redis.call('SET', key, 1, 'EX', window)
+            return {1, max_requests - 1, window}
+        else
+            current_count = tonumber(current_count)
+            if current_count < max_requests then
+                local new_count = redis.call('INCR', key)
+                local ttl = redis.call('TTL', key)
+                return {1, max_requests - new_count, ttl}
+            else
+                local ttl = redis.call('TTL', key)
+                return {0, 0, ttl}
+            end
+        end
+    ]]
+    
+    local result, err = red:eval(script, 1, key, limit.window, limit.max_requests, ngx.time())
+    close_redis(red)
+    
+    if err then
+        ngx.log(ngx.ERR, "Rate limit script error: ", err)
+        return
+    end
+    
+    local allowed = result[1] == 1
+    local remaining = result[2]
+    local reset_time = result[3]
+    
+    -- 设置限流响应头
+    ngx.header["X-RateLimit-Limit"] = limit.max_requests
+    ngx.header["X-RateLimit-Remaining"] = remaining
+    ngx.header["X-RateLimit-Reset"] = ngx.time() + reset_time
+    
+    if not allowed then
+        response(429, "Rate limit exceeded")
+        return
+    end
+end
+
+-- 请求验证
+function _M.validate_request()
+    local method = ngx.var.request_method
+    local content_type = ngx.var.content_type
+    
+    -- 验证Content-Type
+    if method == "POST" or method == "PUT" then
+        if not content_type or not string.find(content_type, "application/json") then
+            response(400, "Invalid Content-Type, expected application/json")
+            return
+        end
+    end
+    
+    -- 验证请求体大小
+    local content_length = tonumber(ngx.var.content_length)
+    if content_length and content_length > 10 * 1024 * 1024 then  -- 10MB
+        response(413, "Request body too large")
+        return
+    end
+end
+
+-- 主访问控制函数
+function _M.access_control()
+    _M.validate_request()
+    _M.rate_limit()
+    _M.authenticate()
+    _M.authorize()
+end
+
+return _M
+-- [AI-BLOCK-END]
+```
+
+#### 路由模块
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- /usr/local/openresty/lualib/modules/router.lua
+
+local cjson = require "cjson"
+
+local _M = {}
+
+-- 路由配置
+local routes = {
+    -- API版本路由
+    {
+        pattern = "^/api/v1/users/(%d+)$",
+        rewrite = "/api/users/$1",
+        upstream = "backend_api",
+        methods = {"GET", "PUT", "DELETE"}
+    },
+    {
+        pattern = "^/api/v1/users$",
+        rewrite = "/api/users",
+        upstream = "backend_api",
+        methods = {"GET", "POST"}
+    },
+    {
+        pattern = "^/api/v1/orders/(%d+)$",
+        rewrite = "/api/orders/$1",
+        upstream = "backend_api",
+        methods = {"GET", "PUT", "DELETE"}
+    },
+    {
+        pattern = "^/api/v1/orders$",
+        rewrite = "/api/orders",
+        upstream = "backend_api",
+        methods = {"GET", "POST"}
+    },
+    -- 静态资源路由
+    {
+        pattern = "^/static/(.+)$",
+        rewrite = "/static/$1",
+        upstream = "static_servers",
+        methods = {"GET"}
+    },
+    -- WebSocket路由
+    {
+        pattern = "^/ws/(.+)$",
+        rewrite = "/ws/$1",
+        upstream = "websocket_servers",
+        methods = {"GET"}
+    }
+}
+
+-- 服务发现配置
+local service_discovery = {
+    enabled = false,
+    consul_host = "127.0.0.1",
+    consul_port = 8500,
+    cache_ttl = 30
+}
+
+-- 负载均衡策略
+local load_balancer = {
+    strategy = "round_robin", -- round_robin, least_conn, ip_hash
+    health_check = true
+}
+
+-- 获取上游服务器
+local function get_upstream_servers(service_name)
+    if not service_discovery.enabled then
+        return nil
+    end
+    
+    -- 从共享内存获取缓存的服务器列表
+    local cache = ngx.shared.cache
+    local cache_key = "upstream:" .. service_name
+    local servers = cache:get(cache_key)
+    
+    if servers then
+        return cjson.decode(servers)
+    end
+    
+    -- 从Consul获取服务器列表（这里简化实现）
+    -- 实际应该调用Consul API
+    local default_servers = {
+        {host = "backend1", port = 8080, weight = 1},
+        {host = "backend2", port = 8080, weight = 1}
+    }
+    
+    -- 缓存结果
+    cache:set(cache_key, cjson.encode(default_servers), service_discovery.cache_ttl)
+    
+    return default_servers
+end
+
+-- 选择上游服务器
+local function select_upstream_server(servers)
+    if not servers or #servers == 0 then
+        return nil
+    end
+    
+    -- 简单的轮询策略
+    local stats = ngx.shared.stats
+    local key = "round_robin_index"
+    local index = stats:get(key) or 0
+    index = (index % #servers) + 1
+    stats:set(key, index)
+    
+    return servers[index]
+end
+
+-- 路径重写
+function _M.rewrite()
+    local uri = ngx.var.uri
+    local method = ngx.var.request_method
+    
+    -- 遍历路由规则
+    for _, route in ipairs(routes) do
+        local matches = {string.match(uri, route.pattern)}
+        
+        if #matches > 0 then
+            -- 检查HTTP方法
+            local method_allowed = false
+            for _, allowed_method in ipairs(route.methods) do
+                if method == allowed_method then
+                    method_allowed = true
+                    break
+                end
+            end
+            
+            if not method_allowed then
+                ngx.status = 405
+                ngx.header["Allow"] = table.concat(route.methods, ", ")
+                ngx.say('{"code": 405, "message": "Method Not Allowed"}')
+                ngx.exit(405)
+            end
+            
+            -- 执行路径重写
+            local new_uri = route.rewrite
+            for i, match in ipairs(matches) do
+                new_uri = string.gsub(new_uri, "%$" .. i, match)
+            end
+            
+            ngx.var.upstream_uri = new_uri
+            ngx.var.upstream_host = route.upstream
+            
+            -- 设置代理目标
+            if service_discovery.enabled then
+                local servers = get_upstream_servers(route.upstream)
+                local server = select_upstream_server(servers)
+                
+                if server then
+                    ngx.var.proxy_pass_target = "http://" .. server.host .. ":" .. server.port
+                end
+            end
+            
+            ngx.log(ngx.INFO, "Route matched: ", uri, " -> ", new_uri, " (upstream: ", route.upstream, ")")
+            return
+        end
+    end
+    
+    -- 没有匹配的路由
+    ngx.log(ngx.WARN, "No route matched for: ", uri)
+end
+
+-- 动态路由更新
+function _M.update_routes(new_routes)
+    routes = new_routes
+    ngx.log(ngx.INFO, "Routes updated: ", cjson.encode(new_routes))
+end
+
+-- 获取路由信息
+function _M.get_routes()
+    return routes
+end
+
+-- 健康检查
+function _M.health_check()
+    local upstream_host = ngx.var.upstream_host
+    if not upstream_host then
+        return true
+    end
+    
+    -- 简化的健康检查逻辑
+    local stats = ngx.shared.stats
+    local health_key = "health:" .. upstream_host
+    local health_status = stats:get(health_key)
+    
+    return health_status ~= "unhealthy"
+end
+
+-- 设置上游服务器健康状态
+function _M.set_upstream_health(upstream, status)
+    local stats = ngx.shared.stats
+    local health_key = "health:" .. upstream
+    stats:set(health_key, status, 300) -- 5分钟过期
+    
+    ngx.log(ngx.INFO, "Upstream health status updated: ", upstream, " -> ", status)
+end
+
+return _M
+-- [AI-BLOCK-END]
+```
+
+#### 监控模块
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- /usr/local/openresty/lualib/modules/metrics.lua
+
+local cjson = require "cjson"
+
+local _M = {}
+
+-- 指标收集
+local function collect_metrics()
+    local stats = ngx.shared.stats
+    local metrics = {}
+    
+    -- 请求计数
+    metrics.requests_total = stats:get("requests_total") or 0
+    metrics.requests_success = stats:get("requests_success") or 0
+    metrics.requests_error = stats:get("requests_error") or 0
+    
+    -- 响应时间统计
+    metrics.response_time_avg = stats:get("response_time_avg") or 0
+    metrics.response_time_max = stats:get("response_time_max") or 0
+    
+    -- 状态码统计
+    for status = 200, 599 do
+        local key = "status_" .. status
+        local count = stats:get(key)
+        if count then
+            metrics[key] = count
+        end
+    end
+    
+    -- 上游服务器状态
+    metrics.upstream_status = {}
+    local upstreams = {"backend_api", "static_servers", "websocket_servers"}
+    for _, upstream in ipairs(upstreams) do
+        local health_key = "health:" .. upstream
+        local status = stats:get(health_key) or "unknown"
+        metrics.upstream_status[upstream] = status
+    end
+    
+    -- 系统指标
+    metrics.connections_active = ngx.var.connections_active
+    metrics.connections_reading = ngx.var.connections_reading
+    metrics.connections_writing = ngx.var.connections_writing
+    metrics.connections_waiting = ngx.var.connections_waiting
+    
+    return metrics
+end
+
+-- 导出Prometheus格式指标
+function _M.export_prometheus()
+    local metrics = collect_metrics()
+    local output = {}
+    
+    -- 请求总数
+    table.insert(output, "# HELP nginx_requests_total Total number of requests")
+    table.insert(output, "# TYPE nginx_requests_total counter")
+    table.insert(output, string.format("nginx_requests_total %d", metrics.requests_total))
+    
+    -- 成功请求数
+    table.insert(output, "# HELP nginx_requests_success Number of successful requests")
+    table.insert(output, "# TYPE nginx_requests_success counter")
+    table.insert(output, string.format("nginx_requests_success %d", metrics.requests_success))
+    
+    -- 错误请求数
+    table.insert(output, "# HELP nginx_requests_error Number of error requests")
+    table.insert(output, "# TYPE nginx_requests_error counter")
+    table.insert(output, string.format("nginx_requests_error %d", metrics.requests_error))
+    
+    -- 平均响应时间
+    table.insert(output, "# HELP nginx_response_time_avg Average response time")
+    table.insert(output, "# TYPE nginx_response_time_avg gauge")
+    table.insert(output, string.format("nginx_response_time_avg %f", metrics.response_time_avg))
+    
+    -- 最大响应时间
+    table.insert(output, "# HELP nginx_response_time_max Maximum response time")
+    table.insert(output, "# TYPE nginx_response_time_max gauge")
+    table.insert(output, string.format("nginx_response_time_max %f", metrics.response_time_max))
+    
+    -- 状态码统计
+    table.insert(output, "# HELP nginx_status_codes HTTP status code counts")
+    table.insert(output, "# TYPE nginx_status_codes counter")
+    for key, value in pairs(metrics) do
+        if string.match(key, "^status_%d+$") then
+            local status_code = string.match(key, "status_(%d+)")
+            table.insert(output, string.format("nginx_status_codes{code=\"%s\"} %d", status_code, value))
+        end
+    end
+    
+    -- 连接数统计
+    table.insert(output, "# HELP nginx_connections Current connection counts")
+    table.insert(output, "# TYPE nginx_connections gauge")
+    table.insert(output, string.format("nginx_connections{state=\"active\"} %s", metrics.connections_active or 0))
+    table.insert(output, string.format("nginx_connections{state=\"reading\"} %s", metrics.connections_reading or 0))
+    table.insert(output, string.format("nginx_connections{state=\"writing\"} %s", metrics.connections_writing or 0))
+    table.insert(output, string.format("nginx_connections{state=\"waiting\"} %s", metrics.connections_waiting or 0))
+    
+    -- 上游服务器状态
+    table.insert(output, "# HELP nginx_upstream_status Upstream server status")
+    table.insert(output, "# TYPE nginx_upstream_status gauge")
+    for upstream, status in pairs(metrics.upstream_status) do
+        local status_value = status == "healthy" and 1 or 0
+        table.insert(output, string.format("nginx_upstream_status{upstream=\"%s\"} %d", upstream, status_value))
+    end
+    
+    ngx.header.content_type = "text/plain; charset=utf-8"
+    ngx.say(table.concat(output, "\n"))
+end
+
+-- 导出JSON格式指标
+function _M.export_json()
+    local metrics = collect_metrics()
+    metrics.timestamp = ngx.time()
+    metrics.server_name = ngx.var.server_name
+    
+    ngx.header.content_type = "application/json; charset=utf-8"
+    ngx.say(cjson.encode(metrics))
+end
+
+-- 主导出函数
+function _M.export()
+    local format = ngx.var.arg_format or "prometheus"
+    
+    if format == "json" then
+        _M.export_json()
+    else
+        _M.export_prometheus()
+    end
+end
+
+-- 记录请求指标
+function _M.record_request(status, response_time)
+    local stats = ngx.shared.stats
+    
+    -- 增加总请求数
+    local requests_total = stats:get("requests_total") or 0
+    stats:set("requests_total", requests_total + 1)
+    
+    -- 根据状态码分类
+    if status >= 200 and status < 400 then
+        local requests_success = stats:get("requests_success") or 0
+        stats:set("requests_success", requests_success + 1)
+    else
+        local requests_error = stats:get("requests_error") or 0
+        stats:set("requests_error", requests_error + 1)
+    end
+    
+    -- 记录状态码
+    local status_key = "status_" .. status
+    local status_count = stats:get(status_key) or 0
+    stats:set(status_key, status_count + 1)
+    
+    -- 更新响应时间统计
+    if response_time then
+        local current_avg = stats:get("response_time_avg") or 0
+        local current_max = stats:get("response_time_max") or 0
+        local request_count = stats:get("response_time_count") or 0
+        
+        -- 计算新的平均值
+        local new_avg = (current_avg * request_count + response_time) / (request_count + 1)
+        stats:set("response_time_avg", new_avg)
+        stats:set("response_time_count", request_count + 1)
+        
+        -- 更新最大值
+        if response_time > current_max then
+            stats:set("response_time_max", response_time)
+        end
+    end
+end
+
+-- 重置指标
+function _M.reset_metrics()
+    local stats = ngx.shared.stats
+    stats:flush_all()
+    ngx.log(ngx.INFO, "Metrics reset")
+end
+
+return _M
+-- [AI-BLOCK-END]
+```
+
+### 4. 性能优化配置
+
+#### 系统级优化
+```bash
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+#!/bin/bash
+# 系统优化脚本
+
+# 内核参数优化
+cat >> /etc/sysctl.conf << EOF
+# 网络优化
+net.core.somaxconn = 65535
+net.core.netdev_max_backlog = 5000
+net.ipv4.tcp_max_syn_backlog = 65535
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_keepalive_probes = 3
+net.ipv4.tcp_keepalive_intvl = 15
+net.ipv4.tcp_rmem = 4096 65536 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+net.core.rmem_default = 262144
+net.core.rmem_max = 16777216
+net.core.wmem_default = 262144
+net.core.wmem_max = 16777216
+
+# 文件描述符限制
+fs.file-max = 1000000
+fs.nr_open = 1000000
+
+# 虚拟内存优化
+vm.swappiness = 10
+vm.dirty_ratio = 20
+vm.dirty_background_ratio = 10
+EOF
+
+# 应用内核参数
+sysctl -p
+
+# 用户限制优化
+cat >> /etc/security/limits.conf << EOF
+*               soft    nofile          65535
+*               hard    nofile          65535
+*               soft    nproc           65535
+*               hard    nproc           65535
+nginx           soft    nofile          65535
+nginx           hard    nofile          65535
+EOF
+
+# 创建systemd配置目录
+mkdir -p /etc/systemd/system/openresty.service.d
+
+# 创建systemd服务限制配置
+cat > /etc/systemd/system/openresty.service.d/limits.conf << EOF
+[Service]
+LimitNOFILE=65535
+LimitNPROC=65535
+EOF
+
+# 重新加载systemd配置
+systemctl daemon-reload
+# [AI-BLOCK-END]
+```
+
+#### 缓存配置
+```nginx
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# /etc/nginx/conf.d/cache.conf
+
+# 缓存路径配置
+proxy_cache_path /var/cache/nginx/proxy 
+    levels=1:2 
+    keys_zone=proxy_cache:100m 
+    max_size=10g 
+    inactive=60m 
+    use_temp_path=off;
+
+proxy_cache_path /var/cache/nginx/static 
+    levels=1:2 
+    keys_zone=static_cache:50m 
+    max_size=5g 
+    inactive=7d 
+    use_temp_path=off;
+
+# 缓存配置
+map $request_method $purge_method {
+    PURGE 1;
+    default 0;
+}
+
+# API缓存配置
+location ~ ^/api/v1/(users|orders)/\d+$ {
+    # 缓存配置
+    proxy_cache proxy_cache;
+    proxy_cache_key "$scheme$request_method$host$request_uri";
+    proxy_cache_valid 200 302 10m;
+    proxy_cache_valid 404 1m;
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_lock on;
+    proxy_cache_lock_timeout 5s;
+    
+    # 缓存头设置
+    add_header X-Cache-Status $upstream_cache_status;
+    
+    # 缓存清除
+    if ($purge_method) {
+        return 204;
+    }
+    
+    proxy_pass http://backend_api;
+}
+
+# 静态文件缓存
+location /static/ {
+    proxy_cache static_cache;
+    proxy_cache_key "$scheme$request_method$host$request_uri";
+    proxy_cache_valid 200 7d;
+    proxy_cache_valid 404 1h;
+    
+    add_header X-Cache-Status $upstream_cache_status;
+    add_header Cache-Control "public, max-age=604800";
+    
+    proxy_pass http://static_servers;
+}
+
+# 缓存管理接口
+location /cache/purge {
+    allow 127.0.0.1;
+    allow 10.0.0.0/8;
+    deny all;
+    
+    access_by_lua_block {
+        local cache_key = ngx.var.arg_key
+        if not cache_key then
+            ngx.status = 400
+            ngx.say('{"error": "Missing cache key"}')
+            ngx.exit(400)
+        end
+        
+        -- 清除缓存逻辑
+        ngx.log(ngx.INFO, "Purging cache key: ", cache_key)
+    }
+    
+    return 200 '{"status": "success"}';
+}
+# [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 1. 配置相关禁令
+- **禁止使用默认配置**: 必须根据实际需求优化配置参数
+- **禁止不设置资源限制**: 必须设置合理的内存和连接限制
+- **禁止忽略安全配置**: 必须配置SSL、安全头等安全措施
+- **禁止不配置日志**: 必须配置详细的访问和错误日志
+
+### 2. Lua脚本禁令
+- **禁止阻塞操作**: 避免在Lua中执行同步IO操作
+- **禁止内存泄漏**: 正确管理Lua对象的生命周期
+- **禁止全局变量污染**: 避免使用全局变量
+- **禁止不处理错误**: 必须处理所有可能的错误情况
+
+### 3. 性能相关禁令
+- **禁止不优化连接池**: 必须合理配置upstream连接池
+- **禁止忽略缓存**: 合理使用代理缓存和Lua缓存
+- **禁止不配置压缩**: 必须启用gzip压缩
+- **禁止不监控性能**: 必须实现性能监控和告警
+
+### 4. 安全相关禁令
+- **禁止暴露敏感信息**: 错误信息不能包含系统敏感信息
+- **禁止不验证输入**: 所有输入必须进行验证和过滤
+- **禁止弱SSL配置**: 必须使用强SSL/TLS配置
+- **禁止不实现访问控制**: 必须实现适当的认证和授权
+
+这个OpenResty规范提供了完整的高性能Web服务器配置和使用指南，包括基础配置、Lua模块开发、性能优化、安全防护等各个方面的详细规范，确保开发团队能够正确、高效地使用OpenResty。
+description:
+globs:
+alwaysApply: false
+---

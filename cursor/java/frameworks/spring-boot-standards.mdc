@@ -1,0 +1,1164 @@
+# Spring Boot编程规范
+
+## 🎯 规范目标
+- 建立Spring Boot应用的统一开发标准
+- 确保应用的可维护性、可扩展性和高性能
+- 提供安全可靠的企业级应用开发指导
+- 优化Spring Boot特性的使用方式
+
+## 📋 应用配置规范
+
+### 配置文件组织
+```yaml
+# ✅ application.yml - 主配置文件
+spring:
+  profiles:
+    active: @spring.profiles.active@  # Maven profile 注入
+  application:
+    name: footstone-demo
+    
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+    
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+```
+
+```yaml
+# ✅ application-dev.yml - 开发环境配置
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/footstone_dev?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+    
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: 0
+    
+logging:
+  level:
+    cn.org.bjca.footstone: DEBUG
+    org.springframework.web: DEBUG
+```
+
+### 配置属性绑定规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 应用配置属性类
+ * 使用 @ConfigurationProperties 绑定配置
+ */
+@Data
+@Component
+@ConfigurationProperties(prefix = "app")
+@Validated
+public class AppProperties {
+    
+    /**
+     * 应用基础配置
+     */
+    @NotBlank
+    private String name;
+    
+    @NotBlank
+    private String version;
+    
+    /**
+     * 业务配置
+     */
+    private Business business = new Business();
+    
+    /**
+     * 缓存配置
+     */
+    private Cache cache = new Cache();
+    
+    @Data
+    public static class Business {
+        @Min(1)
+        @Max(100)
+        private int maxRetryCount = 3;
+        
+        @NotNull
+        private Duration timeout = Duration.ofSeconds(30);
+        
+        private boolean enableAsync = true;
+    }
+    
+    @Data
+    public static class Cache {
+        @NotNull
+        private Duration defaultTtl = Duration.ofMinutes(30);
+        
+        @Min(1)
+        private int maxSize = 1000;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 依赖注入规范
+
+### 构造器注入优先
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * ✅ 推荐：使用构造器注入
+ * 优点：不可变、便于测试、避免循环依赖
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class UserService {
+    
+    private final UserMapper userMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final AppProperties appProperties;
+    
+    public User getUserById(Long id) {
+        // 缓存键构建
+        String cacheKey = buildCacheKey("user", id);
+        
+        // 先查缓存
+        User user = (User) redisTemplate.opsForValue().get(cacheKey);
+        if (user != null) {
+            log.debug("User found in cache: {}", id);
+            return user;
+        }
+        
+        // 查数据库
+        user = userMapper.selectById(id);
+        if (user != null) {
+            // 写入缓存
+            redisTemplate.opsForValue().set(cacheKey, user, 
+                appProperties.getCache().getDefaultTtl());
+            log.debug("User loaded from database: {}", id);
+        }
+        
+        return user;
+    }
+    
+    private String buildCacheKey(String prefix, Object... keys) {
+        return prefix + ":" + String.join(":", 
+            Arrays.stream(keys).map(String::valueOf).toArray(String[]::new));
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### Bean定义和生命周期
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 配置类示例
+ */
+@Configuration
+@EnableScheduling
+@EnableAsync
+@Slf4j
+public class AppConfiguration {
+    
+    /**
+     * Redis配置
+     */
+    @Bean
+    @Primary
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+        
+        // 使用Jackson序列化
+        Jackson2JsonRedisSerializer<Object> jackson2JsonRedisSerializer = 
+            new Jackson2JsonRedisSerializer<>(Object.class);
+        ObjectMapper om = new ObjectMapper();
+        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        om.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, 
+            ObjectMapper.DefaultTyping.NON_FINAL);
+        jackson2JsonRedisSerializer.setObjectMapper(om);
+        
+        template.setValueSerializer(jackson2JsonRedisSerializer);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(jackson2JsonRedisSerializer);
+        template.afterPropertiesSet();
+        
+        return template;
+    }
+    
+    /**
+     * 线程池配置
+     */
+    @Bean(name = "taskExecutor")
+    public TaskExecutor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(15);
+        executor.setQueueCapacity(100);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("async-task-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
+    
+    /**
+     * 缓存管理器
+     */
+    @Bean
+    public CacheManager cacheManager(RedisConnectionFactory factory) {
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(30))
+            .serializeKeysWith(RedisSerializationContext.SerializationPair
+                .fromSerializer(new StringRedisSerializer()))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair
+                .fromSerializer(new Jackson2JsonRedisSerializer<>(Object.class)));
+        
+        return RedisCacheManager.builder(factory)
+            .cacheDefaults(config)
+            .build();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 控制层规范
+
+### RESTful API设计
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 用户管理控制器
+ * RESTful API 设计规范
+ */
+@RestController
+@RequestMapping("/v1/users")
+@RequiredArgsConstructor
+@Slf4j
+@Validated
+public class UserController {
+    
+    private final UserService userService;
+    
+    /**
+     * 获取用户列表
+     * GET /api/v1/users?page=0&size=20&username=john
+     */
+    @GetMapping
+    public ResponseEntity<PageResult<UserVO>> getUsers(
+            @Valid UserQuery query,
+            @PageableDefault(size = 20) Pageable pageable) {
+        
+        log.info("查询用户列表, query: {}, pageable: {}", query, pageable);
+        
+        PageResult<UserVO> result = userService.findUsers(query, pageable);
+        return ResponseEntity.ok(result);
+    }
+    
+    /**
+     * 根据ID获取用户
+     * GET /api/v1/users/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<UserVO> getUserById(
+            @PathVariable @Positive Long id) {
+        
+        log.info("查询用户详情, id: {}", id);
+        
+        UserVO user = userService.findById(id);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        return ResponseEntity.ok(user);
+    }
+    
+    /**
+     * 创建用户
+     * POST /api/v1/users
+     */
+    @PostMapping
+    public ResponseEntity<UserVO> createUser(
+            @Valid @RequestBody CreateUserRequest request,
+            HttpServletRequest httpRequest) {
+        
+        log.info("创建用户, request: {}", request);
+        
+        UserVO user = userService.createUser(request);
+        
+        // 构建Location头
+        URI location = ServletUriComponentsBuilder
+            .fromCurrentRequest()
+            .path("/{id}")
+            .buildAndExpand(user.getId())
+            .toUri();
+        
+        return ResponseEntity.created(location).body(user);
+    }
+    
+    /**
+     * 更新用户
+     * PUT /api/v1/users/{id}
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<UserVO> updateUser(
+            @PathVariable @Positive Long id,
+            @Valid @RequestBody UpdateUserRequest request) {
+        
+        log.info("更新用户, id: {}, request: {}", id, request);
+        
+        UserVO user = userService.updateUser(id, request);
+        return ResponseEntity.ok(user);
+    }
+    
+    /**
+     * 删除用户
+     * DELETE /api/v1/users/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable @Positive Long id) {
+        log.info("删除用户, id: {}", id);
+        
+        userService.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 统一响应格式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 统一响应结果
+ */
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class ApiResponse<T> {
+    
+    private int code;
+    private String message;
+    private T data;
+    private long timestamp;
+    
+    public static <T> ApiResponse<T> success(T data) {
+        return ApiResponse.<T>builder()
+            .code(200)
+            .message("success")
+            .data(data)
+            .timestamp(System.currentTimeMillis())
+            .build();
+    }
+    
+    public static <T> ApiResponse<T> error(int code, String message) {
+        return ApiResponse.<T>builder()
+            .code(code)
+            .message(message)
+            .timestamp(System.currentTimeMillis())
+            .build();
+    }
+}
+
+/**
+ * 分页结果
+ */
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class PageResult<T> {
+    private List<T> content;
+    private long totalElements;
+    private int totalPages;
+    private int size;
+    private int number;
+    private boolean first;
+    private boolean last;
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 异常处理规范
+
+### 全局异常处理器
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 全局异常处理器
+ */
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+    
+    /**
+     * 业务异常
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(
+            BusinessException e, HttpServletRequest request) {
+        
+        log.warn("业务异常: {}, URI: {}", e.getMessage(), request.getRequestURI());
+        
+        ApiResponse<Void> response = ApiResponse.error(e.getCode(), e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+    
+    /**
+     * 参数校验异常
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationException(
+            MethodArgumentNotValidException e) {
+        
+        Map<String, String> errors = new HashMap<>();
+        e.getBindingResult().getFieldErrors().forEach(error -> 
+            errors.put(error.getField(), error.getDefaultMessage()));
+        
+        log.warn("参数校验失败: {}", errors);
+        
+        ApiResponse<Map<String, String>> response = ApiResponse.<Map<String, String>>builder()
+            .code(400)
+            .message("参数校验失败")
+            .data(errors)
+            .timestamp(System.currentTimeMillis())
+            .build();
+        
+        return ResponseEntity.badRequest().body(response);
+    }
+    
+    /**
+     * 数据库异常
+     */
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataAccessException(
+            DataAccessException e, HttpServletRequest request) {
+        
+        log.error("数据库操作异常: {}, URI: {}", e.getMessage(), request.getRequestURI(), e);
+        
+        ApiResponse<Void> response = ApiResponse.error(500, "数据库操作失败");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+    
+    /**
+     * 系统异常
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleException(
+            Exception e, HttpServletRequest request) {
+        
+        log.error("系统异常: {}, URI: {}", e.getMessage(), request.getRequestURI(), e);
+        
+        ApiResponse<Void> response = ApiResponse.error(500, "系统内部错误");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+}
+
+/**
+ * 自定义业务异常
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class BusinessException extends RuntimeException {
+    private final int code;
+    
+    public BusinessException(int code, String message) {
+        super(message);
+        this.code = code;
+    }
+    
+    public BusinessException(ErrorCode errorCode) {
+        super(errorCode.getMessage());
+        this.code = errorCode.getCode();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 事务管理规范
+
+### 声明式事务使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 事务使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@Transactional(readOnly = true)  // 默认只读事务
+public class OrderService {
+    
+    private final OrderMapper orderMapper;
+    private final ProductService productService;
+    private final UserService userService;
+    private final NotificationService notificationService;
+    
+    /**
+     * 创建订单 - 写事务
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Order createOrder(CreateOrderRequest request) {
+        log.info("开始创建订单: {}", request);
+        
+        // 1. 验证用户
+        User user = userService.findById(request.getUserId());
+        if (user == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+        
+        // 2. 验证和扣减库存
+        Product product = productService.decreaseStock(
+            request.getProductId(), request.getQuantity());
+        
+        // 3. 创建订单
+        Order order = Order.builder()
+            .orderNo(generateOrderNo())
+            .userId(request.getUserId())
+            .productId(request.getProductId())
+            .quantity(request.getQuantity())
+            .totalAmount(product.getPrice().multiply(BigDecimal.valueOf(request.getQuantity())))
+            .status(OrderStatus.PENDING)
+            .build();
+        
+        orderMapper.insert(order);
+        
+        // 4. 发送通知 (异步，不影响事务)
+        notificationService.sendOrderCreatedNotification(order);
+        
+        log.info("订单创建成功: {}", order.getOrderNo());
+        return order;
+    }
+    
+    /**
+     * 取消订单 - 写事务，自定义传播行为
+     */
+    @Transactional(
+        rollbackFor = Exception.class,
+        propagation = Propagation.REQUIRED,
+        timeout = 30
+    )
+    public void cancelOrder(Long orderId, String reason) {
+        log.info("开始取消订单: {}, 原因: {}", orderId, reason);
+        
+        Order order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
+        }
+        
+        if (!OrderStatus.PENDING.equals(order.getStatus())) {
+            throw new BusinessException(ErrorCode.ORDER_CANNOT_CANCEL);
+        }
+        
+        // 1. 更新订单状态
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setCancelReason(reason);
+        order.setCancelTime(LocalDateTime.now());
+        orderMapper.updateById(order);
+        
+        // 2. 恢复库存
+        productService.increaseStock(order.getProductId(), order.getQuantity());
+        
+        log.info("订单取消成功: {}", orderId);
+    }
+    
+    /**
+     * 查询订单 - 只读事务
+     */
+    public PageResult<OrderVO> findOrders(OrderQuery query, Pageable pageable) {
+        // 只读事务，不会锁定资源
+        return orderMapper.selectByQuery(query, pageable);
+    }
+    
+    private String generateOrderNo() {
+        return "ORD" + System.currentTimeMillis() + 
+            ThreadLocalRandom.current().nextInt(1000, 9999);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 AOP编程规范
+
+### 切面定义和使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 操作日志切面
+ */
+@Aspect
+@Component
+@Slf4j
+@RequiredArgsConstructor
+public class OperationLogAspect {
+    
+    private final OperationLogService operationLogService;
+    
+    /**
+     * 切点定义
+     */
+    @Pointcut("@annotation(cn.org.bjca.footstone.annotation.OperationLog)")
+    public void operationLogPointcut() {}
+    
+    /**
+     * 环绕通知
+     */
+    @Around("operationLogPointcut()")
+    public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
+        long startTime = System.currentTimeMillis();
+        
+        // 获取注解信息
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        OperationLog operationLog = signature.getMethod()
+            .getAnnotation(OperationLog.class);
+        
+        // 获取请求信息
+        HttpServletRequest request = getCurrentRequest();
+        String userAgent = request.getHeader("User-Agent");
+        String ipAddress = getClientIpAddress(request);
+        
+        // 构建日志对象
+        OperationLogEntity logEntity = OperationLogEntity.builder()
+            .operation(operationLog.value())
+            .method(signature.getMethod().getName())
+            .className(signature.getDeclaringType().getSimpleName())
+            .requestMethod(request.getMethod())
+            .requestUrl(request.getRequestURL().toString())
+            .userAgent(userAgent)
+            .ipAddress(ipAddress)
+            .requestParams(getRequestParams(joinPoint))
+            .startTime(LocalDateTime.now())
+            .build();
+        
+        try {
+            // 执行目标方法
+            Object result = joinPoint.proceed();
+            
+            // 记录成功日志
+            long duration = System.currentTimeMillis() - startTime;
+            logEntity.setDuration(duration);
+            logEntity.setStatus(OperationStatus.SUCCESS);
+            logEntity.setResponse(JsonUtils.toJson(result));
+            
+            return result;
+            
+        } catch (Exception e) {
+            // 记录异常日志
+            long duration = System.currentTimeMillis() - startTime;
+            logEntity.setDuration(duration);
+            logEntity.setStatus(OperationStatus.FAILED);
+            logEntity.setErrorMessage(e.getMessage());
+            
+            throw e;
+        } finally {
+            // 异步保存日志
+            operationLogService.saveAsync(logEntity);
+        }
+    }
+    
+    private HttpServletRequest getCurrentRequest() {
+        ServletRequestAttributes attributes = 
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        return attributes.getRequest();
+    }
+    
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(xForwardedFor)) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        
+        String xRealIP = request.getHeader("X-Real-IP");
+        if (StringUtils.hasText(xRealIP)) {
+            return xRealIP;
+        }
+        
+        return request.getRemoteAddr();
+    }
+    
+    private String getRequestParams(ProceedingJoinPoint joinPoint) {
+        Object[] args = joinPoint.getArgs();
+        if (args.length == 0) {
+            return "{}";
+        }
+        
+        // 过滤敏感参数
+        List<Object> filteredArgs = Arrays.stream(args)
+            .filter(arg -> !(arg instanceof HttpServletRequest) 
+                && !(arg instanceof HttpServletResponse))
+            .collect(Collectors.toList());
+        
+        return JsonUtils.toJson(filteredArgs);
+    }
+}
+
+/**
+ * 操作日志注解
+ */
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface OperationLog {
+    /**
+     * 操作描述
+     */
+    String value();
+    
+    /**
+     * 是否记录请求参数
+     */
+    boolean logParams() default true;
+    
+    /**
+     * 是否记录响应结果
+     */
+    boolean logResult() default true;
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 缓存使用规范
+
+### Spring Cache注解
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 缓存使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@CacheConfig(cacheNames = "user")
+public class UserCacheService {
+    
+    private final UserMapper userMapper;
+    
+    /**
+     * 缓存查询结果
+     */
+    @Cacheable(
+        key = "#id", 
+        condition = "#id != null && #id > 0",
+        unless = "#result == null"
+    )
+    public User findById(Long id) {
+        log.info("从数据库查询用户: {}", id);
+        return userMapper.selectById(id);
+    }
+    
+    /**
+     * 缓存复杂查询
+     */
+    @Cacheable(
+        key = "'list:' + #query.hashCode()",
+        condition = "#query != null"
+    )
+    public List<User> findByQuery(UserQuery query) {
+        log.info("从数据库查询用户列表: {}", query);
+        return userMapper.selectByQuery(query);
+    }
+    
+    /**
+     * 更新时清除缓存
+     */
+    @CacheEvict(key = "#user.id")
+    public User updateUser(User user) {
+        log.info("更新用户并清除缓存: {}", user.getId());
+        userMapper.updateById(user);
+        return user;
+    }
+    
+    /**
+     * 删除时清除缓存
+     */
+    @CacheEvict(key = "#id")
+    public void deleteUser(Long id) {
+        log.info("删除用户并清除缓存: {}", id);
+        userMapper.deleteById(id);
+    }
+    
+    /**
+     * 清除所有缓存
+     */
+    @CacheEvict(allEntries = true)
+    public void clearAllCache() {
+        log.info("清除所有用户缓存");
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 异步处理规范
+
+### 异步方法使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 异步服务示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class NotificationService {
+    
+    private final EmailService emailService;
+    private final SmsService smsService;
+    private final MessageProducer messageProducer;
+    
+    /**
+     * 异步发送邮件
+     */
+    @Async("taskExecutor")
+    public CompletableFuture<Void> sendEmailAsync(String to, String subject, String content) {
+        log.info("开始异步发送邮件: to={}, subject={}", to, subject);
+        
+        try {
+            emailService.send(to, subject, content);
+            log.info("邮件发送成功: {}", to);
+        } catch (Exception e) {
+            log.error("邮件发送失败: {}", to, e);
+            throw e;
+        }
+        
+        return CompletableFuture.completedFuture(null);
+    }
+    
+    /**
+     * 异步发送短信
+     */
+    @Async("taskExecutor")
+    public CompletableFuture<Boolean> sendSmsAsync(String phone, String message) {
+        log.info("开始异步发送短信: phone={}", phone);
+        
+        try {
+            boolean success = smsService.send(phone, message);
+            log.info("短信发送{}: {}", success ? "成功" : "失败", phone);
+            return CompletableFuture.completedFuture(success);
+        } catch (Exception e) {
+            log.error("短信发送异常: {}", phone, e);
+            return CompletableFuture.completedFuture(false);
+        }
+    }
+    
+    /**
+     * 组合异步操作
+     */
+    public void sendOrderNotification(Order order) {
+        User user = getUserById(order.getUserId());
+        
+        // 组合多个异步操作
+        CompletableFuture<Void> emailFuture = sendEmailAsync(
+            user.getEmail(),
+            "订单创建成功",
+            buildOrderEmailContent(order)
+        );
+        
+        CompletableFuture<Boolean> smsFuture = sendSmsAsync(
+            user.getPhone(),
+            buildOrderSmsContent(order)
+        );
+        
+        // 等待所有异步操作完成
+        CompletableFuture.allOf(emailFuture, smsFuture)
+            .thenRun(() -> log.info("订单通知发送完成: {}", order.getOrderNo()))
+            .exceptionally(throwable -> {
+                log.error("订单通知发送失败: {}", order.getOrderNo(), throwable);
+                return null;
+            });
+    }
+    
+    /**
+     * 异步处理业务逻辑
+     */
+    @Async("taskExecutor")
+    @Retryable(
+        value = {Exception.class},
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public CompletableFuture<Void> processOrderAsync(Long orderId) {
+        log.info("开始异步处理订单: {}", orderId);
+        
+        try {
+            // 模拟业务处理
+            Thread.sleep(5000);
+            
+            // 发送消息到消息队列
+            messageProducer.sendOrderProcessedMessage(orderId);
+            
+            log.info("订单处理完成: {}", orderId);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            log.error("订单处理失败: {}", orderId, e);
+            throw new RuntimeException("订单处理失败", e);
+        }
+    }
+    
+    @Recover
+    public CompletableFuture<Void> recover(Exception e, Long orderId) {
+        log.error("订单处理最终失败，进入恢复逻辑: {}", orderId, e);
+        // 发送失败通知或记录失败日志
+        return CompletableFuture.completedFuture(null);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 数据校验规范
+
+### Bean Validation使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 用户创建请求DTO
+ */
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class CreateUserRequest {
+    
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
+    private String username;
+    
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+    
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    @NotBlank(message = "密码不能为空")
+    @Size(min = 8, max = 20, message = "密码长度必须在8-20个字符之间")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+        message = "密码必须包含大小写字母、数字和特殊字符"
+    )
+    private String password;
+    
+    @Min(value = 18, message = "年龄不能小于18岁")
+    @Max(value = 120, message = "年龄不能大于120岁")
+    private Integer age;
+    
+    @Valid
+    @NotNull(message = "地址信息不能为空")
+    private AddressDTO address;
+    
+    @NotEmpty(message = "角色列表不能为空")
+    private List<@NotBlank(message = "角色不能为空") String> roles;
+}
+
+/**
+ * 地址DTO
+ */
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class AddressDTO {
+    
+    @NotBlank(message = "省份不能为空")
+    private String province;
+    
+    @NotBlank(message = "城市不能为空")
+    private String city;
+    
+    @NotBlank(message = "详细地址不能为空")
+    @Size(max = 200, message = "详细地址不能超过200个字符")
+    private String detail;
+    
+    @Pattern(regexp = "^\\d{6}$", message = "邮政编码格式不正确")
+    private String zipCode;
+}
+
+/**
+ * 自定义校验注解
+ */
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = UniqueUsernameValidator.class)
+@Documented
+public @interface UniqueUsername {
+    String message() default "用户名已存在";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+/**
+ * 自定义校验器
+ */
+@Component
+@RequiredArgsConstructor
+public class UniqueUsernameValidator implements ConstraintValidator<UniqueUsername, String> {
+    
+    private final UserService userService;
+    
+    @Override
+    public boolean isValid(String username, ConstraintValidatorContext context) {
+        if (username == null || username.trim().isEmpty()) {
+            return true; // 空值交由@NotBlank处理
+        }
+        
+        return !userService.existsByUsername(username);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 监控和健康检查
+
+### Actuator配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 自定义健康检查
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class DatabaseHealthIndicator implements HealthIndicator {
+    
+    private final UserMapper userMapper;
+    
+    @Override
+    public Health health() {
+        try {
+            // 执行简单查询测试数据库连接
+            int count = userMapper.selectCount(null);
+            
+            return Health.up()
+                .withDetail("database", "available")
+                .withDetail("userCount", count)
+                .withDetail("timestamp", LocalDateTime.now())
+                .build();
+                
+        } catch (Exception e) {
+            log.error("数据库健康检查失败", e);
+            
+            return Health.down()
+                .withDetail("database", "unavailable")
+                .withDetail("error", e.getMessage())
+                .withDetail("timestamp", LocalDateTime.now())
+                .build();
+        }
+    }
+}
+
+/**
+ * 自定义信息端点
+ */
+@Component
+public class AppInfoContributor implements InfoContributor {
+    
+    @Override
+    public void contribute(Info.Builder builder) {
+        builder.withDetail("app", Map.of(
+            "name", "footstone-demo",
+            "version", "1.0.0",
+            "description", "Spring Boot 示例应用"
+        ));
+        
+        builder.withDetail("build", Map.of(
+            "time", LocalDateTime.now().toString(),
+            "jdk", System.getProperty("java.version"),
+            "os", System.getProperty("os.name")
+        ));
+    }
+}
+
+/**
+ * 自定义指标
+ */
+@Component
+@RequiredArgsConstructor
+public class CustomMetrics {
+    
+    private final MeterRegistry meterRegistry;
+    private final Counter userCreatedCounter;
+    private final Timer orderProcessingTimer;
+    
+    public CustomMetrics(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+        this.userCreatedCounter = Counter.builder("user.created")
+            .description("用户创建数量")
+            .register(meterRegistry);
+        this.orderProcessingTimer = Timer.builder("order.processing.time")
+            .description("订单处理时间")
+            .register(meterRegistry);
+    }
+    
+    public void incrementUserCreated() {
+        userCreatedCounter.increment();
+    }
+    
+    public void recordOrderProcessingTime(Duration duration) {
+        orderProcessingTimer.record(duration);
+    }
+    
+    @EventListener
+    public void handleUserCreatedEvent(UserCreatedEvent event) {
+        incrementUserCreated();
+        
+        // 记录用户创建时的其他指标
+        Gauge.builder("user.total")
+            .description("用户总数")
+            .register(meterRegistry, this, CustomMetrics::getUserCount);
+    }
+    
+    private double getUserCount() {
+        // 返回当前用户总数
+        return 0.0;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## ✅ 检查清单
+
+### 开发阶段检查
+- [ ] 使用@ConfigurationProperties绑定配置
+- [ ] 优先使用构造器注入
+- [ ] 控制器使用RESTful设计
+- [ ] 异常处理使用@ControllerAdvice
+- [ ] 事务注解正确配置传播行为和回滚条件
+
+### 性能优化检查
+- [ ] 合理使用缓存注解
+- [ ] 异步方法使用独立线程池
+- [ ] 大数据量操作考虑分页处理
+- [ ] 数据库连接池配置合理
+- [ ] Redis连接池配置优化
+
+### 安全检查
+- [ ] 敏感配置使用环境变量
+- [ ] 输入参数进行校验
+- [ ] 输出结果进行脱敏
+- [ ] 使用HTTPS传输
+- [ ] 日志不包含敏感信息
+
+### 监控检查
+- [ ] 配置健康检查端点
+- [ ] 添加自定义指标监控
+- [ ] 日志级别配置合理
+- [ ] 异常信息记录完整
+- [ ] 性能指标收集完善
+
+---
+*遵循以上Spring Boot规范，构建高质量的企业级应用*
+description:
+globs:
+alwaysApply: false
+---

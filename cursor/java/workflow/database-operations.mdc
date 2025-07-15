@@ -1,0 +1,1299 @@
+# 数据库操作流程规范
+
+## 基础规范
+
+### 数据库操作原则
+- **事务一致性**: 确保数据操作的ACID特性
+- **性能优化**: 合理使用索引、避免N+1查询、控制查询范围
+- **安全防护**: 防止SQL注入、敏感数据保护
+- **连接管理**: 合理使用连接池、避免连接泄露
+
+### MyBatis-Plus配置标准
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+@EnableTransactionManagement
+@MapperScan(basePackages = "com.example.mapper")
+public class MyBatisPlusConfig {
+    
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        
+        // 1. 分页插件 - 必须配置
+        PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor();
+        paginationInterceptor.setDbType(DbType.MYSQL);
+        paginationInterceptor.setMaxLimit(1000L); // 最大分页限制
+        paginationInterceptor.setOverflow(false); // 溢出总页数后是否进行处理
+        paginationInterceptor.setOptimizeJoin(true); // 优化JOIN查询
+        interceptor.addInnerInterceptor(paginationInterceptor);
+        
+        // 2. 乐观锁插件 - 必须配置
+        OptimisticLockerInnerInterceptor optimisticLockerInterceptor = 
+            new OptimisticLockerInnerInterceptor();
+        interceptor.addInnerInterceptor(optimisticLockerInterceptor);
+        
+        // 3. 防止全表更新与删除插件 - 必须配置
+        BlockAttackInnerInterceptor blockAttackInterceptor = 
+            new BlockAttackInnerInterceptor();
+        interceptor.addInnerInterceptor(blockAttackInterceptor);
+        
+        // 4. SQL性能规范插件 - 必须配置
+        IllegalSQLInnerInterceptor illegalSQLInterceptor = 
+            new IllegalSQLInnerInterceptor();
+        interceptor.addInnerInterceptor(illegalSQLInterceptor);
+        
+        // 5. 数据权限插件 - 根据需要配置
+        DataPermissionInterceptor dataPermissionInterceptor = 
+            new DataPermissionInterceptor();
+        interceptor.addInnerInterceptor(dataPermissionInterceptor);
+        
+        return interceptor;
+    }
+    
+    @Bean
+    public GlobalConfig globalConfig() {
+        GlobalConfig globalConfig = new GlobalConfig();
+        
+        // 数据库字段命名策略
+        GlobalConfig.DbConfig dbConfig = new GlobalConfig.DbConfig();
+        dbConfig.setTableUnderline(true); // 表名下划线命名
+        dbConfig.setColumnUnderline(true); // 字段下划线命名
+        dbConfig.setIdType(IdType.ASSIGN_ID); // 主键策略
+        dbConfig.setLogicDeleteField("deleted"); // 逻辑删除字段
+        dbConfig.setLogicDeleteValue("1"); // 逻辑删除值
+        dbConfig.setLogicNotDeleteValue("0"); // 逻辑未删除值
+        
+        globalConfig.setDbConfig(dbConfig);
+        return globalConfig;
+    }
+    
+    @Bean
+    public ConfigurationCustomizer configurationCustomizer() {
+        return configuration -> {
+            // 开启驼峰命名转换
+            configuration.setMapUnderscoreToCamelCase(true);
+            // 开启二级缓存
+            configuration.setCacheEnabled(true);
+            // 延迟加载
+            configuration.setLazyLoadingEnabled(true);
+            configuration.setAggressiveLazyLoading(false);
+            // 设置超时时间
+            configuration.setDefaultStatementTimeout(30);
+        };
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 强制行为
+
+### Mapper接口规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+    
+    /**
+     * 根据用户名查询用户信息
+     * @param username 用户名
+     * @return 用户信息
+     */
+    @Select("SELECT * FROM users WHERE username = #{username} AND deleted = 0")
+    User findByUsername(@Param("username") String username);
+    
+    /**
+     * 根据邮箱查询用户信息
+     * @param email 邮箱
+     * @return 用户信息
+     */
+    User findByEmail(@Param("email") String email);
+    
+    /**
+     * 分页查询用户列表
+     * @param page 分页参数
+     * @param queryWrapper 查询条件
+     * @return 用户列表
+     */
+    IPage<User> selectUserPage(IPage<User> page, 
+                              @Param(Constants.WRAPPER) Wrapper<User> queryWrapper);
+    
+    /**
+     * 查询用户统计信息
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 统计信息
+     */
+    List<UserStatisticsVO> selectUserStatistics(@Param("startDate") LocalDate startDate,
+                                               @Param("endDate") LocalDate endDate);
+    
+    /**
+     * 批量更新用户状态
+     * @param userIds 用户ID列表
+     * @param status 状态
+     * @return 更新数量
+     */
+    int batchUpdateStatus(@Param("userIds") List<Long> userIds, 
+                         @Param("status") UserStatus status);
+    
+    /**
+     * 逻辑删除用户
+     * @param userId 用户ID
+     * @return 删除数量
+     */
+    @Update("UPDATE users SET deleted = 1, updated_at = NOW() WHERE id = #{userId}")
+    int logicDeleteById(@Param("userId") Long userId);
+    
+    /**
+     * 查询活跃用户数量
+     * @param days 天数
+     * @return 活跃用户数量
+     */
+    @Select("SELECT COUNT(DISTINCT user_id) FROM user_login_logs " +
+            "WHERE login_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)")
+    Long countActiveUsers(@Param("days") int days);
+}
+// [AI-BLOCK-END]
+```
+
+### 自定义Mapper XML
+```xml
+<!-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.UserMapper">
+    
+    <!-- 结果映射 -->
+    <resultMap id="UserResultMap" type="com.example.entity.User">
+        <id column="id" property="id"/>
+        <result column="username" property="username"/>
+        <result column="email" property="email"/>
+        <result column="real_name" property="realName"/>
+        <result column="phone" property="phone"/>
+        <result column="age" property="age"/>
+        <result column="birth_date" property="birthDate"/>
+        <result column="status" property="status" 
+                typeHandler="org.apache.ibatis.type.EnumTypeHandler"/>
+        <result column="gender" property="gender" 
+                typeHandler="org.apache.ibatis.type.EnumTypeHandler"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="deleted" property="deleted"/>
+        <result column="version" property="version"/>
+    </resultMap>
+    
+    <!-- 用户详情结果映射（包含关联数据） -->
+    <resultMap id="UserDetailResultMap" type="com.example.entity.User" 
+               extends="UserResultMap">
+        <association property="profile" javaType="com.example.entity.UserProfile">
+            <id column="profile_id" property="id"/>
+            <result column="avatar" property="avatar"/>
+            <result column="bio" property="bio"/>
+            <result column="website" property="website"/>
+            <result column="company" property="company"/>
+            <result column="position" property="position"/>
+            <result column="location" property="location"/>
+        </association>
+        <collection property="roles" ofType="com.example.entity.UserRole">
+            <id column="user_role_id" property="id"/>
+            <result column="role_id" property="roleId"/>
+            <result column="role_name" property="roleName"/>
+            <result column="role_description" property="roleDescription"/>
+        </collection>
+    </resultMap>
+    
+    <!-- 通用查询条件 -->
+    <sql id="BaseColumns">
+        id, username, email, real_name, phone, age, birth_date, 
+        status, gender, created_at, updated_at, created_by, 
+        updated_by, deleted, version
+    </sql>
+    
+    <sql id="BaseConditions">
+        <where>
+            deleted = 0
+            <if test="username != null and username != ''">
+                AND username = #{username}
+            </if>
+            <if test="email != null and email != ''">
+                AND email = #{email}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+            <if test="startDate != null">
+                AND created_at >= #{startDate}
+            </if>
+            <if test="endDate != null">
+                AND created_at &lt;= #{endDate}
+            </if>
+        </where>
+    </sql>
+    
+    <!-- 根据邮箱查询用户 -->
+    <select id="findByEmail" resultMap="UserResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM users
+        WHERE email = #{email} AND deleted = 0
+    </select>
+    
+    <!-- 分页查询用户列表 -->
+    <select id="selectUserPage" resultMap="UserResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM users
+        ${ew.customSqlSegment}
+    </select>
+    
+    <!-- 查询用户详情（包含关联数据） -->
+    <select id="selectUserDetail" resultMap="UserDetailResultMap">
+        SELECT 
+            u.id, u.username, u.email, u.real_name, u.phone, u.age, 
+            u.birth_date, u.status, u.gender, u.created_at, u.updated_at,
+            u.created_by, u.updated_by, u.deleted, u.version,
+            p.id as profile_id, p.avatar, p.bio, p.website, 
+            p.company, p.position, p.location,
+            ur.id as user_role_id, r.id as role_id, 
+            r.name as role_name, r.description as role_description
+        FROM users u
+        LEFT JOIN user_profiles p ON u.id = p.user_id AND p.deleted = 0
+        LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.deleted = 0
+        LEFT JOIN roles r ON ur.role_id = r.id AND r.deleted = 0
+        WHERE u.id = #{userId} AND u.deleted = 0
+    </select>
+    
+    <!-- 查询用户统计信息 -->
+    <select id="selectUserStatistics" resultType="com.example.vo.UserStatisticsVO">
+        SELECT 
+            DATE(created_at) as date,
+            COUNT(*) as userCount,
+            COUNT(CASE WHEN status = 'ACTIVE' THEN 1 END) as activeCount,
+            COUNT(CASE WHEN status = 'INACTIVE' THEN 1 END) as inactiveCount
+        FROM users
+        WHERE created_at BETWEEN #{startDate} AND #{endDate}
+        AND deleted = 0
+        GROUP BY DATE(created_at)
+        ORDER BY date
+    </select>
+    
+    <!-- 批量更新用户状态 -->
+    <update id="batchUpdateStatus">
+        UPDATE users 
+        SET status = #{status}, updated_at = NOW()
+        WHERE id IN
+        <foreach collection="userIds" item="userId" open="(" separator="," close=")">
+            #{userId}
+        </foreach>
+        AND deleted = 0
+    </update>
+    
+    <!-- 复杂查询示例：用户搜索 -->
+    <select id="searchUsers" resultMap="UserResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM users
+        <where>
+            deleted = 0
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    username LIKE CONCAT('%', #{keyword}, '%')
+                    OR real_name LIKE CONCAT('%', #{keyword}, '%')
+                    OR email LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="statuses != null and statuses.size() > 0">
+                AND status IN
+                <foreach collection="statuses" item="status" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="ageMin != null">
+                AND age >= #{ageMin}
+            </if>
+            <if test="ageMax != null">
+                AND age &lt;= #{ageMax}
+            </if>
+            <if test="hasProfile != null">
+                <choose>
+                    <when test="hasProfile">
+                        AND EXISTS (SELECT 1 FROM user_profiles p WHERE p.user_id = id AND p.deleted = 0)
+                    </when>
+                    <otherwise>
+                        AND NOT EXISTS (SELECT 1 FROM user_profiles p WHERE p.user_id = id AND p.deleted = 0)
+                    </otherwise>
+                </choose>
+            </if>
+        </where>
+        ORDER BY 
+        <choose>
+            <when test="sortBy == 'username'">username</when>
+            <when test="sortBy == 'email'">email</when>
+            <when test="sortBy == 'createdAt'">created_at</when>
+            <otherwise>id</otherwise>
+        </choose>
+        <choose>
+            <when test="sortDirection == 'ASC'">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </select>
+</mapper>
+<!-- [AI-BLOCK-END] -->
+```
+
+### Service层数据库操作
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+@Transactional
+public class UserDatabaseService extends ServiceImpl<UserMapper, User> {
+    
+    @Autowired
+    private UserMapper userMapper;
+    
+    @Autowired
+    private UserProfileMapper userProfileMapper;
+    
+    @Autowired
+    private UserRoleMapper userRoleMapper;
+    
+    /**
+     * 创建用户（带事务）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public User createUser(UserCreateDTO createDto) {
+        // 1. 检查用户名唯一性
+        LambdaQueryWrapper<User> usernameQuery = new LambdaQueryWrapper<>();
+        usernameQuery.eq(User::getUsername, createDto.getUsername())
+                    .eq(User::getDeleted, false);
+        
+        if (userMapper.selectCount(usernameQuery) > 0) {
+            throw BusinessRuleException.duplicateUsername(createDto.getUsername());
+        }
+        
+        // 2. 检查邮箱唯一性
+        LambdaQueryWrapper<User> emailQuery = new LambdaQueryWrapper<>();
+        emailQuery.eq(User::getEmail, createDto.getEmail())
+                  .eq(User::getDeleted, false);
+        
+        if (userMapper.selectCount(emailQuery) > 0) {
+            throw BusinessRuleException.duplicateEmail(createDto.getEmail());
+        }
+        
+        // 3. 创建用户
+        User user = User.builder()
+            .username(createDto.getUsername())
+            .email(createDto.getEmail())
+            .passwordHash(passwordEncoder.encode(createDto.getPassword()))
+            .realName(createDto.getRealName())
+            .phone(createDto.getPhone())
+            .age(createDto.getAge())
+            .birthDate(createDto.getBirthDate())
+            .status(UserStatus.INACTIVE)
+            .build();
+        
+        userMapper.insert(user);
+        
+        // 4. 创建用户资料
+        if (createDto.getProfile() != null) {
+            UserProfile profile = UserProfile.builder()
+                .userId(user.getId())
+                .avatar(createDto.getProfile().getAvatar())
+                .bio(createDto.getProfile().getBio())
+                .website(createDto.getProfile().getWebsite())
+                .company(createDto.getProfile().getCompany())
+                .position(createDto.getProfile().getPosition())
+                .location(createDto.getProfile().getLocation())
+                .build();
+            
+            userProfileMapper.insert(profile);
+        }
+        
+        // 5. 分配默认角色
+        if (CollectionUtils.isNotEmpty(createDto.getRoleIds())) {
+            List<UserRole> userRoles = createDto.getRoleIds().stream()
+                .map(roleId -> UserRole.builder()
+                    .userId(user.getId())
+                    .roleId(roleId)
+                    .build())
+                .collect(Collectors.toList());
+            
+            userRoleMapper.insertBatch(userRoles);
+        }
+        
+        log.info("用户创建成功: userId={}, username={}", user.getId(), user.getUsername());
+        return user;
+    }
+    
+    /**
+     * 分页查询用户
+     */
+    @Transactional(readOnly = true)
+    public IPage<User> pageUsers(UserQueryDTO queryDto) {
+        // 构建查询条件
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        
+        // 基础条件
+        queryWrapper.eq(User::getDeleted, false);
+        
+        // 精确匹配
+        if (StringUtils.hasText(queryDto.getUsername())) {
+            queryWrapper.eq(User::getUsername, queryDto.getUsername());
+        }
+        
+        if (StringUtils.hasText(queryDto.getEmail())) {
+            queryWrapper.eq(User::getEmail, queryDto.getEmail());
+        }
+        
+        if (queryDto.getStatus() != null) {
+            queryWrapper.eq(User::getStatus, queryDto.getStatus());
+        }
+        
+        if (queryDto.getGender() != null) {
+            queryWrapper.eq(User::getGender, queryDto.getGender());
+        }
+        
+        // 模糊匹配
+        if (StringUtils.hasText(queryDto.getRealNameLike())) {
+            queryWrapper.like(User::getRealName, queryDto.getRealNameLike());
+        }
+        
+        if (StringUtils.hasText(queryDto.getPhoneLike())) {
+            queryWrapper.like(User::getPhone, queryDto.getPhoneLike());
+        }
+        
+        // 范围查询
+        if (queryDto.getAgeMin() != null) {
+            queryWrapper.ge(User::getAge, queryDto.getAgeMin());
+        }
+        
+        if (queryDto.getAgeMax() != null) {
+            queryWrapper.le(User::getAge, queryDto.getAgeMax());
+        }
+        
+        if (queryDto.getBirthDateStart() != null) {
+            queryWrapper.ge(User::getBirthDate, queryDto.getBirthDateStart());
+        }
+        
+        if (queryDto.getBirthDateEnd() != null) {
+            queryWrapper.le(User::getBirthDate, queryDto.getBirthDateEnd());
+        }
+        
+        if (queryDto.getCreatedAtStart() != null) {
+            queryWrapper.ge(User::getCreatedAt, queryDto.getCreatedAtStart());
+        }
+        
+        if (queryDto.getCreatedAtEnd() != null) {
+            queryWrapper.le(User::getCreatedAt, queryDto.getCreatedAtEnd());
+        }
+        
+        // 集合查询
+        if (CollectionUtils.isNotEmpty(queryDto.getIds())) {
+            queryWrapper.in(User::getId, queryDto.getIds());
+        }
+        
+        if (CollectionUtils.isNotEmpty(queryDto.getUsernames())) {
+            queryWrapper.in(User::getUsername, queryDto.getUsernames());
+        }
+        
+        if (CollectionUtils.isNotEmpty(queryDto.getStatuses())) {
+            queryWrapper.in(User::getStatus, queryDto.getStatuses());
+        }
+        
+        // 排除条件
+        if (CollectionUtils.isNotEmpty(queryDto.getExcludeIds())) {
+            queryWrapper.notIn(User::getId, queryDto.getExcludeIds());
+        }
+        
+        // 排序
+        String sortBy = StringUtils.hasText(queryDto.getSortBy()) ? 
+            queryDto.getSortBy() : "createdAt";
+        boolean isAsc = "ASC".equalsIgnoreCase(queryDto.getSortDirection());
+        
+        switch (sortBy) {
+            case "username":
+                queryWrapper.orderBy(true, isAsc, User::getUsername);
+                break;
+            case "email":
+                queryWrapper.orderBy(true, isAsc, User::getEmail);
+                break;
+            case "realName":
+                queryWrapper.orderBy(true, isAsc, User::getRealName);
+                break;
+            case "createdAt":
+                queryWrapper.orderBy(true, isAsc, User::getCreatedAt);
+                break;
+            default:
+                queryWrapper.orderBy(true, isAsc, User::getId);
+        }
+        
+        // 分页查询
+        Page<User> page = new Page<>(queryDto.getPage(), queryDto.getSize());
+        return userMapper.selectPage(page, queryWrapper);
+    }
+    
+    /**
+     * 批量操作示例
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void batchUpdateUserStatus(List<Long> userIds, UserStatus status) {
+        if (CollectionUtils.isEmpty(userIds)) {
+            return;
+        }
+        
+        // 验证用户存在性
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.in(User::getId, userIds)
+                   .eq(User::getDeleted, false);
+        
+        List<User> existingUsers = userMapper.selectList(queryWrapper);
+        if (existingUsers.size() != userIds.size()) {
+            throw new ResourceNotFoundException("部分用户不存在");
+        }
+        
+        // 批量更新
+        int updatedCount = userMapper.batchUpdateStatus(userIds, status);
+        
+        log.info("批量更新用户状态完成: count={}, status={}", updatedCount, status);
+    }
+    
+    /**
+     * 复杂查询示例：用户统计
+     */
+    @Transactional(readOnly = true)
+    public List<UserStatisticsVO> getUserStatistics(LocalDate startDate, LocalDate endDate) {
+        return userMapper.selectUserStatistics(startDate, endDate);
+    }
+    
+    /**
+     * 软删除用户
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteUser(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getDeleted()) {
+            throw new ResourceNotFoundException("User", userId);
+        }
+        
+        // 软删除用户
+        user.setDeleted(true);
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+        
+        // 软删除关联数据
+        LambdaUpdateWrapper<UserProfile> profileUpdate = new LambdaUpdateWrapper<>();
+        profileUpdate.eq(UserProfile::getUserId, userId)
+                    .set(UserProfile::getDeleted, true)
+                    .set(UserProfile::getUpdatedAt, LocalDateTime.now());
+        userProfileMapper.update(null, profileUpdate);
+        
+        LambdaUpdateWrapper<UserRole> roleUpdate = new LambdaUpdateWrapper<>();
+        roleUpdate.eq(UserRole::getUserId, userId)
+                  .set(UserRole::getDeleted, true)
+                  .set(UserRole::getUpdatedAt, LocalDateTime.now());
+        userRoleMapper.update(null, roleUpdate);
+        
+        log.info("用户删除成功: userId={}", userId);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 事务管理配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+@EnableTransactionManagement
+public class TransactionConfig {
+    
+    @Bean
+    public PlatformTransactionManager transactionManager(DataSource dataSource) {
+        DataSourceTransactionManager transactionManager = 
+            new DataSourceTransactionManager(dataSource);
+        transactionManager.setRollbackOnCommitFailure(true);
+        return transactionManager;
+    }
+    
+    @Bean
+    public TransactionTemplate transactionTemplate(
+            PlatformTransactionManager transactionManager) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+        template.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        template.setTimeout(30); // 30秒超时
+        return template;
+    }
+    
+    // 自定义事务管理器（用于多数据源）
+    @Bean("primaryTransactionManager")
+    public PlatformTransactionManager primaryTransactionManager(
+            @Qualifier("primaryDataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+    
+    @Bean("secondaryTransactionManager")
+    public PlatformTransactionManager secondaryTransactionManager(
+            @Qualifier("secondaryDataSource") DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+}
+
+// 编程式事务示例
+@Service
+@Slf4j
+public class TransactionalUserService {
+    
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+    
+    @Autowired
+    private UserMapper userMapper;
+    
+    @Autowired
+    private OrderMapper orderMapper;
+    
+    /**
+     * 编程式事务处理
+     */
+    public void processUserOrder(Long userId, OrderCreateDTO orderDto) {
+        transactionTemplate.execute(status -> {
+            try {
+                // 1. 更新用户信息
+                User user = userMapper.selectById(userId);
+                if (user == null) {
+                    throw new ResourceNotFoundException("User", userId);
+                }
+                
+                user.setLastOrderTime(LocalDateTime.now());
+                userMapper.updateById(user);
+                
+                // 2. 创建订单
+                Order order = createOrderFromDto(orderDto, user);
+                orderMapper.insert(order);
+                
+                // 3. 更新用户统计
+                updateUserStatistics(userId);
+                
+                log.info("用户订单处理成功: userId={}, orderId={}", userId, order.getId());
+                return order;
+                
+            } catch (Exception e) {
+                log.error("用户订单处理失败: userId={}", userId, e);
+                status.setRollbackOnly(); // 标记回滚
+                throw e;
+            }
+        });
+    }
+    
+    /**
+     * 多数据源事务处理
+     */
+    @Transactional("primaryTransactionManager")
+    public void syncUserToSecondaryDB(Long userId) {
+        // 主数据库操作
+        User user = userMapper.selectById(userId);
+        
+        // 需要手动管理次数据库事务
+        TransactionTemplate secondaryTransaction = new TransactionTemplate(
+            secondaryTransactionManager);
+        
+        secondaryTransaction.execute(status -> {
+            try {
+                // 次数据库操作
+                secondaryUserMapper.insertOrUpdate(user);
+                return null;
+            } catch (Exception e) {
+                log.error("同步用户到次数据库失败: userId={}", userId, e);
+                throw e;
+            }
+        });
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 数据库操作反模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：N+1查询问题
+@Service
+public class BadUserService {
+    
+    // 禁止：循环查询导致N+1问题
+    public List<UserVO> getUsersWithOrders(List<Long> userIds) {
+        List<UserVO> result = new ArrayList<>();
+        for (Long userId : userIds) {
+            User user = userMapper.selectById(userId);  // N次查询
+            List<Order> orders = orderMapper.selectByUserId(userId);  // N次查询
+            UserVO vo = convertToVO(user, orders);
+            result.add(vo);
+        }
+        return result;
+    }
+    
+    // 禁止：不使用分页的大量数据查询
+    public List<User> getAllUsers() {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getDeleted, false);
+        return userMapper.selectList(wrapper);  // 可能返回数万条记录
+    }
+    
+    // 禁止：在循环中执行数据库操作
+    public void updateUsersStatus(List<Long> userIds, UserStatus status) {
+        for (Long userId : userIds) {
+            User user = new User();
+            user.setId(userId);
+            user.setStatus(status);
+            userMapper.updateById(user);  // N次数据库操作
+        }
+    }
+}
+
+// ❌ 禁止：SQL注入风险
+@Mapper
+public interface BadUserMapper {
+    
+    // 禁止：字符串拼接SQL
+    @Select("SELECT * FROM users WHERE username = '${username}'")
+    User findByUsernameBad(String username);
+    
+    // 禁止：动态SQL中的注入风险
+    @Select("<script>" +
+            "SELECT * FROM users WHERE 1=1 " +
+            "<if test='orderBy != null'>" +
+            "ORDER BY ${orderBy}" +  // 直接拼接，存在注入风险
+            "</if>" +
+            "</script>")
+    List<User> findUsersWithDynamicOrder(@Param("orderBy") String orderBy);
+}
+
+// ❌ 禁止：事务使用不当
+@Service
+public class BadTransactionService {
+    
+    // 禁止：在事务中调用外部服务
+    @Transactional
+    public void processOrder(OrderCreateDTO dto) {
+        Order order = createOrder(dto);
+        orderMapper.insert(order);
+        
+        // 禁止：事务中调用外部HTTP服务
+        paymentService.createPayment(order);  // 可能超时导致事务回滚
+        
+        // 禁止：事务中发送邮件
+        emailService.sendOrderConfirmation(order);  // 耗时操作
+    }
+    
+    // 禁止：不必要的事务
+    @Transactional
+    public User getUserById(Long id) {
+        return userMapper.selectById(id);  // 只读操作不需要事务
+    }
+    
+    // 禁止：事务传播行为使用不当
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateUserLastLogin(Long userId) {
+        // 每次调用都会创建新事务，可能导致数据不一致
+        User user = userMapper.selectById(userId);
+        user.setLastLoginTime(LocalDateTime.now());
+        userMapper.updateById(user);
+    }
+}
+
+// ❌ 禁止：连接泄露
+@Service
+public class BadConnectionService {
+    
+    @Autowired
+    private DataSource dataSource;
+    
+    // 禁止：手动管理连接但不关闭
+    public List<User> getUsersWithRawConnection() {
+        Connection conn = null;
+        try {
+            conn = dataSource.getConnection();
+            PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users");
+            ResultSet rs = stmt.executeQuery();
+            // 处理结果集...
+            return users;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        // 禁止：没有在finally中关闭连接
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 性能问题模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：全表扫描查询
+public class BadQueryService {
+    
+    // 禁止：没有索引的模糊查询
+    public List<User> searchUsersByDescription(String keyword) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(User::getBio, keyword);  // bio字段没有索引
+        return userMapper.selectList(wrapper);
+    }
+    
+    // 禁止：使用SELECT *
+    @Select("SELECT * FROM users u " +
+            "LEFT JOIN user_profiles p ON u.id = p.user_id " +
+            "LEFT JOIN user_roles ur ON u.id = ur.user_id " +
+            "LEFT JOIN roles r ON ur.role_id = r.id")
+    List<User> findUsersWithAllData();  // 返回大量不需要的字段
+    
+    // 禁止：不合理的排序
+    public List<User> getUsersSortedByRandomField() {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.orderByAsc(User::getBio);  // 对大文本字段排序
+        return userMapper.selectList(wrapper);
+    }
+}
+
+// ❌ 禁止：缓存使用不当
+@Service
+public class BadCacheService {
+    
+    // 禁止：缓存大对象
+    @Cacheable(value = "users", key = "#userId")
+    public UserDetailVO getUserDetail(Long userId) {
+        // UserDetailVO包含大量关联数据，占用内存过多
+        return buildUserDetailWithAllRelations(userId);
+    }
+    
+    // 禁止：缓存键冲突
+    @Cacheable(value = "data", key = "#id")
+    public User getUserById(Long id) {
+        return userMapper.selectById(id);
+    }
+    
+    @Cacheable(value = "data", key = "#id")  // 同样的缓存键
+    public Order getOrderById(Long id) {
+        return orderMapper.selectById(id);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 示例代码
+
+### 完整的数据库操作流程
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+@Transactional
+public class OptimizedUserService extends ServiceImpl<UserMapper, User> {
+    
+    @Autowired
+    private UserMapper userMapper;
+    
+    @Autowired
+    private UserProfileMapper userProfileMapper;
+    
+    @Autowired
+    private OrderMapper orderMapper;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * 优化的用户查询（避免N+1问题）
+     */
+    @Transactional(readOnly = true)
+    public List<UserWithOrdersVO> getUsersWithOrders(List<Long> userIds) {
+        if (CollectionUtils.isEmpty(userIds)) {
+            return Collections.emptyList();
+        }
+        
+        // 1. 批量查询用户
+        LambdaQueryWrapper<User> userWrapper = new LambdaQueryWrapper<>();
+        userWrapper.in(User::getId, userIds)
+                   .eq(User::getDeleted, false);
+        List<User> users = userMapper.selectList(userWrapper);
+        
+        if (CollectionUtils.isEmpty(users)) {
+            return Collections.emptyList();
+        }
+        
+        // 2. 批量查询订单
+        LambdaQueryWrapper<Order> orderWrapper = new LambdaQueryWrapper<>();
+        orderWrapper.in(Order::getUserId, userIds)
+                   .eq(Order::getDeleted, false)
+                   .orderByDesc(Order::getCreatedAt);
+        List<Order> orders = orderMapper.selectList(orderWrapper);
+        
+        // 3. 构建用户-订单映射
+        Map<Long, List<Order>> userOrderMap = orders.stream()
+            .collect(Collectors.groupingBy(Order::getUserId));
+        
+        // 4. 组装结果
+        return users.stream()
+            .map(user -> {
+                List<Order> userOrders = userOrderMap.getOrDefault(
+                    user.getId(), Collections.emptyList());
+                return UserWithOrdersVO.builder()
+                    .user(UserResponseDTO.fromEntity(user))
+                    .orders(OrderResponseDTO.fromEntities(userOrders))
+                    .orderCount(userOrders.size())
+                    .build();
+            })
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 分页查询优化
+     */
+    @Transactional(readOnly = true)
+    public PageResponseDTO<UserResponseDTO> pageUsersOptimized(UserQueryDTO queryDto) {
+        // 1. 构建查询条件
+        LambdaQueryWrapper<User> wrapper = buildUserQueryWrapper(queryDto);
+        
+        // 2. 执行分页查询
+        Page<User> page = new Page<>(queryDto.getPage(), queryDto.getSize());
+        IPage<User> userPage = userMapper.selectPage(page, wrapper);
+        
+        // 3. 转换结果
+        List<UserResponseDTO> userDtos = userPage.getRecords().stream()
+            .map(UserResponseDTO::fromEntity)
+            .collect(Collectors.toList());
+        
+        // 4. 构建分页响应
+        return PageResponseDTO.<UserResponseDTO>builder()
+            .content(userDtos)
+            .page((int) userPage.getCurrent() - 1)
+            .size((int) userPage.getSize())
+            .totalElements(userPage.getTotal())
+            .totalPages((int) userPage.getPages())
+            .first(userPage.getCurrent() == 1)
+            .last(userPage.getCurrent() == userPage.getPages())
+            .build();
+    }
+    
+    /**
+     * 缓存优化的用户查询
+     */
+    @Cacheable(value = "users", key = "#userId", unless = "#result == null")
+    @Transactional(readOnly = true)
+    public UserResponseDTO getUserByIdWithCache(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getDeleted()) {
+            return null;
+        }
+        return UserResponseDTO.fromEntity(user);
+    }
+    
+    /**
+     * 批量操作优化
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void batchCreateUsers(List<UserCreateDTO> createDtos) {
+        if (CollectionUtils.isEmpty(createDtos)) {
+            return;
+        }
+        
+        // 1. 批量验证用户名和邮箱唯一性
+        List<String> usernames = createDtos.stream()
+            .map(UserCreateDTO::getUsername)
+            .collect(Collectors.toList());
+        
+        List<String> emails = createDtos.stream()
+            .map(UserCreateDTO::getEmail)
+            .collect(Collectors.toList());
+        
+        // 检查用户名重复
+        LambdaQueryWrapper<User> usernameWrapper = new LambdaQueryWrapper<>();
+        usernameWrapper.in(User::getUsername, usernames)
+                      .eq(User::getDeleted, false);
+        List<User> existingUsers = userMapper.selectList(usernameWrapper);
+        
+        if (CollectionUtils.isNotEmpty(existingUsers)) {
+            Set<String> existingUsernames = existingUsers.stream()
+                .map(User::getUsername)
+                .collect(Collectors.toSet());
+            throw new BusinessRuleException("DUPLICATE_USERNAMES", 
+                "用户名重复: {0}", String.join(",", existingUsernames));
+        }
+        
+        // 检查邮箱重复
+        LambdaQueryWrapper<User> emailWrapper = new LambdaQueryWrapper<>();
+        emailWrapper.in(User::getEmail, emails)
+                   .eq(User::getDeleted, false);
+        List<User> existingEmailUsers = userMapper.selectList(emailWrapper);
+        
+        if (CollectionUtils.isNotEmpty(existingEmailUsers)) {
+            Set<String> existingEmails = existingEmailUsers.stream()
+                .map(User::getEmail)
+                .collect(Collectors.toSet());
+            throw new BusinessRuleException("DUPLICATE_EMAILS", 
+                "邮箱重复: {0}", String.join(",", existingEmails));
+        }
+        
+        // 2. 批量创建用户
+        List<User> users = createDtos.stream()
+            .map(dto -> User.builder()
+                .username(dto.getUsername())
+                .email(dto.getEmail())
+                .passwordHash(passwordEncoder.encode(dto.getPassword()))
+                .realName(dto.getRealName())
+                .phone(dto.getPhone())
+                .age(dto.getAge())
+                .birthDate(dto.getBirthDate())
+                .status(UserStatus.INACTIVE)
+                .build())
+            .collect(Collectors.toList());
+        
+        // 使用MyBatis-Plus的批量插入
+        this.saveBatch(users, 1000); // 每批1000条
+        
+        log.info("批量创建用户成功: count={}", users.size());
+    }
+    
+    /**
+     * 复杂统计查询
+     */
+    @Transactional(readOnly = true)
+    public UserStatisticsSummaryVO getUserStatisticsSummary(
+            LocalDate startDate, LocalDate endDate) {
+        
+        // 1. 基础统计
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getDeleted, false);
+        
+        if (startDate != null) {
+            wrapper.ge(User::getCreatedAt, startDate.atStartOfDay());
+        }
+        
+        if (endDate != null) {
+            wrapper.le(User::getCreatedAt, endDate.atTime(23, 59, 59));
+        }
+        
+        List<User> users = userMapper.selectList(wrapper);
+        
+        // 2. 状态统计
+        Map<UserStatus, Long> statusCount = users.stream()
+            .collect(Collectors.groupingBy(
+                User::getStatus, 
+                Collectors.counting()));
+        
+        // 3. 年龄分布统计
+        Map<String, Long> ageDistribution = users.stream()
+            .filter(user -> user.getAge() != null)
+            .collect(Collectors.groupingBy(
+                user -> getAgeGroup(user.getAge()),
+                Collectors.counting()));
+        
+        // 4. 注册趋势统计
+        Map<LocalDate, Long> registrationTrend = users.stream()
+            .collect(Collectors.groupingBy(
+                user -> user.getCreatedAt().toLocalDate(),
+                Collectors.counting()));
+        
+        return UserStatisticsSummaryVO.builder()
+            .totalUsers(users.size())
+            .statusDistribution(statusCount)
+            .ageDistribution(ageDistribution)
+            .registrationTrend(registrationTrend)
+            .averageAge(users.stream()
+                .filter(user -> user.getAge() != null)
+                .mapToInt(User::getAge)
+                .average()
+                .orElse(0.0))
+            .build();
+    }
+    
+    /**
+     * 构建查询条件
+     */
+    private LambdaQueryWrapper<User> buildUserQueryWrapper(UserQueryDTO queryDto) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        
+        // 基础条件
+        wrapper.eq(User::getDeleted, false);
+        
+        // 动态条件构建
+        Optional.ofNullable(queryDto.getUsername())
+            .filter(StringUtils::hasText)
+            .ifPresent(username -> wrapper.eq(User::getUsername, username));
+        
+        Optional.ofNullable(queryDto.getEmail())
+            .filter(StringUtils::hasText)
+            .ifPresent(email -> wrapper.eq(User::getEmail, email));
+        
+        Optional.ofNullable(queryDto.getStatus())
+            .ifPresent(status -> wrapper.eq(User::getStatus, status));
+        
+        Optional.ofNullable(queryDto.getRealNameLike())
+            .filter(StringUtils::hasText)
+            .ifPresent(name -> wrapper.like(User::getRealName, name));
+        
+        Optional.ofNullable(queryDto.getAgeMin())
+            .ifPresent(min -> wrapper.ge(User::getAge, min));
+        
+        Optional.ofNullable(queryDto.getAgeMax())
+            .ifPresent(max -> wrapper.le(User::getAge, max));
+        
+        // 集合条件
+        if (CollectionUtils.isNotEmpty(queryDto.getIds())) {
+            wrapper.in(User::getId, queryDto.getIds());
+        }
+        
+        if (CollectionUtils.isNotEmpty(queryDto.getStatuses())) {
+            wrapper.in(User::getStatus, queryDto.getStatuses());
+        }
+        
+        // 排序
+        String sortBy = StringUtils.hasText(queryDto.getSortBy()) ? 
+            queryDto.getSortBy() : "createdAt";
+        boolean isAsc = "ASC".equalsIgnoreCase(queryDto.getSortDirection());
+        
+        // 使用函数式接口安全地设置排序
+        Function<LambdaQueryWrapper<User>, LambdaQueryWrapper<User>> sortFunction = 
+            getSortFunction(sortBy, isAsc);
+        
+        return sortFunction.apply(wrapper);
+    }
+    
+    private Function<LambdaQueryWrapper<User>, LambdaQueryWrapper<User>> getSortFunction(
+            String sortBy, boolean isAsc) {
+        switch (sortBy) {
+            case "username":
+                return w -> w.orderBy(true, isAsc, User::getUsername);
+            case "email":
+                return w -> w.orderBy(true, isAsc, User::getEmail);
+            case "realName":
+                return w -> w.orderBy(true, isAsc, User::getRealName);
+            case "createdAt":
+                return w -> w.orderBy(true, isAsc, User::getCreatedAt);
+            default:
+                return w -> w.orderBy(true, isAsc, User::getId);
+        }
+    }
+    
+    private String getAgeGroup(Integer age) {
+        if (age < 18) return "未成年";
+        if (age < 30) return "18-29";
+        if (age < 40) return "30-39";
+        if (age < 50) return "40-49";
+        if (age < 60) return "50-59";
+        return "60+";
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 数据库连接池配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+public class DataSourceConfig {
+    
+    @Bean
+    @Primary
+    @ConfigurationProperties(prefix = "spring.datasource.primary")
+    public DataSource primaryDataSource() {
+        HikariConfig config = new HikariConfig();
+        
+        // 连接池基础配置
+        config.setJdbcUrl("jdbc:mysql://localhost:3306/primary_db");
+        config.setUsername("username");
+        config.setPassword("password");
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        
+        // 连接池性能配置
+        config.setMinimumIdle(5);                    // 最小空闲连接数
+        config.setMaximumPoolSize(20);               // 最大连接数
+        config.setConnectionTimeout(30000);         // 连接超时时间(30秒)
+        config.setIdleTimeout(600000);              // 空闲超时时间(10分钟)
+        config.setMaxLifetime(1800000);             // 连接最大生命周期(30分钟)
+        config.setLeakDetectionThreshold(60000);    // 连接泄露检测阈值(1分钟)
+        
+        // 连接验证配置
+        config.setConnectionTestQuery("SELECT 1");
+        config.setValidationTimeout(5000);          // 验证超时时间(5秒)
+        
+        // 连接池名称
+        config.setPoolName("PrimaryHikariPool");
+        
+        // MySQL特定配置
+        config.addDataSourceProperty("cachePrepStmts", "true");
+        config.addDataSourceProperty("prepStmtCacheSize", "250");
+        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+        config.addDataSourceProperty("useServerPrepStmts", "true");
+        config.addDataSourceProperty("useLocalSessionState", "true");
+        config.addDataSourceProperty("rewriteBatchedStatements", "true");
+        config.addDataSourceProperty("cacheResultSetMetadata", "true");
+        config.addDataSourceProperty("cacheServerConfiguration", "true");
+        config.addDataSourceProperty("elideSetAutoCommits", "true");
+        config.addDataSourceProperty("maintainTimeStats", "false");
+        
+        return new HikariDataSource(config);
+    }
+    
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource.secondary")
+    public DataSource secondaryDataSource() {
+        HikariConfig config = new HikariConfig();
+        
+        config.setJdbcUrl("jdbc:mysql://localhost:3306/secondary_db");
+        config.setUsername("username");
+        config.setPassword("password");
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        
+        // 只读数据源配置
+        config.setMinimumIdle(2);
+        config.setMaximumPoolSize(10);
+        config.setConnectionTimeout(30000);
+        config.setIdleTimeout(300000);
+        config.setMaxLifetime(1200000);
+        config.setReadOnly(true);
+        config.setPoolName("SecondaryHikariPool");
+        
+        return new HikariDataSource(config);
+    }
+    
+    @Bean
+    public SqlSessionFactory primarySqlSessionFactory(
+            @Qualifier("primaryDataSource") DataSource dataSource) throws Exception {
+        
+        MybatisSqlSessionFactoryBean factory = new MybatisSqlSessionFactoryBean();
+        factory.setDataSource(dataSource);
+        factory.setMapperLocations(new PathMatchingResourcePatternResolver()
+            .getResources("classpath*:mapper/primary/*.xml"));
+        
+        MybatisConfiguration configuration = new MybatisConfiguration();
+        configuration.setMapUnderscoreToCamelCase(true);
+        configuration.setCacheEnabled(true);
+        configuration.setLazyLoadingEnabled(true);
+        configuration.setAggressiveLazyLoading(false);
+        configuration.setDefaultStatementTimeout(30);
+        configuration.setDefaultFetchSize(100);
+        
+        factory.setConfiguration(configuration);
+        return factory.getObject();
+    }
+    
+    @Bean
+    public SqlSessionFactory secondarySqlSessionFactory(
+            @Qualifier("secondaryDataSource") DataSource dataSource) throws Exception {
+        
+        MybatisSqlSessionFactoryBean factory = new MybatisSqlSessionFactoryBean();
+        factory.setDataSource(dataSource);
+        factory.setMapperLocations(new PathMatchingResourcePatternResolver()
+            .getResources("classpath*:mapper/secondary/*.xml"));
+        
+        return factory.getObject();
+    }
+}
+// [AI-BLOCK-END]
+```
+description:
+globs:
+alwaysApply: false
+---

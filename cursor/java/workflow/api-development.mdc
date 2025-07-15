@@ -1,0 +1,1124 @@
+# API开发流程 (流程层规则)
+> RESTful API开发的标准化流程和最佳实践
+
+## 基础规范
+
+### API设计原则
+- **RESTful标准**: 严格遵循REST架构风格
+- **资源导向**: 以资源为中心设计API
+- **统一接口**: 使用统一的接口规范
+- **无状态性**: API接口保持无状态设计
+- **可缓存性**: 合理设计缓存策略
+
+### API开发流程
+- **需求分析**: 明确API功能需求和业务场景
+- **接口设计**: 设计RESTful接口规范
+- **文档编写**: 编写详细的API文档
+- **开发实现**: 按照规范实现API
+- **测试验证**: 全面测试API功能
+- **版本管理**: 管理API版本演进
+- **监控运维**: 监控API运行状态
+
+### HTTP方法使用
+- **GET**: 查询资源，幂等且安全
+- **POST**: 创建资源，非幂等
+- **PUT**: 完整更新资源，幂等
+- **PATCH**: 部分更新资源，通常非幂等
+- **DELETE**: 删除资源，幂等
+- **HEAD**: 获取资源元信息
+- **OPTIONS**: 获取资源支持的方法
+
+### 状态码规范
+- **2xx成功**: 请求成功处理
+- **3xx重定向**: 需要进一步操作
+- **4xx客户端错误**: 客户端请求错误
+- **5xx服务器错误**: 服务器处理错误
+
+## 强制行为
+
+### URL设计要求
+- **名词复数**: 使用名词复数表示资源集合
+- **层次结构**: 体现资源间的层次关系
+- **参数传递**: 合理使用路径参数和查询参数
+- **版本标识**: 在URL中标识API版本
+- **小写字母**: URL使用小写字母和连字符
+
+### 请求处理要求
+- **参数验证**: 严格验证所有输入参数
+- **权限检查**: 对所有操作进行权限验证
+- **业务逻辑**: 实现完整的业务逻辑
+- **异常处理**: 妥善处理各种异常情况
+- **日志记录**: 记录关键操作和错误信息
+
+### 响应格式要求
+- **统一格式**: 使用统一的响应格式
+- **错误处理**: 标准化的错误响应
+- **分页支持**: 列表查询支持分页
+- **字段过滤**: 支持响应字段过滤
+- **国际化**: 支持多语言响应
+
+### 文档要求
+- **OpenAPI规范**: 使用OpenAPI描述API
+- **详细描述**: 提供详细的接口说明
+- **示例数据**: 包含请求和响应示例
+- **错误说明**: 说明可能的错误情况
+- **版本记录**: 记录版本变更历史
+
+## 禁止行为
+
+### URL设计禁令
+- **禁止动词**: URL中不使用动词，使用HTTP方法表达动作
+- **禁止驼峰命名**: 不使用camelCase命名
+- **禁止文件扩展名**: 不在URL中使用文件扩展名
+- **禁止版本混乱**: 不在同一API中混用不同版本规范
+- **禁止过深嵌套**: URL层次不超过3层
+
+### 响应设计禁令
+- **禁止不一致格式**: 响应格式必须保持一致
+- **禁止暴露内部**: 不暴露内部实现细节
+- **禁止敏感信息**: 不返回敏感系统信息
+- **禁止无限制响应**: 大数据量必须分页
+- **禁止状态码误用**: 正确使用HTTP状态码
+
+### 安全相关禁令
+- **禁止跳过认证**: 所有API都要进行认证
+- **禁止权限忽略**: 不能跳过权限检查
+- **禁止SQL注入**: 防范SQL注入攻击
+- **禁止XSS攻击**: 防范跨站脚本攻击
+- **禁止CSRF攻击**: 防范跨站请求伪造
+
+### 性能相关禁令
+- **禁止N+1查询**: 避免在循环中查询数据库
+- **禁止大对象传输**: 避免传输过大的对象
+- **禁止同步长操作**: 长时间操作使用异步处理
+- **禁止无缓存设计**: 合理使用缓存机制
+- **禁止忽略限流**: 实施适当的访问限制
+
+## 示例代码
+
+### 标准RESTful API实现
+```java
+/* [AI-BLOCK-START] - 生成工具: API开发流程 v2.0 */
+/**
+ * 用户管理API控制器
+ * 
+ * 提供完整的用户管理RESTful API，包括CRUD操作、批量操作、状态管理等功能。
+ * 严格遵循REST设计原则和HTTP规范。
+ */
+@RestController
+@RequestMapping("/api/v1/users")
+@Tag(name = "用户管理", description = "用户相关的API接口")
+@Validated
+@Slf4j
+public class UserApiController {
+    
+    private final UserService userService;
+    private final UserConverter userConverter;
+    
+    public UserApiController(UserService userService, UserConverter userConverter) {
+        this.userService = userService;
+        this.userConverter = userConverter;
+    }
+    
+    /**
+     * 创建用户
+     * POST /api/v1/users
+     */
+    @PostMapping
+    @Operation(
+        summary = "创建用户",
+        description = "创建新的用户账户，执行完整的注册流程",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "用户创建成功",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = UserResponse.class),
+                examples = @ExampleObject(
+                    name = "成功创建用户",
+                    summary = "用户创建成功的响应示例",
+                    value = """
+                    {
+                        "code": 201,
+                        "message": "用户创建成功",
+                        "data": {
+                            "id": 1,
+                            "username": "testuser",
+                            "email": "test@example.com",
+                            "name": "测试用户",
+                            "status": "PENDING",
+                            "createTime": "2024-01-01T10:00:00"
+                        },
+                        "timestamp": 1704096000000,
+                        "traceId": "abc123"
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "请求参数错误",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "用户名或邮箱已存在",
+            content = @Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @RateLimiting(limit = 10, timeWindow = 60) // 限流：每分钟10次
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Parameter(description = "用户创建请求", required = true)
+            @Valid @RequestBody CreateUserRequest request,
+            HttpServletRequest httpRequest) {
+        
+        log.info("创建用户请求: username={}, ip={}", 
+            request.getUsername(), getClientIp(httpRequest));
+        
+        User user = userService.createUser(request);
+        UserResponse response = userConverter.toResponse(user);
+        
+        // 构建创建成功响应
+        ApiResponse<UserResponse> apiResponse = ApiResponse.<UserResponse>builder()
+            .code(HttpStatus.CREATED.value())
+            .message("用户创建成功")
+            .data(response)
+            .timestamp(Instant.now().toEpochMilli())
+            .traceId(MDC.get("traceId"))
+            .build();
+        
+        // 设置Location头
+        URI location = ServletUriComponentsBuilder
+            .fromCurrentRequest()
+            .path("/{id}")
+            .buildAndExpand(user.getId())
+            .toUri();
+        
+        return ResponseEntity.created(location).body(apiResponse);
+    }
+    
+    /**
+     * 获取用户详情
+     * GET /api/v1/users/{id}
+     */
+    @GetMapping("/{id}")
+    @Operation(
+        summary = "获取用户详情",
+        description = "根据用户ID获取用户的详细信息",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功"),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "403", description = "权限不足")
+    })
+    @Cacheable(value = "users", key = "#id", unless = "#result == null")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(
+            @Parameter(description = "用户ID", required = true, example = "1")
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "响应字段过滤，逗号分隔", example = "id,username,email")
+            @RequestParam(value = "fields", required = false) String fields) {
+        
+        User user = userService.findUserById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+        
+        UserResponse response = userConverter.toResponse(user);
+        
+        // 应用字段过滤
+        if (StringUtils.hasText(fields)) {
+            response = applyFieldFilter(response, fields);
+        }
+        
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    /**
+     * 分页查询用户列表
+     * GET /api/v1/users
+     */
+    @GetMapping
+    @Operation(
+        summary = "分页查询用户",
+        description = "根据查询条件分页获取用户列表",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "查询成功"),
+        @ApiResponse(responseCode = "400", description = "查询参数错误")
+    })
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getUsers(
+            @Parameter(description = "页码（从0开始）", example = "0")
+            @RequestParam(value = "page", defaultValue = "0") 
+            @Min(value = 0, message = "页码不能小于0") Integer page,
+            
+            @Parameter(description = "每页大小", example = "20")
+            @RequestParam(value = "size", defaultValue = "20") 
+            @Range(min = 1, max = 100, message = "每页大小必须在1-100之间") Integer size,
+            
+            @Parameter(description = "排序字段", example = "createTime")
+            @RequestParam(value = "sort", defaultValue = "createTime") String sort,
+            
+            @Parameter(description = "排序方向", example = "desc")
+            @RequestParam(value = "direction", defaultValue = "desc") 
+            @Pattern(regexp = "asc|desc", message = "排序方向只能是asc或desc") String direction,
+            
+            // 查询条件参数
+            @Parameter(description = "用户名关键词")
+            @RequestParam(value = "username", required = false) String username,
+            
+            @Parameter(description = "邮箱关键词")
+            @RequestParam(value = "email", required = false) String email,
+            
+            @Parameter(description = "用户状态")
+            @RequestParam(value = "status", required = false) UserStatus status,
+            
+            @Parameter(description = "部门ID")
+            @RequestParam(value = "departmentId", required = false) Long departmentId,
+            
+            @Parameter(description = "创建开始时间", example = "2024-01-01T00:00:00")
+            @RequestParam(value = "startTime", required = false) 
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
+            
+            @Parameter(description = "创建结束时间", example = "2024-12-31T23:59:59")
+            @RequestParam(value = "endTime", required = false) 
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            
+            @Parameter(description = "响应字段过滤")
+            @RequestParam(value = "fields", required = false) String fields) {
+        
+        // 构建分页参数
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        
+        // 构建查询条件
+        UserSearchCriteria criteria = UserSearchCriteria.builder()
+            .username(username)
+            .email(email)
+            .status(status)
+            .departmentId(departmentId)
+            .startTime(startTime)
+            .endTime(endTime)
+            .build();
+        
+        // 执行查询
+        PageResponse<User> userPage = userService.findUsers(pageable, criteria);
+        
+        // 转换响应
+        List<UserResponse> userResponses = userPage.getContent().stream()
+            .map(userConverter::toResponse)
+            .map(response -> StringUtils.hasText(fields) ? applyFieldFilter(response, fields) : response)
+            .collect(Collectors.toList());
+        
+        PageResponse<UserResponse> responsePage = PageResponse.<UserResponse>builder()
+            .content(userResponses)
+            .page(userPage.getPage())
+            .size(userPage.getSize())
+            .totalPages(userPage.getTotalPages())
+            .totalElements(userPage.getTotalElements())
+            .first(userPage.isFirst())
+            .last(userPage.isLast())
+            .hasNext(userPage.isHasNext())
+            .hasPrevious(userPage.isHasPrevious())
+            .build();
+        
+        return ResponseEntity.ok(ApiResponse.success(responsePage));
+    }
+    
+    /**
+     * 更新用户信息
+     * PUT /api/v1/users/{id}
+     */
+    @PutMapping("/{id}")
+    @Operation(
+        summary = "更新用户信息",
+        description = "更新指定用户的信息，支持完整更新",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "更新成功"),
+        @ApiResponse(responseCode = "400", description = "参数错误"),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "409", description = "乐观锁冲突")
+    })
+    @CacheEvict(value = "users", key = "#id")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "用户更新请求", required = true)
+            @Valid @RequestBody UpdateUserRequest request,
+            
+            @Parameter(description = "客户端版本号，用于乐观锁控制")
+            @RequestHeader(value = "If-Match", required = false) String ifMatch) {
+        
+        log.info("更新用户请求: id={}", id);
+        
+        // 乐观锁版本检查
+        if (StringUtils.hasText(ifMatch)) {
+            validateVersion(id, ifMatch);
+        }
+        
+        User updatedUser = userService.updateUser(id, request);
+        UserResponse response = userConverter.toResponse(updatedUser);
+        
+        // 设置新的ETag
+        HttpHeaders headers = new HttpHeaders();
+        headers.setETag("\"" + updatedUser.getVersion() + "\"");
+        
+        return ResponseEntity.ok()
+            .headers(headers)
+            .body(ApiResponse.success(response, "用户更新成功"));
+    }
+    
+    /**
+     * 部分更新用户信息
+     * PATCH /api/v1/users/{id}
+     */
+    @PatchMapping("/{id}")
+    @Operation(
+        summary = "部分更新用户信息",
+        description = "部分更新指定用户的信息，只更新提供的字段",
+        tags = {"用户管理"}
+    )
+    @CacheEvict(value = "users", key = "#id")
+    public ResponseEntity<ApiResponse<UserResponse>> patchUser(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "用户部分更新请求", required = true)
+            @Valid @RequestBody PatchUserRequest request) {
+        
+        User updatedUser = userService.patchUser(id, request);
+        UserResponse response = userConverter.toResponse(updatedUser);
+        
+        return ResponseEntity.ok(ApiResponse.success(response, "用户更新成功"));
+    }
+    
+    /**
+     * 删除用户
+     * DELETE /api/v1/users/{id}
+     */
+    @DeleteMapping("/{id}")
+    @Operation(
+        summary = "删除用户",
+        description = "软删除指定的用户，不会物理删除数据",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "删除成功"),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "403", description = "权限不足"),
+        @ApiResponse(responseCode = "409", description = "存在关联数据，无法删除")
+    })
+    @CacheEvict(value = "users", key = "#id")
+    public ResponseEntity<Void> deleteUser(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id) {
+        
+        log.info("删除用户请求: id={}", id);
+        
+        userService.deleteUser(id);
+        
+        return ResponseEntity.noContent().build();
+    }
+    
+    /**
+     * 批量操作用户
+     * POST /api/v1/users/batch
+     */
+    @PostMapping("/batch")
+    @Operation(
+        summary = "批量操作用户",
+        description = "批量创建、更新或删除用户",
+        tags = {"用户管理"}
+    )
+    @RateLimiting(limit = 5, timeWindow = 60) // 限流：每分钟5次
+    public ResponseEntity<ApiResponse<BatchOperationResult>> batchOperation(
+            @Parameter(description = "批量操作请求", required = true)
+            @Valid @RequestBody BatchUserRequest request) {
+        
+        log.info("批量操作用户请求: operation={}, count={}", 
+            request.getOperation(), request.getData().size());
+        
+        BatchOperationResult result = userService.batchOperation(request);
+        
+        return ResponseEntity.ok(ApiResponse.success(result, "批量操作完成"));
+    }
+    
+    /**
+     * 更新用户状态
+     * PATCH /api/v1/users/{id}/status
+     */
+    @PatchMapping("/{id}/status")
+    @Operation(
+        summary = "更新用户状态",
+        description = "更新指定用户的状态（激活、锁定、禁用等）",
+        tags = {"用户管理"}
+    )
+    @CacheEvict(value = "users", key = "#id")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUserStatus(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "状态更新请求", required = true)
+            @Valid @RequestBody UpdateUserStatusRequest request) {
+        
+        log.info("更新用户状态请求: id={}, status={}", id, request.getStatus());
+        
+        User updatedUser = userService.updateUserStatus(id, request.getStatus());
+        UserResponse response = userConverter.toResponse(updatedUser);
+        
+        return ResponseEntity.ok(ApiResponse.success(response, "用户状态更新成功"));
+    }
+    
+    /**
+     * 重置用户密码
+     * POST /api/v1/users/{id}/password/reset
+     */
+    @PostMapping("/{id}/password/reset")
+    @Operation(
+        summary = "重置用户密码",
+        description = "管理员重置指定用户的密码",
+        tags = {"用户管理"}
+    )
+    public ResponseEntity<ApiResponse<PasswordResetResult>> resetUserPassword(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "密码重置请求")
+            @Valid @RequestBody ResetPasswordRequest request) {
+        
+        log.info("重置用户密码请求: id={}", id);
+        
+        PasswordResetResult result = userService.resetPassword(id, request);
+        
+        return ResponseEntity.ok(ApiResponse.success(result, "密码重置成功"));
+    }
+    
+    /**
+     * 获取用户统计信息
+     * GET /api/v1/users/statistics
+     */
+    @GetMapping("/statistics")
+    @Operation(
+        summary = "获取用户统计信息",
+        description = "获取用户相关的统计数据，包括总数、状态分布等",
+        tags = {"用户管理"}
+    )
+    @Cacheable(value = "user-statistics", unless = "#result == null")
+    public ResponseEntity<ApiResponse<UserStatisticsResponse>> getUserStatistics(
+            @Parameter(description = "统计时间范围（天）", example = "30")
+            @RequestParam(value = "days", defaultValue = "30") 
+            @Range(min = 1, max = 365, message = "统计天数必须在1-365之间") Integer days) {
+        
+        UserStatisticsResponse statistics = userService.getUserStatistics(days);
+        
+        return ResponseEntity.ok(ApiResponse.success(statistics));
+    }
+    
+    /**
+     * 导出用户数据
+     * GET /api/v1/users/export
+     */
+    @GetMapping("/export")
+    @Operation(
+        summary = "导出用户数据",
+        description = "导出用户数据到Excel或CSV文件",
+        tags = {"用户管理"}
+    )
+    public ResponseEntity<Resource> exportUsers(
+            @Parameter(description = "导出格式", example = "excel")
+            @RequestParam(value = "format", defaultValue = "excel") 
+            @Pattern(regexp = "excel|csv", message = "导出格式只能是excel或csv") String format,
+            
+            @Parameter(description = "查询条件")
+            UserSearchCriteria criteria) {
+        
+        log.info("导出用户数据请求: format={}", format);
+        
+        ExportResult exportResult = userService.exportUsers(criteria, format);
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, 
+            "attachment; filename=\"" + exportResult.getFilename() + "\"");
+        headers.add(HttpHeaders.CONTENT_TYPE, exportResult.getContentType());
+        
+        return ResponseEntity.ok()
+            .headers(headers)
+            .body(exportResult.getResource());
+    }
+    
+    /**
+     * 获取用户头像
+     * GET /api/v1/users/{id}/avatar
+     */
+    @GetMapping("/{id}/avatar")
+    @Operation(
+        summary = "获取用户头像",
+        description = "获取指定用户的头像图片",
+        tags = {"用户管理"}
+    )
+    public ResponseEntity<Resource> getUserAvatar(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "图片大小", example = "medium")
+            @RequestParam(value = "size", defaultValue = "medium") 
+            @Pattern(regexp = "small|medium|large", message = "图片大小只能是small、medium或large") String size) {
+        
+        AvatarResult avatar = userService.getUserAvatar(id, size);
+        
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(avatar.getContentType()))
+            .contentLength(avatar.getContentLength())
+            .lastModified(avatar.getLastModified())
+            .eTag("\"" + avatar.getEtag() + "\"")
+            .body(avatar.getResource());
+    }
+    
+    /**
+     * 上传用户头像
+     * POST /api/v1/users/{id}/avatar
+     */
+    @PostMapping("/{id}/avatar")
+    @Operation(
+        summary = "上传用户头像",
+        description = "上传或更新指定用户的头像图片",
+        tags = {"用户管理"}
+    )
+    @CacheEvict(value = "users", key = "#id")
+    public ResponseEntity<ApiResponse<UploadResult>> uploadUserAvatar(
+            @Parameter(description = "用户ID", required = true)
+            @PathVariable 
+            @Min(value = 1, message = "用户ID必须大于0") Long id,
+            
+            @Parameter(description = "头像文件", required = true)
+            @RequestParam("file") MultipartFile file) {
+        
+        log.info("上传用户头像请求: id={}, filename={}, size={}", 
+            id, file.getOriginalFilename(), file.getSize());
+        
+        // 文件验证
+        validateAvatarFile(file);
+        
+        UploadResult result = userService.uploadAvatar(id, file);
+        
+        return ResponseEntity.ok(ApiResponse.success(result, "头像上传成功"));
+    }
+    
+    // ==================== 辅助方法 ====================
+    
+    /**
+     * 获取客户端IP地址
+     */
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        return ip;
+    }
+    
+    /**
+     * 应用字段过滤
+     */
+    private UserResponse applyFieldFilter(UserResponse response, String fields) {
+        if (!StringUtils.hasText(fields)) {
+            return response;
+        }
+        
+        Set<String> allowedFields = Set.of(fields.split(","));
+        
+        // 这里可以使用反射或者JSON库来实现字段过滤
+        // 简化示例，实际项目中建议使用专门的字段过滤库
+        return response; // 简化处理
+    }
+    
+    /**
+     * 验证版本号（乐观锁）
+     */
+    private void validateVersion(Long id, String ifMatch) {
+        User user = userService.findUserById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+        
+        String currentVersion = "\"" + user.getVersion() + "\"";
+        if (!currentVersion.equals(ifMatch)) {
+            throw new BusinessException(ErrorCodes.DB_OPTIMISTIC_LOCK_CONFLICT, 
+                "数据已被其他用户修改，请刷新后重试");
+        }
+    }
+    
+    /**
+     * 验证头像文件
+     */
+    private void validateAvatarFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new ValidationException("头像文件不能为空");
+        }
+        
+        // 文件大小限制 2MB
+        if (file.getSize() > 2 * 1024 * 1024) {
+            throw new ValidationException("头像文件大小不能超过2MB");
+        }
+        
+        // 文件类型限制
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new ValidationException("头像文件必须是图片格式");
+        }
+        
+        // 支持的图片格式
+        List<String> allowedTypes = Arrays.asList("image/jpeg", "image/png", "image/gif");
+        if (!allowedTypes.contains(contentType)) {
+            throw new ValidationException("只支持JPEG、PNG、GIF格式的图片");
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### API版本管理和中间件
+```java
+/* [AI-BLOCK-START] - 生成工具: API开发流程 v2.0 */
+/**
+ * API版本管理控制器
+ * 
+ * 展示如何在同一个应用中管理多个API版本。
+ */
+@RestController
+@RequestMapping("/api/v2/users")
+@Tag(name = "用户管理 V2", description = "用户管理API第二版")
+public class UserApiV2Controller {
+    
+    private final UserService userService;
+    private final UserV2Converter userConverter;
+    
+    public UserApiV2Controller(UserService userService, UserV2Converter userConverter) {
+        this.userService = userService;
+        this.userConverter = userConverter;
+    }
+    
+    /**
+     * V2版本的用户创建接口
+     * 相比V1版本，增加了更多的用户属性和验证
+     */
+    @PostMapping
+    @Operation(summary = "创建用户 V2", description = "V2版本的用户创建接口")
+    public ResponseEntity<ApiResponseV2<UserResponseV2>> createUser(
+            @Valid @RequestBody CreateUserRequestV2 request) {
+        
+        User user = userService.createUser(request);
+        UserResponseV2 response = userConverter.toResponseV2(user);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponseV2.success(response, "用户创建成功"));
+    }
+    
+    /**
+     * V2版本的用户查询接口
+     * 增加了更丰富的查询条件和响应信息
+     */
+    @GetMapping
+    @Operation(summary = "查询用户列表 V2", description = "V2版本的用户查询接口")
+    public ResponseEntity<ApiResponseV2<PageResponseV2<UserResponseV2>>> getUsers(
+            @Valid UserSearchCriteriaV2 criteria,
+            @Valid PageRequestV2 pageRequest) {
+        
+        // V2版本的查询逻辑
+        PageResponse<User> userPage = userService.findUsersV2(criteria, pageRequest);
+        PageResponseV2<UserResponseV2> response = convertToV2PageResponse(userPage);
+        
+        return ResponseEntity.ok(ApiResponseV2.success(response));
+    }
+    
+    private PageResponseV2<UserResponseV2> convertToV2PageResponse(PageResponse<User> userPage) {
+        List<UserResponseV2> content = userPage.getContent().stream()
+            .map(userConverter::toResponseV2)
+            .collect(Collectors.toList());
+        
+        return PageResponseV2.<UserResponseV2>builder()
+            .content(content)
+            .pagination(PaginationInfo.builder()
+                .page(userPage.getPage())
+                .size(userPage.getSize())
+                .totalPages(userPage.getTotalPages())
+                .totalElements(userPage.getTotalElements())
+                .build())
+            .meta(ResponseMeta.builder()
+                .timestamp(Instant.now())
+                .version("v2")
+                .build())
+            .build();
+    }
+}
+
+/**
+ * API限流中间件
+ * 
+ * 实现API访问频率限制。
+ */
+@Component
+@Slf4j
+public class RateLimitingInterceptor implements HandlerInterceptor {
+    
+    private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
+    
+    public RateLimitingInterceptor(RedisTemplate<String, String> redisTemplate, 
+                                  ObjectMapper objectMapper) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+    }
+    
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, 
+                           Object handler) throws Exception {
+        
+        if (!(handler instanceof HandlerMethod)) {
+            return true;
+        }
+        
+        HandlerMethod handlerMethod = (HandlerMethod) handler;
+        RateLimiting rateLimiting = handlerMethod.getMethodAnnotation(RateLimiting.class);
+        
+        if (rateLimiting == null) {
+            rateLimiting = handlerMethod.getBeanType().getAnnotation(RateLimiting.class);
+        }
+        
+        if (rateLimiting != null) {
+            String clientId = getClientId(request);
+            String key = "rate_limit:" + handlerMethod.getMethod().getName() + ":" + clientId;
+            
+            if (!checkRateLimit(key, rateLimiting.limit(), rateLimiting.timeWindow())) {
+                response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                
+                ErrorResponse errorResponse = ErrorResponse.builder()
+                    .code(HttpStatus.TOO_MANY_REQUESTS.value())
+                    .errorCode("RATE_LIMIT_EXCEEDED")
+                    .message("请求频率超限，请稍后重试")
+                    .path(request.getRequestURI())
+                    .timestamp(Instant.now())
+                    .build();
+                
+                response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    private String getClientId(HttpServletRequest request) {
+        // 可以基于IP、用户ID、API Key等生成客户端标识
+        String apiKey = request.getHeader("X-API-Key");
+        if (StringUtils.hasText(apiKey)) {
+            return "api_key:" + apiKey;
+        }
+        
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated()) {
+            return "user:" + auth.getName();
+        }
+        
+        return "ip:" + getClientIp(request);
+    }
+    
+    private boolean checkRateLimit(String key, int limit, int timeWindow) {
+        try {
+            String current = redisTemplate.opsForValue().get(key);
+            
+            if (current == null) {
+                redisTemplate.opsForValue().set(key, "1", Duration.ofSeconds(timeWindow));
+                return true;
+            }
+            
+            int count = Integer.parseInt(current);
+            if (count >= limit) {
+                return false;
+            }
+            
+            redisTemplate.opsForValue().increment(key);
+            return true;
+            
+        } catch (Exception e) {
+            log.error("限流检查失败", e);
+            return true; // 出错时允许请求通过
+        }
+    }
+    
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        return ip;
+    }
+}
+
+/**
+ * 限流注解
+ */
+@Target({ElementType.METHOD, ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface RateLimiting {
+    
+    /**
+     * 时间窗口内允许的最大请求次数
+     */
+    int limit() default 100;
+    
+    /**
+     * 时间窗口大小（秒）
+     */
+    int timeWindow() default 60;
+}
+
+/**
+ * API请求日志拦截器
+ * 
+ * 记录API请求和响应信息，用于监控和分析。
+ */
+@Component
+@Slf4j
+public class ApiLoggingInterceptor implements HandlerInterceptor {
+    
+    private static final String START_TIME = "start_time";
+    private static final String REQUEST_BODY = "request_body";
+    
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, 
+                           Object handler) throws Exception {
+        
+        request.setAttribute(START_TIME, System.currentTimeMillis());
+        
+        // 记录请求信息
+        logRequest(request);
+        
+        return true;
+    }
+    
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, 
+                              Object handler, Exception ex) throws Exception {
+        
+        Long startTime = (Long) request.getAttribute(START_TIME);
+        if (startTime != null) {
+            long duration = System.currentTimeMillis() - startTime;
+            
+            // 记录响应信息
+            logResponse(request, response, duration, ex);
+        }
+    }
+    
+    private void logRequest(HttpServletRequest request) {
+        String method = request.getMethod();
+        String uri = request.getRequestURI();
+        String queryString = request.getQueryString();
+        String clientIp = getClientIp(request);
+        String userAgent = request.getHeader("User-Agent");
+        
+        StringBuilder logMessage = new StringBuilder();
+        logMessage.append("API请求 - ")
+                  .append("方法: ").append(method)
+                  .append(", URI: ").append(uri);
+        
+        if (StringUtils.hasText(queryString)) {
+            logMessage.append("?").append(queryString);
+        }
+        
+        logMessage.append(", IP: ").append(clientIp)
+                  .append(", User-Agent: ").append(userAgent);
+        
+        log.info(logMessage.toString());
+    }
+    
+    private void logResponse(HttpServletRequest request, HttpServletResponse response, 
+                           long duration, Exception ex) {
+        String method = request.getMethod();
+        String uri = request.getRequestURI();
+        int status = response.getStatus();
+        
+        StringBuilder logMessage = new StringBuilder();
+        logMessage.append("API响应 - ")
+                  .append("方法: ").append(method)
+                  .append(", URI: ").append(uri)
+                  .append(", 状态: ").append(status)
+                  .append(", 耗时: ").append(duration).append("ms");
+        
+        if (ex != null) {
+            logMessage.append(", 异常: ").append(ex.getMessage());
+            log.error(logMessage.toString(), ex);
+        } else {
+            log.info(logMessage.toString());
+        }
+        
+        // 记录慢请求
+        if (duration > 1000) {
+            log.warn("慢请求告警 - URI: {}, 耗时: {}ms", uri, duration);
+        }
+    }
+    
+    private String getClientIp(HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        return ip;
+    }
+}
+
+/**
+ * API响应包装器
+ * 
+ * 统一包装API响应格式。
+ */
+@ControllerAdvice
+@Slf4j
+public class ApiResponseWrapper implements ResponseBodyAdvice<Object> {
+    
+    private final ObjectMapper objectMapper;
+    
+    public ApiResponseWrapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+    
+    @Override
+    public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
+        // 检查是否需要包装响应
+        return returnType.hasMethodAnnotation(RestController.class) ||
+               returnType.getDeclaringClass().isAnnotationPresent(RestController.class);
+    }
+    
+    @Override
+    public Object beforeBodyWrite(Object body, MethodParameter returnType, 
+                                MediaType selectedContentType, 
+                                Class<? extends HttpMessageConverter<?>> selectedConverterType, 
+                                ServerHttpRequest request, ServerHttpResponse response) {
+        
+        // 如果已经是ApiResponse格式，直接返回
+        if (body instanceof ApiResponse) {
+            return body;
+        }
+        
+        // 如果是错误响应，不进行包装
+        if (body instanceof ErrorResponse) {
+            return body;
+        }
+        
+        // 如果是字符串类型，需要特殊处理
+        if (body instanceof String) {
+            try {
+                ApiResponse<String> apiResponse = ApiResponse.<String>builder()
+                    .code(200)
+                    .message("操作成功")
+                    .data((String) body)
+                    .timestamp(Instant.now().toEpochMilli())
+                    .traceId(MDC.get("traceId"))
+                    .build();
+                
+                return objectMapper.writeValueAsString(apiResponse);
+            } catch (Exception e) {
+                log.error("字符串响应包装失败", e);
+                return body;
+            }
+        }
+        
+        // 包装其他类型的响应
+        return ApiResponse.builder()
+            .code(200)
+            .message("操作成功")
+            .data(body)
+            .timestamp(Instant.now().toEpochMilli())
+            .traceId(MDC.get("traceId"))
+            .build();
+    }
+}
+
+/**
+ * Web配置类
+ * 
+ * 配置API相关的拦截器和处理器。
+ */
+@Configuration
+@EnableWebMvc
+public class ApiWebConfig implements WebMvcConfigurer {
+    
+    private final RateLimitingInterceptor rateLimitingInterceptor;
+    private final ApiLoggingInterceptor apiLoggingInterceptor;
+    
+    public ApiWebConfig(RateLimitingInterceptor rateLimitingInterceptor,
+                       ApiLoggingInterceptor apiLoggingInterceptor) {
+        this.rateLimitingInterceptor = rateLimitingInterceptor;
+        this.apiLoggingInterceptor = apiLoggingInterceptor;
+    }
+    
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        // API日志拦截器
+        registry.addInterceptor(apiLoggingInterceptor)
+                .addPathPatterns("/api/**")
+                .order(1);
+        
+        // 限流拦截器
+        registry.addInterceptor(rateLimitingInterceptor)
+                .addPathPatterns("/api/**")
+                .order(2);
+    }
+    
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        // 配置CORS
+        registry.addMapping("/api/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
+    }
+    
+    @Override
+    public void configureContentNegotiation(ContentNegotiationConfigurer configurer) {
+        // 内容协商配置
+        configurer.favorParameter(false)
+                  .favorPathExtension(false)
+                  .defaultContentType(MediaType.APPLICATION_JSON)
+                  .mediaType("json", MediaType.APPLICATION_JSON)
+                  .mediaType("xml", MediaType.APPLICATION_XML);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+
+
+*此API开发流程规范提供了完整的RESTful API开发标准，包括接口设计、版本管理、限流控制、日志记录等核心功能*
+

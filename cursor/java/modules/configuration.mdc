@@ -1,0 +1,1229 @@
+# 配置层规范 (模块层规则)
+> Configuration类的标准化设计和实现规范
+
+## 基础规范
+
+### 配置类设计原则
+- **单一职责**: 每个配置类负责一个特定领域的配置
+- **模块化**: 按功能模块组织配置类
+- **环境感知**: 支持不同环境的配置差异
+- **类型安全**: 使用强类型配置而不是字符串常量
+- **可测试性**: 配置类要便于单元测试
+
+### 配置组织结构
+- **核心配置**: 应用启动必需的基础配置
+- **数据配置**: 数据库、缓存等数据相关配置
+- **安全配置**: 认证、授权等安全相关配置
+- **集成配置**: 第三方服务集成配置
+- **监控配置**: 监控、日志等运维配置
+
+### 配置属性管理
+- **外部化配置**: 使用application.yml管理配置
+- **配置绑定**: 使用@ConfigurationProperties绑定配置
+- **配置验证**: 对配置参数进行验证
+- **配置文档**: 为配置参数提供清晰的文档说明
+- **默认值**: 为配置参数提供合理的默认值
+
+### Bean定义规范
+- **明确依赖**: 清晰地声明Bean之间的依赖关系
+- **生命周期**: 合理管理Bean的生命周期
+- **条件化创建**: 使用条件注解进行Bean的条件化创建
+- **懒加载**: 合理使用懒加载优化启动性能
+- **Bean名称**: 为Bean提供有意义的名称
+
+## 强制行为
+
+### 注解使用要求
+- **@Configuration**: 配置类必须使用@Configuration注解
+- **@EnableXxx**: 使用对应的Enable注解启用特定功能
+- **@Bean**: Bean创建方法使用@Bean注解
+- **@ConditionalOn**: 使用条件注解进行条件化配置
+- **@ConfigurationProperties**: 使用属性绑定注解
+
+### 配置属性绑定
+- **属性类**: 创建专门的属性类进行配置绑定
+- **验证注解**: 使用JSR-303注解验证配置参数
+- **默认值**: 为配置属性提供合理的默认值
+- **文档注释**: 为配置属性添加详细的说明文档
+- **类型安全**: 使用强类型而不是字符串配置
+
+### Bean管理规范
+- **方法命名**: Bean创建方法使用有意义的命名
+- **依赖注入**: 通过方法参数注入依赖的Bean
+- **作用域**: 明确指定Bean的作用域
+- **初始化**: 在需要时提供Bean的初始化逻辑
+- **销毁**: 为有状态的Bean提供销毁逻辑
+
+### 环境配置管理
+- **Profile**: 使用Spring Profile管理环境配置
+- **条件配置**: 使用条件注解进行环境相关配置
+- **外部配置**: 敏感配置通过环境变量或配置中心管理
+- **配置优先级**: 理解配置的加载优先级
+- **配置热更新**: 支持运行时配置更新
+
+## 禁止行为
+
+### 配置设计禁令
+- **禁止万能配置类**: 避免在一个配置类中配置所有内容
+- **禁止硬编码**: 不在配置类中硬编码配置值
+- **禁止复杂逻辑**: 配置类不包含复杂的业务逻辑
+- **禁止状态管理**: 配置类不保存应用状态
+- **禁止循环依赖**: Bean之间不能有循环依赖
+
+### Bean定义禁令
+- **禁止重复定义**: 避免定义重复功能的Bean
+- **禁止无意义Bean**: 不创建没有实际用途的Bean
+- **禁止复杂构造**: Bean构造逻辑不应过于复杂
+- **禁止忽略异常**: Bean创建时不忽略异常
+- **禁止资源泄露**: 确保Bean正确管理资源
+
+### 配置管理禁令
+- **禁止敏感信息明文**: 不在配置文件中明文存储敏感信息
+- **禁止配置冗余**: 避免在多处重复相同配置
+- **禁止忽略验证**: 不忽略配置参数的验证
+- **禁止环境混淆**: 不同环境的配置要明确区分
+- **禁止配置污染**: 测试配置不能影响生产环境
+
+### 性能相关禁令
+- **禁止启动阻塞**: 配置初始化不能阻塞应用启动
+- **禁止资源浪费**: 不创建不必要的Bean实例
+- **禁止同步阻塞**: 避免在配置中进行同步阻塞操作
+- **禁止大对象**: 不在配置中创建过大的对象
+- **禁止频繁初始化**: 避免重复初始化相同的资源
+
+## 示例代码
+
+### 核心应用配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 配置层规范 v2.0 */
+/**
+ * 应用核心配置类
+ * 
+ * 配置应用的核心组件，包括线程池、任务调度、序列化等基础设施。
+ * 这些配置对应用的正常运行至关重要。
+ */
+@Configuration
+@EnableAsync
+@EnableScheduling
+@Slf4j
+public class ApplicationConfig {
+    
+    private final ApplicationProperties applicationProperties;
+    
+    public ApplicationConfig(ApplicationProperties applicationProperties) {
+        this.applicationProperties = applicationProperties;
+    }
+    
+    /**
+     * 异步任务执行器
+     * 
+     * 配置用于异步任务执行的线程池，用于@Async注解的方法。
+     */
+    @Bean(name = "taskExecutor")
+    @Primary
+    public Executor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        
+        ThreadPoolConfig config = applicationProperties.getThreadPool();
+        executor.setCorePoolSize(config.getCorePoolSize());
+        executor.setMaxPoolSize(config.getMaxPoolSize());
+        executor.setQueueCapacity(config.getQueueCapacity());
+        executor.setKeepAliveSeconds(config.getKeepAliveSeconds());
+        executor.setThreadNamePrefix("async-task-");
+        
+        // 拒绝策略：由调用者线程执行
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        
+        // 等待任务完成后关闭
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        
+        executor.initialize();
+        
+        log.info("异步任务执行器配置完成: corePoolSize={}, maxPoolSize={}, queueCapacity={}", 
+            config.getCorePoolSize(), config.getMaxPoolSize(), config.getQueueCapacity());
+        
+        return executor;
+    }
+    
+    /**
+     * 定时任务调度器
+     */
+    @Bean(name = "taskScheduler")
+    public TaskScheduler taskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        
+        SchedulerConfig config = applicationProperties.getScheduler();
+        scheduler.setPoolSize(config.getPoolSize());
+        scheduler.setThreadNamePrefix("scheduled-task-");
+        scheduler.setAwaitTerminationSeconds(30);
+        scheduler.setWaitForTasksToCompleteOnShutdown(true);
+        
+        scheduler.initialize();
+        
+        log.info("定时任务调度器配置完成: poolSize={}", config.getPoolSize());
+        
+        return scheduler;
+    }
+    
+    /**
+     * JSON序列化配置
+     */
+    @Bean
+    @Primary
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        
+        // 配置序列化特性
+        mapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+        mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        mapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
+        
+        // 配置时间格式
+        mapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
+        mapper.registerModule(new JavaTimeModule());
+        
+        // 配置字段命名策略
+        mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+        
+        log.info("JSON序列化器配置完成");
+        
+        return mapper;
+    }
+    
+    /**
+     * 密码编码器
+     */
+    @Bean
+    @Primary
+    public PasswordEncoder passwordEncoder() {
+        // 使用BCrypt算法，强度为12
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+        
+        log.info("密码编码器配置完成: 算法=BCrypt, 强度=12");
+        
+        return encoder;
+    }
+    
+    /**
+     * HTTP客户端配置
+     */
+    @Bean
+    public RestTemplate restTemplate() {
+        RestTemplate restTemplate = new RestTemplate();
+        
+        // 配置连接超时和读取超时
+        HttpClientConfig httpConfig = applicationProperties.getHttpClient();
+        
+        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory();
+        factory.setConnectTimeout(httpConfig.getConnectTimeout());
+        factory.setReadTimeout(httpConfig.getReadTimeout());
+        
+        restTemplate.setRequestFactory(factory);
+        
+        // 添加拦截器
+        restTemplate.getInterceptors().add(new LoggingClientHttpRequestInterceptor());
+        
+        log.info("HTTP客户端配置完成: connectTimeout={}ms, readTimeout={}ms", 
+            httpConfig.getConnectTimeout(), httpConfig.getReadTimeout());
+        
+        return restTemplate;
+    }
+    
+    /**
+     * 国际化消息源
+     */
+    @Bean
+    public MessageSource messageSource() {
+        ResourceBundleMessageSource messageSource = new ResourceBundleMessageSource();
+        messageSource.setBasename("messages");
+        messageSource.setDefaultEncoding("UTF-8");
+        messageSource.setCacheSeconds(3600);
+        
+        log.info("国际化消息源配置完成");
+        
+        return messageSource;
+    }
+    
+    /**
+     * 事件发布器
+     */
+    @Bean
+    public ApplicationEventPublisher applicationEventPublisher(ApplicationContext applicationContext) {
+        return applicationContext;
+    }
+}
+
+/**
+ * 应用配置属性
+ * 
+ * 绑定application.yml中的配置参数，提供类型安全的配置访问。
+ */
+@ConfigurationProperties(prefix = "app")
+@Data
+@Validated
+@Component
+public class ApplicationProperties {
+    
+    /**
+     * 应用基本信息
+     */
+    @NotBlank(message = "应用名称不能为空")
+    private String name = "default-app";
+    
+    @NotBlank(message = "应用版本不能为空")
+    private String version = "1.0.0";
+    
+    private String description = "Default Application";
+    
+    /**
+     * 线程池配置
+     */
+    @Valid
+    private ThreadPoolConfig threadPool = new ThreadPoolConfig();
+    
+    /**
+     * 调度器配置
+     */
+    @Valid
+    private SchedulerConfig scheduler = new SchedulerConfig();
+    
+    /**
+     * HTTP客户端配置
+     */
+    @Valid
+    private HttpClientConfig httpClient = new HttpClientConfig();
+    
+    /**
+     * 文件上传配置
+     */
+    @Valid
+    private FileUploadConfig fileUpload = new FileUploadConfig();
+    
+    @Data
+    @Validated
+    public static class ThreadPoolConfig {
+        
+        @Min(value = 1, message = "核心线程数至少为1")
+        @Max(value = 100, message = "核心线程数不能超过100")
+        private int corePoolSize = 5;
+        
+        @Min(value = 1, message = "最大线程数至少为1")
+        @Max(value = 200, message = "最大线程数不能超过200")
+        private int maxPoolSize = 10;
+        
+        @Min(value = 0, message = "队列容量不能为负数")
+        @Max(value = 10000, message = "队列容量不能超过10000")
+        private int queueCapacity = 25;
+        
+        @Min(value = 30, message = "保活时间至少30秒")
+        @Max(value = 3600, message = "保活时间不能超过1小时")
+        private int keepAliveSeconds = 60;
+    }
+    
+    @Data
+    @Validated
+    public static class SchedulerConfig {
+        
+        @Min(value = 1, message = "调度器线程池大小至少为1")
+        @Max(value = 50, message = "调度器线程池大小不能超过50")
+        private int poolSize = 5;
+    }
+    
+    @Data
+    @Validated
+    public static class HttpClientConfig {
+        
+        @Min(value = 1000, message = "连接超时至少1秒")
+        @Max(value = 60000, message = "连接超时不能超过60秒")
+        private int connectTimeout = 5000;
+        
+        @Min(value = 1000, message = "读取超时至少1秒")
+        @Max(value = 300000, message = "读取超时不能超过5分钟")
+        private int readTimeout = 30000;
+    }
+    
+    @Data
+    @Validated
+    public static class FileUploadConfig {
+        
+        @NotBlank(message = "上传路径不能为空")
+        private String path = "/tmp/uploads";
+        
+        @Min(value = 1024, message = "最大文件大小至少1KB")
+        @Max(value = 104857600, message = "最大文件大小不能超过100MB")
+        private long maxFileSize = 10 * 1024 * 1024; // 10MB
+        
+        @NotEmpty(message = "允许的文件类型不能为空")
+        private List<String> allowedTypes = Arrays.asList("jpg", "png", "pdf", "doc", "docx");
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 数据库配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 配置层规范 v2.0 */
+/**
+ * 数据库配置类
+ * 
+ * 配置数据源、JPA、MyBatis-Plus等数据访问相关组件。
+ * 支持多数据源、读写分离、事务管理等高级特性。
+ */
+@Configuration
+@EnableTransactionManagement
+@EnableJpaRepositories(
+    basePackages = "com.company.project.repository.jpa",
+    entityManagerFactoryRef = "entityManagerFactory",
+    transactionManagerRef = "transactionManager"
+)
+@MapperScan(basePackages = "com.company.project.repository.mybatis")
+@Slf4j
+public class DatabaseConfig {
+    
+    private final DatabaseProperties databaseProperties;
+    
+    public DatabaseConfig(DatabaseProperties databaseProperties) {
+        this.databaseProperties = databaseProperties;
+    }
+    
+    /**
+     * 主数据源配置
+     */
+    @Bean
+    @Primary
+    @ConfigurationProperties(prefix = "spring.datasource.master")
+    public DataSource masterDataSource() {
+        HikariConfig config = new HikariConfig();
+        
+        DataSourceConfig masterConfig = databaseProperties.getMaster();
+        config.setJdbcUrl(masterConfig.getUrl());
+        config.setUsername(masterConfig.getUsername());
+        config.setPassword(masterConfig.getPassword());
+        config.setDriverClassName(masterConfig.getDriverClassName());
+        
+        // 连接池配置
+        ConnectionPoolConfig poolConfig = masterConfig.getPool();
+        config.setMaximumPoolSize(poolConfig.getMaximumPoolSize());
+        config.setMinimumIdle(poolConfig.getMinimumIdle());
+        config.setConnectionTimeout(poolConfig.getConnectionTimeout());
+        config.setIdleTimeout(poolConfig.getIdleTimeout());
+        config.setMaxLifetime(poolConfig.getMaxLifetime());
+        config.setLeakDetectionThreshold(poolConfig.getLeakDetectionThreshold());
+        
+        // 连接池名称
+        config.setPoolName("HikariCP-Master");
+        
+        // 连接测试
+        config.setConnectionTestQuery("SELECT 1");
+        
+        HikariDataSource dataSource = new HikariDataSource(config);
+        
+        log.info("主数据源配置完成: url={}, maxPoolSize={}", 
+            maskUrl(masterConfig.getUrl()), poolConfig.getMaximumPoolSize());
+        
+        return dataSource;
+    }
+    
+    /**
+     * 从数据源配置（读取专用）
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.database.slave.enabled", havingValue = "true")
+    @ConfigurationProperties(prefix = "spring.datasource.slave")
+    public DataSource slaveDataSource() {
+        HikariConfig config = new HikariConfig();
+        
+        DataSourceConfig slaveConfig = databaseProperties.getSlave();
+        config.setJdbcUrl(slaveConfig.getUrl());
+        config.setUsername(slaveConfig.getUsername());
+        config.setPassword(slaveConfig.getPassword());
+        config.setDriverClassName(slaveConfig.getDriverClassName());
+        
+        // 从库连接池配置（通常配置更多连接）
+        ConnectionPoolConfig poolConfig = slaveConfig.getPool();
+        config.setMaximumPoolSize(poolConfig.getMaximumPoolSize());
+        config.setMinimumIdle(poolConfig.getMinimumIdle());
+        config.setConnectionTimeout(poolConfig.getConnectionTimeout());
+        config.setIdleTimeout(poolConfig.getIdleTimeout());
+        config.setMaxLifetime(poolConfig.getMaxLifetime());
+        
+        config.setPoolName("HikariCP-Slave");
+        config.setConnectionTestQuery("SELECT 1");
+        config.setReadOnly(true);  // 从库设置为只读
+        
+        HikariDataSource dataSource = new HikariDataSource(config);
+        
+        log.info("从数据源配置完成: url={}, maxPoolSize={}", 
+            maskUrl(slaveConfig.getUrl()), poolConfig.getMaximumPoolSize());
+        
+        return dataSource;
+    }
+    
+    /**
+     * 动态数据源配置（读写分离）
+     */
+    @Bean
+    @ConditionalOnBean(name = "slaveDataSource")
+    public DataSource dynamicDataSource(@Qualifier("masterDataSource") DataSource masterDataSource,
+                                       @Qualifier("slaveDataSource") DataSource slaveDataSource) {
+        
+        DynamicDataSource dynamicDataSource = new DynamicDataSource();
+        
+        Map<Object, Object> targetDataSources = new HashMap<>();
+        targetDataSources.put(DataSourceType.MASTER, masterDataSource);
+        targetDataSources.put(DataSourceType.SLAVE, slaveDataSource);
+        
+        dynamicDataSource.setTargetDataSources(targetDataSources);
+        dynamicDataSource.setDefaultTargetDataSource(masterDataSource);
+        
+        log.info("动态数据源配置完成，支持读写分离");
+        
+        return dynamicDataSource;
+    }
+    
+    /**
+     * JPA实体管理器工厂
+     */
+    @Bean
+    @Primary
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(
+            @Qualifier("masterDataSource") DataSource dataSource) {
+        
+        LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
+        em.setDataSource(dataSource);
+        em.setPackagesToScan("com.company.project.entity");
+        
+        HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
+        em.setJpaVendorAdapter(vendorAdapter);
+        
+        Properties properties = new Properties();
+        JpaConfig jpaConfig = databaseProperties.getJpa();
+        
+        properties.setProperty("hibernate.hbm2ddl.auto", jpaConfig.getHbm2ddlAuto());
+        properties.setProperty("hibernate.dialect", jpaConfig.getDialect());
+        properties.setProperty("hibernate.show_sql", String.valueOf(jpaConfig.isShowSql()));
+        properties.setProperty("hibernate.format_sql", String.valueOf(jpaConfig.isFormatSql()));
+        properties.setProperty("hibernate.use_sql_comments", "true");
+        
+        // 性能优化配置
+        properties.setProperty("hibernate.jdbc.batch_size", String.valueOf(jpaConfig.getBatchSize()));
+        properties.setProperty("hibernate.order_inserts", "true");
+        properties.setProperty("hibernate.order_updates", "true");
+        
+        // 二级缓存配置
+        if (jpaConfig.isSecondLevelCacheEnabled()) {
+            properties.setProperty("hibernate.cache.use_second_level_cache", "true");
+            properties.setProperty("hibernate.cache.use_query_cache", "true");
+            properties.setProperty("hibernate.cache.region.factory_class", 
+                "org.hibernate.cache.ehcache.EhCacheRegionFactory");
+        }
+        
+        em.setJpaProperties(properties);
+        
+        log.info("JPA实体管理器工厂配置完成");
+        
+        return em;
+    }
+    
+    /**
+     * JPA事务管理器
+     */
+    @Bean
+    @Primary
+    public PlatformTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory);
+        
+        log.info("JPA事务管理器配置完成");
+        
+        return transactionManager;
+    }
+    
+    /**
+     * MyBatis-Plus配置
+     */
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        
+        // 分页插件
+        PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor(DbType.MYSQL);
+        paginationInterceptor.setMaxLimit(1000L);
+        paginationInterceptor.setOverflow(false);
+        interceptor.addInnerInterceptor(paginationInterceptor);
+        
+        // 乐观锁插件
+        interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
+        
+        // 防全表更新与删除插件
+        interceptor.addInnerInterceptor(new BlockAttackInnerInterceptor());
+        
+        log.info("MyBatis-Plus拦截器配置完成");
+        
+        return interceptor;
+    }
+    
+    /**
+     * MyBatis-Plus全局配置
+     */
+    @Bean
+    public GlobalConfig globalConfig() {
+        GlobalConfig globalConfig = new GlobalConfig();
+        
+        GlobalConfig.DbConfig dbConfig = new GlobalConfig.DbConfig();
+        dbConfig.setLogicDeleteField("deleted");
+        dbConfig.setLogicDeleteValue("1");
+        dbConfig.setLogicNotDeleteValue("0");
+        dbConfig.setIdType(IdType.ASSIGN_ID);
+        
+        globalConfig.setDbConfig(dbConfig);
+        globalConfig.setMetaObjectHandler(new AuditMetaObjectHandler());
+        
+        log.info("MyBatis-Plus全局配置完成");
+        
+        return globalConfig;
+    }
+    
+    /**
+     * 数据库健康检查
+     */
+    @Bean
+    public DatabaseHealthIndicator databaseHealthIndicator(DataSource dataSource) {
+        return new DatabaseHealthIndicator(dataSource);
+    }
+    
+    /**
+     * 屏蔽URL中的敏感信息
+     */
+    private String maskUrl(String url) {
+        if (url == null) return null;
+        return url.replaceAll("password=[^&;]*", "password=***");
+    }
+}
+
+/**
+ * 数据库配置属性
+ */
+@ConfigurationProperties(prefix = "app.database")
+@Data
+@Validated
+@Component
+public class DatabaseProperties {
+    
+    /**
+     * 主数据源配置
+     */
+    @Valid
+    private DataSourceConfig master = new DataSourceConfig();
+    
+    /**
+     * 从数据源配置
+     */
+    @Valid
+    private DataSourceConfig slave = new DataSourceConfig();
+    
+    /**
+     * JPA配置
+     */
+    @Valid
+    private JpaConfig jpa = new JpaConfig();
+    
+    /**
+     * 数据源配置
+     */
+    @Data
+    @Validated
+    public static class DataSourceConfig {
+        
+        @NotBlank(message = "数据库URL不能为空")
+        private String url;
+        
+        @NotBlank(message = "数据库用户名不能为空")
+        private String username;
+        
+        @NotBlank(message = "数据库密码不能为空")
+        private String password;
+        
+        @NotBlank(message = "数据库驱动不能为空")
+        private String driverClassName = "com.mysql.cj.jdbc.Driver";
+        
+        /**
+         * 连接池配置
+         */
+        @Valid
+        private ConnectionPoolConfig pool = new ConnectionPoolConfig();
+    }
+    
+    /**
+     * 连接池配置
+     */
+    @Data
+    @Validated
+    public static class ConnectionPoolConfig {
+        
+        @Min(value = 1, message = "最大连接数至少为1")
+        @Max(value = 100, message = "最大连接数不能超过100")
+        private int maximumPoolSize = 20;
+        
+        @Min(value = 0, message = "最小空闲连接数不能为负")
+        @Max(value = 50, message = "最小空闲连接数不能超过50")
+        private int minimumIdle = 5;
+        
+        @Min(value = 1000, message = "连接超时至少1秒")
+        @Max(value = 60000, message = "连接超时不能超过60秒")
+        private long connectionTimeout = 30000;
+        
+        @Min(value = 60000, message = "空闲超时至少1分钟")
+        @Max(value = 1800000, message = "空闲超时不能超过30分钟")
+        private long idleTimeout = 600000;
+        
+        @Min(value = 300000, message = "最大生命周期至少5分钟")
+        @Max(value = 7200000, message = "最大生命周期不能超过2小时")
+        private long maxLifetime = 1800000;
+        
+        @Min(value = 0, message = "泄露检测阈值不能为负")
+        private long leakDetectionThreshold = 60000;
+    }
+    
+    /**
+     * JPA配置
+     */
+    @Data
+    @Validated
+    public static class JpaConfig {
+        
+        @Pattern(regexp = "none|validate|update|create|create-drop", 
+                message = "DDL模式必须是: none, validate, update, create, create-drop")
+        private String hbm2ddlAuto = "validate";
+        
+        @NotBlank(message = "数据库方言不能为空")
+        private String dialect = "org.hibernate.dialect.MySQL8Dialect";
+        
+        private boolean showSql = false;
+        private boolean formatSql = false;
+        
+        @Min(value = 1, message = "批处理大小至少为1")
+        @Max(value = 1000, message = "批处理大小不能超过1000")
+        private int batchSize = 20;
+        
+        private boolean secondLevelCacheEnabled = true;
+    }
+}
+
+/**
+ * 数据源类型枚举
+ */
+public enum DataSourceType {
+    MASTER,  // 主库（读写）
+    SLAVE    // 从库（只读）
+}
+
+/**
+ * 动态数据源
+ */
+public class DynamicDataSource extends AbstractRoutingDataSource {
+    
+    private static final ThreadLocal<DataSourceType> CONTEXT_HOLDER = new ThreadLocal<>();
+    
+    public static void setDataSourceType(DataSourceType type) {
+        CONTEXT_HOLDER.set(type);
+    }
+    
+    public static DataSourceType getDataSourceType() {
+        return CONTEXT_HOLDER.get();
+    }
+    
+    public static void clearDataSourceType() {
+        CONTEXT_HOLDER.remove();
+    }
+    
+    @Override
+    protected Object determineCurrentLookupKey() {
+        return getDataSourceType();
+    }
+}
+
+/**
+ * 审计元数据处理器
+ */
+@Component
+public class AuditMetaObjectHandler implements MetaObjectHandler {
+    
+    @Override
+    public void insertFill(MetaObject metaObject) {
+        this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+        this.strictInsertFill(metaObject, "deleted", Boolean.class, false);
+        
+        String currentUser = getCurrentUser();
+        this.strictInsertFill(metaObject, "createBy", String.class, currentUser);
+        this.strictInsertFill(metaObject, "updateBy", String.class, currentUser);
+    }
+    
+    @Override
+    public void updateFill(MetaObject metaObject) {
+        this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+        
+        String currentUser = getCurrentUser();
+        this.strictUpdateFill(metaObject, "updateBy", String.class, currentUser);
+    }
+    
+    private String getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() 
+            && !"anonymousUser".equals(authentication.getName())) {
+            return authentication.getName();
+        }
+        return "system";
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 缓存和消息队列配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 配置层规范 v2.0 */
+/**
+ * 缓存配置类
+ * 
+ * 配置Redis缓存、本地缓存等缓存相关组件。
+ * 支持多级缓存、缓存预热、缓存监控等功能。
+ */
+@Configuration
+@EnableCaching
+@ConditionalOnProperty(name = "app.cache.enabled", havingValue = "true", matchIfMissing = true)
+@Slf4j
+public class CacheConfig {
+    
+    private final CacheProperties cacheProperties;
+    
+    public CacheConfig(CacheProperties cacheProperties) {
+        this.cacheProperties = cacheProperties;
+    }
+    
+    /**
+     * Redis连接工厂
+     */
+    @Bean
+    @ConditionalOnClass(RedisConnectionFactory.class)
+    public LettuceConnectionFactory redisConnectionFactory() {
+        RedisConfig redisConfig = cacheProperties.getRedis();
+        
+        // Redis配置
+        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
+        config.setHostName(redisConfig.getHost());
+        config.setPort(redisConfig.getPort());
+        config.setDatabase(redisConfig.getDatabase());
+        
+        if (StringUtils.hasText(redisConfig.getPassword())) {
+            config.setPassword(redisConfig.getPassword());
+        }
+        
+        // 连接池配置
+        LettucePoolingClientConfiguration.Builder poolBuilder = 
+            LettucePoolingClientConfiguration.builder();
+        
+        RedisConfig.PoolConfig poolConfig = redisConfig.getPool();
+        GenericObjectPoolConfig<Object> poolConfiguration = new GenericObjectPoolConfig<>();
+        poolConfiguration.setMaxTotal(poolConfig.getMaxActive());
+        poolConfiguration.setMaxIdle(poolConfig.getMaxIdle());
+        poolConfiguration.setMinIdle(poolConfig.getMinIdle());
+        poolConfiguration.setMaxWaitMillis(poolConfig.getMaxWait());
+        
+        poolBuilder.poolConfig(poolConfiguration);
+        poolBuilder.commandTimeout(Duration.ofMillis(redisConfig.getTimeout()));
+        
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(config, poolBuilder.build());
+        factory.setValidateConnection(true);
+        
+        log.info("Redis连接工厂配置完成: host={}:{}, database={}", 
+            redisConfig.getHost(), redisConfig.getPort(), redisConfig.getDatabase());
+        
+        return factory;
+    }
+    
+    /**
+     * Redis模板配置
+     */
+    @Bean
+    @ConditionalOnBean(RedisConnectionFactory.class)
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        
+        // 序列化配置
+        Jackson2JsonRedisSerializer<Object> jsonSerializer = new Jackson2JsonRedisSerializer<>(Object.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        objectMapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, 
+            ObjectMapper.DefaultTyping.NON_FINAL);
+        jsonSerializer.setObjectMapper(objectMapper);
+        
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        
+        // 设置序列化器
+        template.setKeySerializer(stringSerializer);
+        template.setValueSerializer(jsonSerializer);
+        template.setHashKeySerializer(stringSerializer);
+        template.setHashValueSerializer(jsonSerializer);
+        
+        template.afterPropertiesSet();
+        
+        log.info("Redis模板配置完成");
+        
+        return template;
+    }
+    
+    /**
+     * 缓存管理器配置
+     */
+    @Bean
+    @Primary
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(cacheProperties.getDefaultTtl()))
+            .serializeKeysWith(RedisSerializationContext.SerializationPair
+                .fromSerializer(new StringRedisSerializer()))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair
+                .fromSerializer(new Jackson2JsonRedisSerializer<>(Object.class)))
+            .disableCachingNullValues();
+        
+        // 自定义缓存配置
+        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
+        
+        cacheProperties.getCaches().forEach((cacheName, cacheConfig) -> {
+            RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofMinutes(cacheConfig.getTtl()))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair
+                    .fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                    .fromSerializer(new Jackson2JsonRedisSerializer<>(Object.class)));
+            
+            if (!cacheConfig.isCacheNullValues()) {
+                config = config.disableCachingNullValues();
+            }
+            
+            cacheConfigurations.put(cacheName, config);
+        });
+        
+        RedisCacheManager cacheManager = RedisCacheManager.builder(connectionFactory)
+            .cacheDefaults(defaultConfig)
+            .withInitialCacheConfigurations(cacheConfigurations)
+            .build();
+        
+        log.info("Redis缓存管理器配置完成，默认TTL={}分钟", cacheProperties.getDefaultTtl());
+        
+        return cacheManager;
+    }
+    
+    /**
+     * 本地缓存管理器（Caffeine）
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.cache.local.enabled", havingValue = "true")
+    public CacheManager localCacheManager() {
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+        
+        LocalCacheConfig localConfig = cacheProperties.getLocal();
+        Caffeine<Object, Object> caffeine = Caffeine.newBuilder()
+            .maximumSize(localConfig.getMaximumSize())
+            .expireAfterWrite(Duration.ofMinutes(localConfig.getExpireAfterWrite()))
+            .expireAfterAccess(Duration.ofMinutes(localConfig.getExpireAfterAccess()))
+            .recordStats();
+        
+        cacheManager.setCaffeine(caffeine);
+        cacheManager.setAllowNullValues(false);
+        
+        log.info("本地缓存管理器配置完成，最大大小={}", localConfig.getMaximumSize());
+        
+        return cacheManager;
+    }
+    
+    /**
+     * 缓存监控
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.cache.monitoring.enabled", havingValue = "true")
+    public CacheMetricsRegistrar cacheMetricsRegistrar(MeterRegistry meterRegistry) {
+        return new CacheMetricsRegistrar(meterRegistry);
+    }
+}
+
+/**
+ * 消息队列配置类
+ * 
+ * 配置RabbitMQ、Kafka等消息队列组件。
+ */
+@Configuration
+@ConditionalOnProperty(name = "app.messaging.enabled", havingValue = "true")
+@EnableRabbit
+@Slf4j
+public class MessagingConfig {
+    
+    private final MessagingProperties messagingProperties;
+    
+    public MessagingConfig(MessagingProperties messagingProperties) {
+        this.messagingProperties = messagingProperties;
+    }
+    
+    /**
+     * RabbitMQ连接工厂
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.messaging.rabbitmq.enabled", havingValue = "true")
+    public ConnectionFactory connectionFactory() {
+        CachingConnectionFactory factory = new CachingConnectionFactory();
+        
+        RabbitConfig rabbitConfig = messagingProperties.getRabbitmq();
+        factory.setHost(rabbitConfig.getHost());
+        factory.setPort(rabbitConfig.getPort());
+        factory.setUsername(rabbitConfig.getUsername());
+        factory.setPassword(rabbitConfig.getPassword());
+        factory.setVirtualHost(rabbitConfig.getVirtualHost());
+        
+        // 连接池配置
+        factory.setChannelCacheSize(rabbitConfig.getChannelCacheSize());
+        factory.setConnectionCacheSize(rabbitConfig.getConnectionCacheSize());
+        factory.setConnectionTimeout(rabbitConfig.getConnectionTimeout());
+        
+        // 确认模式
+        factory.setPublisherConfirmType(CachingConnectionFactory.ConfirmType.CORRELATED);
+        factory.setPublisherReturns(true);
+        
+        log.info("RabbitMQ连接工厂配置完成: host={}:{}, vhost={}", 
+            rabbitConfig.getHost(), rabbitConfig.getPort(), rabbitConfig.getVirtualHost());
+        
+        return factory;
+    }
+    
+    /**
+     * RabbitMQ模板
+     */
+    @Bean
+    @ConditionalOnBean(ConnectionFactory.class)
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        
+        // 序列化配置
+        template.setMessageConverter(new Jackson2JsonMessageConverter());
+        
+        // 发送确认
+        template.setConfirmCallback((correlationData, ack, cause) -> {
+            if (ack) {
+                log.debug("消息发送成功: {}", correlationData);
+            } else {
+                log.error("消息发送失败: {}, 原因: {}", correlationData, cause);
+            }
+        });
+        
+        // 消息返回
+        template.setReturnsCallback(returned -> {
+            log.warn("消息被退回: exchange={}, routingKey={}, replyText={}", 
+                returned.getExchange(), returned.getRoutingKey(), returned.getReplyText());
+        });
+        
+        log.info("RabbitMQ模板配置完成");
+        
+        return template;
+    }
+    
+    /**
+     * 死信队列配置
+     */
+    @Bean
+    public Queue deadLetterQueue() {
+        return QueueBuilder.durable("dead.letter.queue")
+            .withArgument("x-message-ttl", 1800000)  // 30分钟TTL
+            .build();
+    }
+    
+    /**
+     * 用户事件队列
+     */
+    @Bean
+    public Queue userEventQueue() {
+        return QueueBuilder.durable("user.event.queue")
+            .withArgument("x-dead-letter-exchange", "dead.letter.exchange")
+            .withArgument("x-dead-letter-routing-key", "dead.letter")
+            .build();
+    }
+    
+    /**
+     * 用户事件交换机
+     */
+    @Bean
+    public TopicExchange userEventExchange() {
+        return new TopicExchange("user.event.exchange");
+    }
+    
+    /**
+     * 绑定用户事件队列到交换机
+     */
+    @Bean
+    public Binding userEventBinding() {
+        return BindingBuilder
+            .bind(userEventQueue())
+            .to(userEventExchange())
+            .with("user.*");
+    }
+}
+
+/**
+ * 缓存配置属性
+ */
+@ConfigurationProperties(prefix = "app.cache")
+@Data
+@Validated
+@Component
+public class CacheProperties {
+    
+    private boolean enabled = true;
+    
+    @Min(value = 1, message = "默认TTL至少1分钟")
+    @Max(value = 1440, message = "默认TTL不能超过24小时")
+    private int defaultTtl = 60; // 分钟
+    
+    /**
+     * Redis配置
+     */
+    @Valid
+    private RedisConfig redis = new RedisConfig();
+    
+    /**
+     * 本地缓存配置
+     */
+    @Valid
+    private LocalCacheConfig local = new LocalCacheConfig();
+    
+    /**
+     * 自定义缓存配置
+     */
+    private Map<String, CustomCacheConfig> caches = new HashMap<>();
+    
+    @Data
+    @Validated
+    public static class RedisConfig {
+        
+        @NotBlank(message = "Redis主机不能为空")
+        private String host = "localhost";
+        
+        @Range(min = 1, max = 65535, message = "Redis端口必须在1-65535之间")
+        private int port = 6379;
+        
+        @Min(value = 0, message = "Redis数据库索引不能为负")
+        @Max(value = 15, message = "Redis数据库索引不能超过15")
+        private int database = 0;
+        
+        private String password;
+        
+        @Min(value = 1000, message = "超时时间至少1秒")
+        private int timeout = 5000;
+        
+        @Valid
+        private PoolConfig pool = new PoolConfig();
+        
+        @Data
+        @Validated
+        public static class PoolConfig {
+            
+            @Min(value = 1, message = "最大活跃连接数至少为1")
+            private int maxActive = 20;
+            
+            @Min(value = 0, message = "最大空闲连接数不能为负")
+            private int maxIdle = 10;
+            
+            @Min(value = 0, message = "最小空闲连接数不能为负")
+            private int minIdle = 5;
+            
+            @Min(value = -1, message = "最大等待时间不能小于-1")
+            private long maxWait = 5000;
+        }
+    }
+    
+    @Data
+    @Validated
+    public static class LocalCacheConfig {
+        
+        private boolean enabled = false;
+        
+        @Min(value = 100, message = "最大缓存大小至少100")
+        private long maximumSize = 10000;
+        
+        @Min(value = 1, message = "写入后过期时间至少1分钟")
+        private int expireAfterWrite = 30;
+        
+        @Min(value = 1, message = "访问后过期时间至少1分钟")
+        private int expireAfterAccess = 10;
+    }
+    
+    @Data
+    @Validated
+    public static class CustomCacheConfig {
+        
+        @Min(value = 1, message = "TTL至少1分钟")
+        private int ttl = 60;
+        
+        private boolean cacheNullValues = false;
+    }
+}
+
+/**
+ * 消息队列配置属性
+ */
+@ConfigurationProperties(prefix = "app.messaging")
+@Data
+@Validated
+@Component
+public class MessagingProperties {
+    
+    private boolean enabled = true;
+    
+    /**
+     * RabbitMQ配置
+     */
+    @Valid
+    private RabbitConfig rabbitmq = new RabbitConfig();
+    
+    @Data
+    @Validated
+    public static class RabbitConfig {
+        
+        private boolean enabled = true;
+        
+        @NotBlank(message = "RabbitMQ主机不能为空")
+        private String host = "localhost";
+        
+        @Range(min = 1, max = 65535, message = "RabbitMQ端口必须在1-65535之间")
+        private int port = 5672;
+        
+        @NotBlank(message = "RabbitMQ用户名不能为空")
+        private String username = "guest";
+        
+        @NotBlank(message = "RabbitMQ密码不能为空")
+        private String password = "guest";
+        
+        @NotBlank(message = "虚拟主机不能为空")
+        private String virtualHost = "/";
+        
+        @Min(value = 1, message = "通道缓存大小至少为1")
+        private int channelCacheSize = 25;
+        
+        @Min(value = 1, message = "连接缓存大小至少为1")
+        private int connectionCacheSize = 1;
+        
+        @Min(value = 1000, message = "连接超时至少1秒")
+        private int connectionTimeout = 30000;
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此配置层规范确保系统配置的标准化、类型安全和可维护性，支持多环境部署和动态配置管理*
+description:
+globs:
+alwaysApply: false
+---

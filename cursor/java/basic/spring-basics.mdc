@@ -1,0 +1,635 @@
+# Spring框架基础 (基础层规则)
+> Spring框架核心概念、依赖注入和AOP的基础使用规范
+
+## 基础规范
+
+### Spring核心概念
+- **IoC容器**: 使用Spring IoC容器管理对象生命周期和依赖关系
+- **依赖注入**: 优先使用构造器注入，避免字段注入
+- **Bean作用域**: 理解singleton、prototype等作用域的使用场景
+- **配置方式**: 优先使用Java配置，注解配置，最后考虑XML配置
+- **Profile环境**: 使用Spring Profile管理不同环境的配置
+
+### 依赖注入原则
+- **构造器注入**: 必需依赖使用构造器注入
+- **Setter注入**: 可选依赖使用Setter注入
+- **字段注入**: 避免使用@Autowired字段注入
+- **接口注入**: 依赖接口而不是具体实现
+- **循环依赖**: 避免循环依赖，重新设计组件关系
+
+### AOP使用规范
+- **切面设计**: 切面关注点要单一且明确
+- **切点表达式**: 使用精确的切点表达式，避免过度匹配
+- **通知类型**: 根据需求选择合适的通知类型
+- **性能考虑**: 避免在高频调用方法上使用复杂切面
+- **异常处理**: 切面中妥善处理异常，不影响主业务逻辑
+
+### 事务管理标准
+- **声明式事务**: 优先使用@Transactional注解
+- **事务传播**: 明确指定事务传播行为
+- **只读事务**: 查询方法使用只读事务
+- **回滚规则**: 明确指定回滚异常类型
+- **事务边界**: 在Service层定义事务边界
+
+## 强制行为
+
+### Bean定义和管理
+- **@Component族注解**: 使用@Service、@Repository、@Controller明确标识组件类型
+- **Bean命名**: 提供有意义的Bean名称，避免默认命名冲突
+- **生命周期回调**: 使用@PostConstruct和@PreDestroy管理Bean生命周期
+- **条件化Bean**: 使用@ConditionalOn*注解创建条件化Bean
+- **Bean验证**: 在Bean创建后验证其状态和依赖
+
+### 依赖注入实践
+- **构造器注入优先**: 所有必需依赖通过构造器注入
+- **final字段**: 注入的依赖字段声明为final
+- **@Qualifier使用**: 多个实现时使用@Qualifier指定具体Bean
+- **@Primary注解**: 为首选实现添加@Primary注解
+- **延迟初始化**: 使用@Lazy进行延迟初始化（谨慎使用）
+
+### 配置类规范
+- **@Configuration注解**: 配置类使用@Configuration注解
+- **@Bean方法**: Bean创建方法使用@Bean注解并提供有意义的名称
+- **配置分离**: 按功能模块分离配置类
+- **条件配置**: 使用@ConditionalOnProperty等条件注解
+- **配置属性**: 使用@ConfigurationProperties绑定配置属性
+
+### 切面编程要求
+- **@Aspect注解**: 切面类使用@Aspect注解
+- **切点定义**: 使用@Pointcut定义可重用的切点
+- **通知注解**: 使用@Before、@After、@Around等通知注解
+- **参数绑定**: 正确绑定切点参数到通知方法
+- **异常处理**: 在@AfterThrowing中处理异常通知
+
+## 禁止行为
+
+### 依赖注入禁令
+- **禁止字段注入**: 不使用@Autowired直接注入字段
+- **禁止循环依赖**: 避免组件间的循环依赖关系
+- **禁止过度注入**: 不在一个类中注入过多依赖
+- **禁止硬编码依赖**: 不在代码中硬编码依赖关系
+- **禁止忽略注入失败**: 处理依赖注入可能的失败情况
+
+### Bean管理禁令
+- **禁止无状态Bean**: singleton Bean不能有可变状态
+- **禁止手动实例化**: 不手动new由Spring管理的Bean
+- **禁止Bean污染**: 不在Bean中持有不应该持有的引用
+- **禁止忽略作用域**: 明确Bean的作用域，不使用默认值
+- **禁止Bean泄露**: 避免Bean的引用泄露到Spring容器外
+
+### 事务管理禁令
+- **禁止细粒度事务**: 不在过小的方法上使用事务
+- **禁止嵌套事务滥用**: 避免不必要的嵌套事务
+- **禁止长事务**: 避免长时间运行的事务
+- **禁止事务中的UI操作**: 不在事务中进行用户交互
+- **禁止忽略事务回滚**: 确保异常时事务正确回滚
+
+### AOP使用禁令
+- **禁止切面复杂化**: 切面逻辑不应过于复杂
+- **禁止切面依赖**: 切面不应依赖业务组件
+- **禁止性能敏感切面**: 避免在性能关键路径使用复杂切面
+- **禁止切面状态**: 切面类不应有实例状态
+- **禁止切面异常泄露**: 切面异常不应影响目标方法执行
+
+## 示例代码
+
+### 标准的Spring组件定义
+```java
+/* [AI-BLOCK-START] - 生成工具: Spring框架基础 v2.0 */
+/**
+ * 用户服务实现 - 标准的Spring Service组件
+ */
+@Service
+@Transactional(readOnly = true)
+@Slf4j
+public class UserServiceImpl implements UserService {
+    
+    // 使用构造器注入依赖
+    private final UserRepository userRepository;
+    private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
+    
+    /**
+     * 构造器注入 - 推荐的依赖注入方式
+     */
+    public UserServiceImpl(UserRepository userRepository,
+                          EmailService emailService,
+                          PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.emailService = emailService;
+        this.passwordEncoder = passwordEncoder;
+    }
+    
+    /**
+     * Bean初始化后的回调
+     */
+    @PostConstruct
+    public void init() {
+        log.info("UserService initialized successfully");
+        // 执行初始化逻辑
+        validateDependencies();
+    }
+    
+    /**
+     * Bean销毁前的回调
+     */
+    @PreDestroy
+    public void destroy() {
+        log.info("UserService is being destroyed");
+        // 执行清理逻辑
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public User createUser(CreateUserRequest request) {
+        log.info("Creating user: {}", request.getUsername());
+        
+        // 业务逻辑实现
+        User user = new User();
+        user.setUsername(request.getUsername());
+        user.setEmail(request.getEmail());
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        
+        User savedUser = userRepository.save(user);
+        
+        // 异步发送欢迎邮件
+        emailService.sendWelcomeEmailAsync(savedUser.getEmail());
+        
+        return savedUser;
+    }
+    
+    @Override
+    public Optional<User> findUserById(Long id) {
+        return userRepository.findById(id);
+    }
+    
+    private void validateDependencies() {
+        Objects.requireNonNull(userRepository, "UserRepository must not be null");
+        Objects.requireNonNull(emailService, "EmailService must not be null");
+        Objects.requireNonNull(passwordEncoder, "PasswordEncoder must not be null");
+    }
+}
+
+/**
+ * 标准的Spring Repository组件
+ */
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    
+    /**
+     * 根据用户名查找用户
+     */
+    @Query("SELECT u FROM User u WHERE u.username = :username AND u.deleted = false")
+    Optional<User> findByUsername(@Param("username") String username);
+    
+    /**
+     * 根据邮箱查找用户
+     */
+    Optional<User> findByEmailAndDeletedFalse(String email);
+    
+    /**
+     * 检查用户名是否存在
+     */
+    boolean existsByUsernameAndDeletedFalse(String username);
+}
+
+/**
+ * 标准的Spring Controller组件
+ */
+@RestController
+@RequestMapping("/api/v1/users")
+@Validated
+@Slf4j
+public class UserController {
+    
+    private final UserService userService;
+    
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+    
+    @PostMapping
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Valid @RequestBody CreateUserRequest request) {
+        
+        log.info("Received user creation request: {}", request.getUsername());
+        
+        User user = userService.createUser(request);
+        UserResponse response = convertToResponse(user);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(response));
+    }
+    
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserResponse>> getUser(@PathVariable Long id) {
+        return userService.findUserById(id)
+            .map(this::convertToResponse)
+            .map(response -> ResponseEntity.ok(ApiResponse.success(response)))
+            .orElse(ResponseEntity.notFound().build());
+    }
+    
+    private UserResponse convertToResponse(User user) {
+        return UserResponse.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .createTime(user.getCreateTime())
+            .build();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### Spring配置类示例
+```java
+/* [AI-BLOCK-START] - 生成工具: Spring框架基础 v2.0 */
+/**
+ * 应用程序主配置类
+ */
+@Configuration
+@EnableJpaRepositories(basePackages = "com.company.project.repository")
+@EnableTransactionManagement
+@EnableAsync
+@PropertySource("classpath:application.properties")
+public class ApplicationConfig {
+    
+    /**
+     * 密码编码器Bean
+     */
+    @Bean
+    @Primary
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
+    }
+    
+    /**
+     * 异步任务执行器
+     */
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(25);
+        executor.setThreadNamePrefix("async-task-");
+        executor.initialize();
+        return executor;
+    }
+    
+    /**
+     * 条件化的邮件服务Bean
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.email.enabled", havingValue = "true")
+    public EmailService emailService() {
+        return new SmtpEmailService();
+    }
+    
+    /**
+     * 默认的邮件服务Bean
+     */
+    @Bean
+    @ConditionalOnMissingBean(EmailService.class)
+    public EmailService mockEmailService() {
+        return new MockEmailService();
+    }
+}
+
+/**
+ * 数据库配置类
+ */
+@Configuration
+@Profile("!test")
+public class DatabaseConfig {
+    
+    @Value("${spring.datasource.url}")
+    private String databaseUrl;
+    
+    @Value("${spring.datasource.username}")
+    private String databaseUsername;
+    
+    @Value("${spring.datasource.password}")
+    private String databasePassword;
+    
+    /**
+     * 数据源配置
+     */
+    @Bean
+    @Primary
+    public DataSource dataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(databaseUrl);
+        config.setUsername(databaseUsername);
+        config.setPassword(databasePassword);
+        config.setMaximumPoolSize(20);
+        config.setMinimumIdle(5);
+        return new HikariDataSource(config);
+    }
+    
+    /**
+     * JPA配置
+     */
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+        LocalContainerEntityManagerFactoryBean em = new LocalContainerEntityManagerFactoryBean();
+        em.setDataSource(dataSource);
+        em.setPackagesToScan("com.company.project.entity");
+        
+        HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
+        em.setJpaVendorAdapter(vendorAdapter);
+        
+        Properties properties = new Properties();
+        properties.setProperty("hibernate.hbm2ddl.auto", "validate");
+        properties.setProperty("hibernate.dialect", "org.hibernate.dialect.MySQL8Dialect");
+        em.setJpaProperties(properties);
+        
+        return em;
+    }
+    
+    /**
+     * 事务管理器
+     */
+    @Bean
+    public PlatformTransactionManager transactionManager(EntityManagerFactory entityManagerFactory) {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory);
+        return transactionManager;
+    }
+}
+
+/**
+ * 配置属性绑定示例
+ */
+@ConfigurationProperties(prefix = "app")
+@Data
+@Component
+public class ApplicationProperties {
+    
+    /**
+     * 应用基本信息
+     */
+    private String name = "default-app";
+    private String version = "1.0.0";
+    
+    /**
+     * 邮件配置
+     */
+    private Email email = new Email();
+    
+    /**
+     * 文件上传配置
+     */
+    private Upload upload = new Upload();
+    
+    @Data
+    public static class Email {
+        private boolean enabled = false;
+        private String host = "localhost";
+        private int port = 587;
+        private String username;
+        private String password;
+    }
+    
+    @Data
+    public static class Upload {
+        private String path = "/tmp/uploads";
+        private long maxSize = 10 * 1024 * 1024; // 10MB
+        private String[] allowedTypes = {"jpg", "png", "pdf"};
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### Spring AOP切面示例
+```java
+/* [AI-BLOCK-START] - 生成工具: Spring框架基础 v2.0 */
+/**
+ * 日志记录切面
+ */
+@Aspect
+@Component
+@Slf4j
+public class LoggingAspect {
+    
+    /**
+     * 定义切点 - Service层的所有公共方法
+     */
+    @Pointcut("execution(public * com.company.project.service..*(..))")
+    public void serviceLayer() {}
+    
+    /**
+     * 定义切点 - Controller层的所有公共方法
+     */
+    @Pointcut("execution(public * com.company.project.controller..*(..))")
+    public void controllerLayer() {}
+    
+    /**
+     * 方法执行前的日志记录
+     */
+    @Before("serviceLayer()")
+    public void logBefore(JoinPoint joinPoint) {
+        String className = joinPoint.getTarget().getClass().getSimpleName();
+        String methodName = joinPoint.getSignature().getName();
+        Object[] args = joinPoint.getArgs();
+        
+        log.debug("Entering {}.{}() with arguments: {}", 
+            className, methodName, Arrays.toString(args));
+    }
+    
+    /**
+     * 方法正常返回后的日志记录
+     */
+    @AfterReturning(pointcut = "serviceLayer()", returning = "result")
+    public void logAfterReturning(JoinPoint joinPoint, Object result) {
+        String className = joinPoint.getTarget().getClass().getSimpleName();
+        String methodName = joinPoint.getSignature().getName();
+        
+        log.debug("Exiting {}.{}() with result: {}", 
+            className, methodName, result);
+    }
+    
+    /**
+     * 方法抛出异常后的日志记录
+     */
+    @AfterThrowing(pointcut = "serviceLayer()", throwing = "exception")
+    public void logAfterThrowing(JoinPoint joinPoint, Throwable exception) {
+        String className = joinPoint.getTarget().getClass().getSimpleName();
+        String methodName = joinPoint.getSignature().getName();
+        
+        log.error("Exception in {}.{}(): {}", 
+            className, methodName, exception.getMessage(), exception);
+    }
+}
+
+/**
+ * 性能监控切面
+ */
+@Aspect
+@Component
+@Slf4j
+public class PerformanceAspect {
+    
+    private final MeterRegistry meterRegistry;
+    
+    public PerformanceAspect(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+    
+    /**
+     * 切点：标注了@Timed注解的方法
+     */
+    @Pointcut("@annotation(org.springframework.boot.actuate.metrics.annotation.Timed)")
+    public void timedMethods() {}
+    
+    /**
+     * 环绕通知：测量方法执行时间
+     */
+    @Around("timedMethods()")
+    public Object measureExecutionTime(ProceedingJoinPoint joinPoint) throws Throwable {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        try {
+            Object result = joinPoint.proceed();
+            
+            sample.stop(Timer.builder("method.execution.time")
+                .tag("class", joinPoint.getTarget().getClass().getSimpleName())
+                .tag("method", joinPoint.getSignature().getName())
+                .tag("status", "success")
+                .register(meterRegistry));
+            
+            return result;
+            
+        } catch (Throwable throwable) {
+            sample.stop(Timer.builder("method.execution.time")
+                .tag("class", joinPoint.getTarget().getClass().getSimpleName())
+                .tag("method", joinPoint.getSignature().getName())
+                .tag("status", "error")
+                .register(meterRegistry));
+            
+            throw throwable;
+        }
+    }
+}
+
+/**
+ * 缓存切面
+ */
+@Aspect
+@Component
+@Slf4j
+public class CacheAspect {
+    
+    private final CacheManager cacheManager;
+    
+    public CacheAspect(CacheManager cacheManager) {
+        this.cacheManager = cacheManager;
+    }
+    
+    /**
+     * 切点：标注了@Cacheable注解的方法
+     */
+    @Pointcut("@annotation(org.springframework.cache.annotation.Cacheable)")
+    public void cacheableMethods() {}
+    
+    /**
+     * 前置通知：记录缓存查询
+     */
+    @Before("cacheableMethods() && @annotation(cacheable)")
+    public void logCacheAccess(JoinPoint joinPoint, Cacheable cacheable) {
+        String cacheName = cacheable.value().length > 0 ? cacheable.value()[0] : "default";
+        String key = generateCacheKey(joinPoint, cacheable.key());
+        
+        log.debug("Checking cache '{}' for key: {}", cacheName, key);
+    }
+    
+    /**
+     * 后置通知：记录缓存操作结果
+     */
+    @AfterReturning(pointcut = "cacheableMethods() && @annotation(cacheable)", returning = "result")
+    public void logCacheResult(JoinPoint joinPoint, Cacheable cacheable, Object result) {
+        String cacheName = cacheable.value().length > 0 ? cacheable.value()[0] : "default";
+        String key = generateCacheKey(joinPoint, cacheable.key());
+        
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache != null) {
+            Cache.ValueWrapper cachedValue = cache.get(key);
+            if (cachedValue != null) {
+                log.debug("Cache hit for key: {}", key);
+            } else {
+                log.debug("Cache miss for key: {}, result cached", key);
+            }
+        }
+    }
+    
+    private String generateCacheKey(JoinPoint joinPoint, String keyExpression) {
+        // 简化的缓存Key生成逻辑
+        if (StringUtils.hasText(keyExpression)) {
+            return keyExpression;
+        }
+        
+        StringBuilder keyBuilder = new StringBuilder();
+        keyBuilder.append(joinPoint.getSignature().getName());
+        
+        for (Object arg : joinPoint.getArgs()) {
+            keyBuilder.append(":").append(arg != null ? arg.toString() : "null");
+        }
+        
+        return keyBuilder.toString();
+    }
+}
+
+/**
+ * 事务切面（用于事务监控）
+ */
+@Aspect
+@Component
+@Slf4j
+public class TransactionAspect {
+    
+    /**
+     * 切点：标注了@Transactional注解的方法
+     */
+    @Pointcut("@annotation(org.springframework.transaction.annotation.Transactional)")
+    public void transactionalMethods() {}
+    
+    /**
+     * 环绕通知：监控事务执行
+     */
+    @Around("transactionalMethods()")
+    public Object monitorTransaction(ProceedingJoinPoint joinPoint) throws Throwable {
+        String className = joinPoint.getTarget().getClass().getSimpleName();
+        String methodName = joinPoint.getSignature().getName();
+        
+        log.debug("Starting transaction for {}.{}()", className, methodName);
+        
+        long startTime = System.currentTimeMillis();
+        
+        try {
+            Object result = joinPoint.proceed();
+            
+            long executionTime = System.currentTimeMillis() - startTime;
+            log.debug("Transaction completed for {}.{}() in {}ms", 
+                className, methodName, executionTime);
+            
+            return result;
+            
+        } catch (Throwable throwable) {
+            long executionTime = System.currentTimeMillis() - startTime;
+            log.warn("Transaction failed for {}.{}() after {}ms: {}", 
+                className, methodName, executionTime, throwable.getMessage());
+            
+            throw throwable;
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此Spring框架基础规范确保正确使用Spring的核心特性，建立标准化的组件设计和配置管理*
+description:
+globs:
+alwaysApply: false
+---

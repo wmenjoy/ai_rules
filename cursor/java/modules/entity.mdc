@@ -1,0 +1,864 @@
+# 实体层规范 (模块层规则)
+> JPA实体设计、关系映射和数据验证的标准化规范
+
+## 基础规范
+
+### 实体类设计原则
+- **@Entity注解**：标识JPA实体类
+- **@Table注解**：指定数据库表名和约束
+- **主键策略**：使用@Id和@GeneratedValue定义主键
+- **字段映射**：使用@Column注解精确控制字段属性
+- **关系映射**：正确使用@OneToOne、@OneToMany、@ManyToOne、@ManyToMany
+
+### 继承策略
+- **基础实体**：所有实体继承BaseEntity获得审计字段
+- **@MappedSuperclass**：定义公共字段的基类
+- **@EntityListeners**：集成JPA审计功能
+- **软删除支持**：统一的软删除实现
+- **版本控制**：使用@Version实现乐观锁
+
+### 字段约束和验证
+- **Bean Validation**：使用JSR-303注解进行字段验证
+- **数据库约束**：在@Column中定义nullable、length等约束
+- **唯一约束**：使用@UniqueConstraint定义唯一性约束
+- **外键约束**：正确配置关系映射的外键
+- **索引定义**：使用@Index注解定义数据库索引
+
+### 性能优化配置
+- **懒加载策略**：合理配置fetch类型
+- **级联操作**：谨慎使用cascade配置
+- **批量操作**：配置batch_size提升批量操作性能
+- **二级缓存**：热点数据配置@Cacheable
+- **查询优化**：避免N+1问题，使用@NamedEntityGraph
+
+## 强制行为
+
+### 实体类基本结构
+- **包访问权限**：实体类字段使用private修饰
+- **getter/setter方法**：提供标准的访问器方法
+- **equals和hashCode**：基于业务主键实现
+- **toString方法**：提供有意义的字符串表示
+- **无参构造器**：JPA要求提供无参构造器
+
+### 关系映射配置
+- **双向关系管理**：主控端维护关系，被控端设置mappedBy
+- **孤儿删除**：使用orphanRemoval=true清理孤儿记录
+- **级联配置**：明确指定cascade类型，避免ALL
+- **fetch策略**：默认LAZY加载，按需设置EAGER
+- **关系表命名**：@JoinTable指定关系表名称
+
+### 数据验证要求
+- **非空验证**：使用@NotNull、@NotBlank、@NotEmpty
+- **长度限制**：@Size、@Length限制字符串长度
+- **格式验证**：@Pattern、@Email、@URL验证格式
+- **数值范围**：@Min、@Max、@Range限制数值范围
+- **自定义验证**：复杂业务规则使用自定义验证器
+
+### 审计和软删除
+- **审计字段**：继承BaseEntity获得创建时间、更新时间等
+- **软删除标记**：使用deleted字段实现软删除
+- **@Where注解**：在实体级别过滤已删除记录
+- **乐观锁版本**：使用@Version字段实现乐观锁
+- **审计监听器**：配置@EntityListeners实现审计
+
+## 禁止行为
+
+### 实体设计禁令
+- **禁止在实体中编写业务逻辑**：实体只包含数据和简单的业务方法
+- **禁止在实体中注入依赖**：不使用@Autowired等注入注解
+- **禁止实体之间循环引用**：避免无限递归和内存泄漏
+- **禁止在实体中使用复杂计算**：复杂逻辑在Service层处理
+- **禁止忽略字段命名规范**：字段名称要有明确的业务含义
+
+### 关系映射禁令
+- **禁止随意使用CascadeType.ALL**：明确指定所需的级联类型
+- **禁止过度使用EAGER加载**：避免性能问题
+- **禁止忽略关系维护**：双向关系要正确维护两端
+- **禁止在多对多关系中使用Set**：使用List避免重复查询
+- **禁止忽略外键约束**：关系映射要符合数据库设计
+
+### 性能相关禁令
+- **禁止在实体中执行查询操作**：不在getter方法中执行数据库查询
+- **禁止大对象字段使用EAGER加载**：@Lob字段使用LAZY加载
+- **禁止忽略批量操作优化**：配置hibernate.jdbc.batch_size
+- **禁止过深的对象图**：避免加载过多的关联对象
+- **禁止在toString中包含关联对象**：避免懒加载异常
+
+### 数据一致性禁令
+- **禁止绕过实体验证**：数据修改必须经过验证
+- **禁止直接修改关联集合**：使用业务方法维护关系
+- **禁止忽略事务边界**：理解实体在事务中的生命周期
+- **禁止不一致的软删除**：删除时要处理关联数据
+- **禁止忽略并发控制**：重要实体要使用乐观锁
+
+## 示例代码
+
+### 标准的实体类设计
+```java
+/* [AI-BLOCK-START] - 生成工具: 实体规范 v2.0 */
+@Entity
+@Table(name = "users", 
+       indexes = {
+           @Index(name = "idx_username", columnList = "username"),
+           @Index(name = "idx_email", columnList = "email"),
+           @Index(name = "idx_create_time", columnList = "create_time"),
+           @Index(name = "idx_status_deleted", columnList = "status,deleted")
+       },
+       uniqueConstraints = {
+           @UniqueConstraint(name = "uk_username", columnNames = "username"),
+           @UniqueConstraint(name = "uk_email", columnNames = "email")
+       })
+@EntityListeners(AuditingEntityListener.class)
+@Where(clause = "deleted = false")
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
+@ToString(callSuper = true, exclude = {"password", "roles", "orders"})
+public class User extends BaseEntity {
+    
+    /**
+     * 用户ID - 主键
+     */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
+    @EqualsAndHashCode.Include
+    private Long id;
+    
+    /**
+     * 用户名 - 唯一，非空
+     */
+    @Column(name = "username", length = 50, nullable = false, unique = true)
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
+    private String username;
+    
+    /**
+     * 邮箱 - 唯一，非空
+     */
+    @Column(name = "email", length = 100, nullable = false, unique = true)
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    @Size(max = 100, message = "邮箱长度不能超过100个字符")
+    private String email;
+    
+    /**
+     * 密码哈希值
+     */
+    @Column(name = "password_hash", length = 255, nullable = false)
+    @NotBlank(message = "密码不能为空")
+    @JsonIgnore
+    private String passwordHash;
+    
+    /**
+     * 真实姓名
+     */
+    @Column(name = "name", length = 50)
+    @Size(max = 50, message = "姓名长度不能超过50个字符")
+    private String name;
+    
+    /**
+     * 手机号
+     */
+    @Column(name = "phone", length = 20)
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    /**
+     * 用户状态
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    @NotNull(message = "用户状态不能为空")
+    private UserStatus status;
+    
+    /**
+     * 头像URL
+     */
+    @Column(name = "avatar_url", length = 500)
+    @URL(message = "头像URL格式不正确")
+    private String avatarUrl;
+    
+    /**
+     * 出生日期
+     */
+    @Column(name = "birth_date")
+    @Past(message = "出生日期必须是过去的时间")
+    private LocalDate birthDate;
+    
+    /**
+     * 用户资料（JSON格式存储）
+     */
+    @Column(name = "profile", columnDefinition = "TEXT")
+    @Convert(converter = JsonConverter.class)
+    private UserProfile profile;
+    
+    /**
+     * 最后登录时间
+     */
+    @Column(name = "last_login_time")
+    private LocalDateTime lastLoginTime;
+    
+    /**
+     * 最后登录IP
+     */
+    @Column(name = "last_login_ip", length = 45)
+    private String lastLoginIp;
+    
+    /**
+     * 用户角色 - 多对多关系
+     */
+    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinTable(
+        name = "user_roles",
+        joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
+        inverseJoinColumns = @JoinColumn(name = "role_id", referencedColumnName = "id"),
+        foreignKey = @ForeignKey(name = "fk_user_roles_user"),
+        inverseForeignKey = @ForeignKey(name = "fk_user_roles_role")
+    )
+    @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+    private Set<Role> roles = new HashSet<>();
+    
+    /**
+     * 用户订单 - 一对多关系
+     */
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, 
+               orphanRemoval = true)
+    @OrderBy("createTime DESC")
+    @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+    private List<Order> orders = new ArrayList<>();
+    
+    /**
+     * 用户设置 - 一对一关系
+     */
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, 
+              orphanRemoval = true)
+    private UserSettings settings;
+    
+    // ================== 业务方法 ==================
+    
+    /**
+     * 添加角色
+     */
+    public void addRole(Role role) {
+        if (role != null) {
+            this.roles.add(role);
+            role.getUsers().add(this);
+        }
+    }
+    
+    /**
+     * 移除角色
+     */
+    public void removeRole(Role role) {
+        if (role != null) {
+            this.roles.remove(role);
+            role.getUsers().remove(this);
+        }
+    }
+    
+    /**
+     * 检查是否拥有指定角色
+     */
+    public boolean hasRole(String roleName) {
+        return roles.stream()
+            .anyMatch(role -> role.getName().equals(roleName));
+    }
+    
+    /**
+     * 检查是否拥有任一角色
+     */
+    public boolean hasAnyRole(String... roleNames) {
+        Set<String> roleNameSet = Set.of(roleNames);
+        return roles.stream()
+            .anyMatch(role -> roleNameSet.contains(role.getName()));
+    }
+    
+    /**
+     * 添加订单
+     */
+    public void addOrder(Order order) {
+        if (order != null) {
+            this.orders.add(order);
+            order.setUser(this);
+        }
+    }
+    
+    /**
+     * 移除订单
+     */
+    public void removeOrder(Order order) {
+        if (order != null) {
+            this.orders.remove(order);
+            order.setUser(null);
+        }
+    }
+    
+    /**
+     * 获取有效订单（未删除）
+     */
+    public List<Order> getValidOrders() {
+        return orders.stream()
+            .filter(order -> !order.isDeleted())
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 更新最后登录信息
+     */
+    public void updateLastLogin(String ipAddress) {
+        this.lastLoginTime = LocalDateTime.now();
+        this.lastLoginIp = ipAddress;
+    }
+    
+    /**
+     * 检查用户是否激活
+     */
+    public boolean isActive() {
+        return UserStatus.ACTIVE.equals(this.status) && !this.isDeleted();
+    }
+    
+    /**
+     * 检查用户是否被锁定
+     */
+    public boolean isLocked() {
+        return UserStatus.LOCKED.equals(this.status);
+    }
+    
+    /**
+     * 激活用户
+     */
+    public void activate() {
+        if (this.status == UserStatus.PENDING) {
+            this.status = UserStatus.ACTIVE;
+        } else {
+            throw new IllegalStateException("只有待激活状态的用户才能被激活");
+        }
+    }
+    
+    /**
+     * 锁定用户
+     */
+    public void lock() {
+        if (this.status == UserStatus.ACTIVE) {
+            this.status = UserStatus.LOCKED;
+        } else {
+            throw new IllegalStateException("只有激活状态的用户才能被锁定");
+        }
+    }
+    
+    /**
+     * 解锁用户
+     */
+    public void unlock() {
+        if (this.status == UserStatus.LOCKED) {
+            this.status = UserStatus.ACTIVE;
+        } else {
+            throw new IllegalStateException("只有锁定状态的用户才能被解锁");
+        }
+    }
+    
+    // ================== JPA回调方法 ==================
+    
+    /**
+     * 保存前的预处理
+     */
+    @PrePersist
+    protected void prePersist() {
+        if (this.status == null) {
+            this.status = UserStatus.PENDING;
+        }
+        if (this.roles == null) {
+            this.roles = new HashSet<>();
+        }
+        if (this.orders == null) {
+            this.orders = new ArrayList<>();
+        }
+    }
+    
+    /**
+     * 更新前的预处理
+     */
+    @PreUpdate
+    protected void preUpdate() {
+        // 可以在这里添加更新前的业务逻辑
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 复杂关系映射示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 实体规范 v2.0 */
+@Entity
+@Table(name = "orders",
+       indexes = {
+           @Index(name = "idx_order_user_id", columnList = "user_id"),
+           @Index(name = "idx_order_status", columnList = "status"),
+           @Index(name = "idx_order_create_time", columnList = "create_time")
+       })
+@EntityListeners(AuditingEntityListener.class)
+@Where(clause = "deleted = false")
+@NamedEntityGraphs({
+    @NamedEntityGraph(
+        name = "Order.withItems",
+        attributeNodes = @NamedAttributeNode("orderItems")
+    ),
+    @NamedEntityGraph(
+        name = "Order.withUserAndItems",
+        attributeNodes = {
+            @NamedAttributeNode("user"),
+            @NamedAttributeNode("orderItems")
+        }
+    )
+})
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
+@ToString(callSuper = true, exclude = {"user", "orderItems"})
+public class Order extends BaseEntity {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
+    private Long id;
+    
+    /**
+     * 订单号 - 业务主键
+     */
+    @Column(name = "order_no", length = 32, nullable = false, unique = true)
+    @NotBlank(message = "订单号不能为空")
+    @EqualsAndHashCode.Include
+    private String orderNo;
+    
+    /**
+     * 订单所属用户
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false, 
+                foreignKey = @ForeignKey(name = "fk_order_user"))
+    @NotNull(message = "订单用户不能为空")
+    private User user;
+    
+    /**
+     * 订单状态
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    @NotNull(message = "订单状态不能为空")
+    private OrderStatus status;
+    
+    /**
+     * 订单总金额
+     */
+    @Column(name = "total_amount", precision = 10, scale = 2, nullable = false)
+    @NotNull(message = "订单总金额不能为空")
+    @DecimalMin(value = "0.01", message = "订单金额必须大于0")
+    @Digits(integer = 8, fraction = 2, message = "金额格式不正确")
+    private BigDecimal totalAmount;
+    
+    /**
+     * 支付方式
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", length = 20)
+    private PaymentMethod paymentMethod;
+    
+    /**
+     * 支付时间
+     */
+    @Column(name = "payment_time")
+    private LocalDateTime paymentTime;
+    
+    /**
+     * 收货地址
+     */
+    @Embedded
+    private Address shippingAddress;
+    
+    /**
+     * 订单明细 - 一对多关系
+     */
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY, 
+               cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
+    @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+    private List<OrderItem> orderItems = new ArrayList<>();
+    
+    /**
+     * 订单日志 - 一对多关系
+     */
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY, 
+               cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createTime DESC")
+    private List<OrderLog> orderLogs = new ArrayList<>();
+    
+    // ================== 业务方法 ==================
+    
+    /**
+     * 添加订单明细
+     */
+    public void addOrderItem(OrderItem orderItem) {
+        if (orderItem != null) {
+            this.orderItems.add(orderItem);
+            orderItem.setOrder(this);
+            recalculateTotalAmount();
+        }
+    }
+    
+    /**
+     * 移除订单明细
+     */
+    public void removeOrderItem(OrderItem orderItem) {
+        if (orderItem != null) {
+            this.orderItems.remove(orderItem);
+            orderItem.setOrder(null);
+            recalculateTotalAmount();
+        }
+    }
+    
+    /**
+     * 重新计算订单总金额
+     */
+    public void recalculateTotalAmount() {
+        this.totalAmount = orderItems.stream()
+            .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+    
+    /**
+     * 添加订单日志
+     */
+    public void addLog(String action, String description) {
+        OrderLog log = OrderLog.builder()
+            .order(this)
+            .action(action)
+            .description(description)
+            .createTime(LocalDateTime.now())
+            .build();
+        this.orderLogs.add(log);
+    }
+    
+    /**
+     * 确认订单
+     */
+    public void confirm() {
+        if (this.status != OrderStatus.PENDING) {
+            throw new IllegalStateException("只有待确认的订单才能被确认");
+        }
+        this.status = OrderStatus.CONFIRMED;
+        addLog("ORDER_CONFIRMED", "订单已确认");
+    }
+    
+    /**
+     * 支付订单
+     */
+    public void pay(PaymentMethod paymentMethod) {
+        if (this.status != OrderStatus.CONFIRMED) {
+            throw new IllegalStateException("只有已确认的订单才能支付");
+        }
+        this.status = OrderStatus.PAID;
+        this.paymentMethod = paymentMethod;
+        this.paymentTime = LocalDateTime.now();
+        addLog("ORDER_PAID", "订单已支付，支付方式：" + paymentMethod.getDescription());
+    }
+    
+    /**
+     * 发货
+     */
+    public void ship() {
+        if (this.status != OrderStatus.PAID) {
+            throw new IllegalStateException("只有已支付的订单才能发货");
+        }
+        this.status = OrderStatus.SHIPPED;
+        addLog("ORDER_SHIPPED", "订单已发货");
+    }
+    
+    /**
+     * 完成订单
+     */
+    public void complete() {
+        if (this.status != OrderStatus.SHIPPED) {
+            throw new IllegalStateException("只有已发货的订单才能完成");
+        }
+        this.status = OrderStatus.COMPLETED;
+        addLog("ORDER_COMPLETED", "订单已完成");
+    }
+    
+    /**
+     * 取消订单
+     */
+    public void cancel(String reason) {
+        if (this.status == OrderStatus.COMPLETED || this.status == OrderStatus.CANCELLED) {
+            throw new IllegalStateException("已完成或已取消的订单不能再次取消");
+        }
+        this.status = OrderStatus.CANCELLED;
+        addLog("ORDER_CANCELLED", "订单已取消，原因：" + reason);
+    }
+    
+    /**
+     * 检查订单是否可以修改
+     */
+    public boolean isModifiable() {
+        return this.status == OrderStatus.PENDING;
+    }
+    
+    /**
+     * 检查订单是否已支付
+     */
+    public boolean isPaid() {
+        return this.paymentTime != null && 
+               (this.status == OrderStatus.PAID || 
+                this.status == OrderStatus.SHIPPED || 
+                this.status == OrderStatus.COMPLETED);
+    }
+    
+    @PrePersist
+    protected void prePersist() {
+        if (this.status == null) {
+            this.status = OrderStatus.PENDING;
+        }
+        if (this.orderItems == null) {
+            this.orderItems = new ArrayList<>();
+        }
+        if (this.orderLogs == null) {
+            this.orderLogs = new ArrayList<>();
+        }
+        if (StringUtils.isBlank(this.orderNo)) {
+            this.orderNo = generateOrderNo();
+        }
+    }
+    
+    /**
+     * 生成订单号
+     */
+    private String generateOrderNo() {
+        return "ORD" + System.currentTimeMillis() + 
+               String.format("%04d", (int)(Math.random() * 10000));
+    }
+}
+
+/**
+ * 嵌入式地址类
+ */
+@Embeddable
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Address {
+    
+    @Column(name = "province", length = 50)
+    @Size(max = 50, message = "省份名称不能超过50个字符")
+    private String province;
+    
+    @Column(name = "city", length = 50)
+    @Size(max = 50, message = "城市名称不能超过50个字符")
+    private String city;
+    
+    @Column(name = "district", length = 50)
+    @Size(max = 50, message = "区县名称不能超过50个字符")
+    private String district;
+    
+    @Column(name = "detail_address", length = 200)
+    @Size(max = 200, message = "详细地址不能超过200个字符")
+    private String detailAddress;
+    
+    @Column(name = "postal_code", length = 10)
+    @Pattern(regexp = "\\d{6}", message = "邮政编码格式不正确")
+    private String postalCode;
+    
+    @Column(name = "contact_name", length = 50)
+    @Size(max = 50, message = "联系人姓名不能超过50个字符")
+    private String contactName;
+    
+    @Column(name = "contact_phone", length = 20)
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "联系电话格式不正确")
+    private String contactPhone;
+    
+    /**
+     * 获取完整地址
+     */
+    public String getFullAddress() {
+        return String.join("", 
+            StringUtils.defaultString(province),
+            StringUtils.defaultString(city),
+            StringUtils.defaultString(district),
+            StringUtils.defaultString(detailAddress)
+        );
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### JSON转换器和枚举定义
+```java
+/* [AI-BLOCK-START] - 生成工具: 实体规范 v2.0 */
+/**
+ * JSON属性转换器
+ */
+@Converter
+public class JsonConverter implements AttributeConverter<Object, String> {
+    
+    private static final ObjectMapper objectMapper = new ObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        .registerModule(new JavaTimeModule());
+    
+    @Override
+    public String convertToDatabaseColumn(Object attribute) {
+        if (attribute == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(attribute);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Error converting object to JSON", e);
+        }
+    }
+    
+    @Override
+    @SuppressWarnings("unchecked")
+    public Object convertToEntityAttribute(String dbData) {
+        if (StringUtils.isBlank(dbData)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(dbData, Object.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Error converting JSON to object", e);
+        }
+    }
+}
+
+/**
+ * 用户状态枚举
+ */
+public enum UserStatus {
+    
+    PENDING("PENDING", "待激活"),
+    ACTIVE("ACTIVE", "正常"),
+    LOCKED("LOCKED", "已锁定"),
+    DELETED("DELETED", "已删除");
+    
+    private final String code;
+    private final String description;
+    
+    UserStatus(String code, String description) {
+        this.code = code;
+        this.description = description;
+    }
+    
+    public String getCode() {
+        return code;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    public static UserStatus fromCode(String code) {
+        for (UserStatus status : values()) {
+            if (status.code.equals(code)) {
+                return status;
+            }
+        }
+        throw new IllegalArgumentException("无效的用户状态代码: " + code);
+    }
+}
+
+/**
+ * 订单状态枚举
+ */
+public enum OrderStatus {
+    
+    PENDING("PENDING", "待确认"),
+    CONFIRMED("CONFIRMED", "已确认"),
+    PAID("PAID", "已支付"),
+    SHIPPED("SHIPPED", "已发货"),
+    COMPLETED("COMPLETED", "已完成"),
+    CANCELLED("CANCELLED", "已取消");
+    
+    private final String code;
+    private final String description;
+    
+    OrderStatus(String code, String description) {
+        this.code = code;
+        this.description = description;
+    }
+    
+    public String getCode() {
+        return code;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+    
+    /**
+     * 检查是否为最终状态
+     */
+    public boolean isFinalStatus() {
+        return this == COMPLETED || this == CANCELLED;
+    }
+    
+    /**
+     * 检查是否可以取消
+     */
+    public boolean isCancellable() {
+        return this == PENDING || this == CONFIRMED;
+    }
+}
+
+/**
+ * 用户资料DTO
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UserProfile {
+    
+    /**
+     * 个人简介
+     */
+    @Size(max = 500, message = "个人简介不能超过500个字符")
+    private String bio;
+    
+    /**
+     * 兴趣爱好
+     */
+    private List<String> interests;
+    
+    /**
+     * 社交媒体链接
+     */
+    private Map<String, String> socialLinks;
+    
+    /**
+     * 个人设置
+     */
+    private Map<String, Object> settings;
+    
+    /**
+     * 扩展属性
+     */
+    private Map<String, Object> attributes;
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此实体层规范确保JPA实体的正确设计、高效的关系映射和完整的数据验证机制*
+description:
+globs:
+alwaysApply: false
+---

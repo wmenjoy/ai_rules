@@ -1,0 +1,589 @@
+# Java编码标准 (基础层规则)
+> Java语言特性使用、编码风格和最佳实践的标准化规范
+
+## 基础规范
+
+### Java版本特性使用
+- **目标版本**: 项目最低支持Java 8，推荐使用Java 11或17 LTS
+- **语言特性**: 合理使用Lambda表达式、Stream API、Optional等现代特性
+- **新特性采用**: 新项目优先使用新版本Java特性，老项目谨慎升级
+- **兼容性**: 确保使用的语言特性与目标运行环境兼容
+- **性能考虑**: 了解不同特性的性能影响，避免过度使用
+
+### 编码风格标准
+- **缩进风格**: 使用4个空格缩进，不使用Tab字符
+- **大括号风格**: K&R风格，左大括号不换行
+- **行长度**: 每行代码不超过120个字符
+- **空行使用**: 逻辑块之间使用空行分隔，不连续使用多个空行
+- **空格使用**: 操作符前后、逗号后、关键字后使用空格
+
+### 变量和方法设计
+- **变量声明**: 变量声明尽可能靠近使用位置
+- **局部变量**: 使用最小作用域，优先使用final修饰
+- **方法长度**: 方法代码行数控制在50行以内
+- **参数数量**: 方法参数不超过5个，过多参数使用对象封装
+- **返回值**: 明确的返回类型，避免返回null，优先使用Optional
+
+### 异常处理标准
+- **异常类型**: 区分检查异常和非检查异常的使用场景
+- **异常信息**: 提供清晰、有用的异常信息
+- **异常转换**: 适当地转换底层异常为业务异常
+- **资源管理**: 使用try-with-resources管理资源
+- **异常日志**: 记录异常的完整信息和上下文
+
+## 强制行为
+
+### 现代Java特性使用
+- **Lambda表达式**: 优先使用Lambda替代匿名内部类
+- **Stream API**: 集合操作优先使用Stream API
+- **Optional使用**: 可能为空的返回值使用Optional包装
+- **方法引用**: 适当使用方法引用简化Lambda表达式
+- **var关键字**: Java 10+项目合理使用var简化局部变量声明
+
+### 集合框架使用
+- **接口编程**: 声明使用接口类型，如List、Map、Set
+- **泛型使用**: 严格使用泛型，避免原始类型
+- **集合初始化**: 使用diamond操作符简化泛型声明
+- **不可变集合**: 优先使用不可变集合，如Collections.unmodifiableList()
+- **并发集合**: 多线程环境使用并发安全的集合类
+
+### 对象设计原则
+- **封装性**: 字段使用private修饰，提供合适的访问方法
+- **不可变性**: 优先设计不可变对象，使用final修饰字段
+- **Builder模式**: 复杂对象使用Builder模式构建
+- **equals和hashCode**: 重写equals时必须重写hashCode
+- **toString实现**: 提供有意义的toString实现
+
+### 线程安全要求
+- **线程安全注解**: 使用@ThreadSafe、@NotThreadSafe标注线程安全性
+- **同步机制**: 优先使用java.util.concurrent包中的同步工具
+- **锁使用**: 使用ReentrantLock替代synchronized进行复杂锁控制
+- **原子操作**: 使用原子类替代synchronized进行简单原子操作
+- **线程池**: 使用Executor框架管理线程，避免直接创建Thread
+
+## 禁止行为
+
+### 语言特性禁令
+- **禁止原始类型**: 不使用原始类型的集合，必须使用泛型
+- **禁止finalize方法**: 不重写finalize方法，使用try-with-resources
+- **禁止clone方法**: 避免使用clone方法，使用拷贝构造函数
+- **禁止反射滥用**: 不滥用反射，影响性能和类型安全
+- **禁止序列化滥用**: 避免不必要的序列化实现
+
+### 编码风格禁令
+- **禁止匈牙利命名法**: 不使用类型前缀的命名方式
+- **禁止缩写命名**: 避免使用难以理解的缩写
+- **禁止魔法数字**: 不使用没有名称的数字常量
+- **禁止深层嵌套**: 避免超过4层的嵌套结构
+- **禁止长方法**: 单个方法不超过50行代码
+
+### 性能相关禁令
+- **禁止字符串拼接**: 循环中不使用+操作符拼接字符串
+- **禁止异常控制流程**: 不使用异常控制正常业务流程
+- **禁止频繁装箱**: 避免在循环中频繁的自动装箱操作
+- **禁止同步方法滥用**: 不滥用synchronized关键字
+- **禁止递归滥用**: 避免深层递归可能导致栈溢出
+
+### 安全相关禁令
+- **禁止硬编码密码**: 不在代码中硬编码密码和密钥
+- **禁止SQL拼接**: 不使用字符串拼接构造SQL语句
+- **禁止信任用户输入**: 不信任任何外部输入数据
+- **禁止敏感信息日志**: 不在日志中输出敏感信息
+- **禁止不安全的随机数**: 不使用Random类生成安全相关的随机数
+
+## 示例代码
+
+### Lambda表达式和Stream API使用
+```java
+/* [AI-BLOCK-START] - 生成工具: Java编码标准 v2.0 */
+/**
+ * Lambda表达式和Stream API的正确使用示例
+ */
+public class ModernJavaExamples {
+    
+    /**
+     * 使用Stream API进行集合操作
+     */
+    public List<UserDto> processUsers(List<User> users) {
+        return users.stream()
+            .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+            .filter(user -> user.getAge() >= 18)
+            .map(this::convertToDto)
+            .sorted(Comparator.comparing(UserDto::getName))
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 使用Optional避免null值
+     */
+    public Optional<User> findUserByEmail(String email) {
+        if (StringUtils.isBlank(email)) {
+            return Optional.empty();
+        }
+        
+        return userRepository.findByEmail(email)
+            .filter(user -> !user.isDeleted());
+    }
+    
+    /**
+     * 使用Optional进行安全的方法链调用
+     */
+    public String getUserDepartmentName(Long userId) {
+        return findUserById(userId)
+            .map(User::getDepartment)
+            .map(Department::getName)
+            .orElse("未知部门");
+    }
+    
+    /**
+     * 使用方法引用简化Lambda表达式
+     */
+    public List<String> getUserNames(List<User> users) {
+        return users.stream()
+            .map(User::getName)                    // 方法引用
+            .filter(Objects::nonNull)              // 静态方法引用
+            .map(String::toUpperCase)              // 实例方法引用
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 使用Collector进行复杂的聚合操作
+     */
+    public Map<Department, List<User>> groupUsersByDepartment(List<User> users) {
+        return users.stream()
+            .filter(user -> user.getDepartment() != null)
+            .collect(Collectors.groupingBy(User::getDepartment));
+    }
+    
+    /**
+     * 使用并行Stream处理大数据集
+     */
+    public long countActiveUsers(List<User> users) {
+        return users.parallelStream()
+            .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+            .count();
+    }
+    
+    /**
+     * 使用自定义Collector
+     */
+    public String joinUserNames(List<User> users) {
+        return users.stream()
+            .map(User::getName)
+            .filter(Objects::nonNull)
+            .collect(Collectors.joining(", ", "[", "]"));
+    }
+    
+    private UserDto convertToDto(User user) {
+        return UserDto.builder()
+            .id(user.getId())
+            .name(user.getName())
+            .email(user.getEmail())
+            .build();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 异常处理最佳实践
+```java
+/* [AI-BLOCK-START] - 生成工具: Java编码标准 v2.0 */
+/**
+ * 异常处理的最佳实践示例
+ */
+public class ExceptionHandlingExamples {
+    
+    private static final Logger log = LoggerFactory.getLogger(ExceptionHandlingExamples.class);
+    
+    /**
+     * 使用try-with-resources管理资源
+     */
+    public String readFileContent(String filePath) throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath), StandardCharsets.UTF_8)) {
+            return reader.lines()
+                .collect(Collectors.joining(System.lineSeparator()));
+        }
+    }
+    
+    /**
+     * 异常转换和包装
+     */
+    public User createUser(CreateUserRequest request) {
+        try {
+            validateUserRequest(request);
+            
+            User user = new User();
+            user.setUsername(request.getUsername());
+            user.setEmail(request.getEmail());
+            
+            return userRepository.save(user);
+            
+        } catch (ValidationException e) {
+            log.warn("用户创建验证失败: {}", e.getMessage());
+            throw new BusinessException("用户信息验证失败: " + e.getMessage(), e);
+            
+        } catch (DataAccessException e) {
+            log.error("用户创建数据库操作失败", e);
+            throw new BusinessException("用户创建失败，请稍后重试", e);
+            
+        } catch (Exception e) {
+            log.error("用户创建未知错误", e);
+            throw new BusinessException("系统错误，请联系管理员", e);
+        }
+    }
+    
+    /**
+     * 自定义业务异常
+     */
+    public class BusinessException extends RuntimeException {
+        private final String errorCode;
+        
+        public BusinessException(String message) {
+            super(message);
+            this.errorCode = "BUSINESS_ERROR";
+        }
+        
+        public BusinessException(String message, Throwable cause) {
+            super(message, cause);
+            this.errorCode = "BUSINESS_ERROR";
+        }
+        
+        public BusinessException(String errorCode, String message) {
+            super(message);
+            this.errorCode = errorCode;
+        }
+        
+        public String getErrorCode() {
+            return errorCode;
+        }
+    }
+    
+    /**
+     * 参数验证异常处理
+     */
+    private void validateUserRequest(CreateUserRequest request) {
+        List<String> errors = new ArrayList<>();
+        
+        if (StringUtils.isBlank(request.getUsername())) {
+            errors.add("用户名不能为空");
+        }
+        
+        if (StringUtils.isBlank(request.getEmail())) {
+            errors.add("邮箱不能为空");
+        } else if (!isValidEmail(request.getEmail())) {
+            errors.add("邮箱格式不正确");
+        }
+        
+        if (!errors.isEmpty()) {
+            throw new ValidationException("参数验证失败: " + String.join(", ", errors));
+        }
+    }
+    
+    /**
+     * 重试机制的异常处理
+     */
+    public void sendEmailWithRetry(String to, String subject, String content) {
+        int maxRetries = 3;
+        int currentAttempt = 0;
+        
+        while (currentAttempt < maxRetries) {
+            try {
+                emailService.sendEmail(to, subject, content);
+                log.info("邮件发送成功: {}", to);
+                return;
+                
+            } catch (EmailServiceException e) {
+                currentAttempt++;
+                log.warn("邮件发送失败，尝试次数: {}/{}, 错误: {}", 
+                    currentAttempt, maxRetries, e.getMessage());
+                
+                if (currentAttempt >= maxRetries) {
+                    log.error("邮件发送最终失败: {}", to, e);
+                    throw new BusinessException("邮件发送失败", e);
+                }
+                
+                // 等待后重试
+                try {
+                    Thread.sleep(1000 * currentAttempt); // 递增等待时间
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new BusinessException("邮件发送被中断", ie);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 异常安全的资源清理
+     */
+    public void processDataFile(String filePath) {
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(filePath);
+            // 处理文件数据
+            processFile(fis);
+            
+        } catch (IOException e) {
+            log.error("文件处理失败: {}", filePath, e);
+            throw new BusinessException("文件处理失败", e);
+            
+        } finally {
+            // 确保资源被释放
+            if (fis != null) {
+                try {
+                    fis.close();
+                } catch (IOException e) {
+                    log.warn("文件关闭失败: {}", filePath, e);
+                }
+            }
+        }
+    }
+    
+    private boolean isValidEmail(String email) {
+        return email != null && email.contains("@") && email.contains(".");
+    }
+    
+    private void processFile(FileInputStream fis) throws IOException {
+        // 文件处理逻辑
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 并发编程最佳实践
+```java
+/* [AI-BLOCK-START] - 生成工具: Java编码标准 v2.0 */
+/**
+ * 并发编程的最佳实践示例
+ */
+public class ConcurrencyExamples {
+    
+    private static final Logger log = LoggerFactory.getLogger(ConcurrencyExamples.class);
+    
+    // 使用线程安全的计数器
+    private final AtomicLong requestCounter = new AtomicLong(0);
+    
+    // 使用并发安全的Map
+    private final ConcurrentMap<String, UserSession> userSessions = new ConcurrentHashMap<>();
+    
+    // 使用线程池而不是直接创建线程
+    private final ExecutorService executorService = Executors.newFixedThreadPool(
+        Runtime.getRuntime().availableProcessors()
+    );
+    
+    /**
+     * 使用CompletableFuture进行异步编程
+     */
+    public CompletableFuture<UserProfile> getUserProfileAsync(Long userId) {
+        return CompletableFuture
+            .supplyAsync(() -> userService.findById(userId), executorService)
+            .thenCompose(user -> getProfileAsync(user.getId()))
+            .thenApply(this::enrichProfile)
+            .exceptionally(throwable -> {
+                log.error("获取用户资料失败: {}", userId, throwable);
+                return createDefaultProfile(userId);
+            });
+    }
+    
+    /**
+     * 使用ReentrantLock进行细粒度锁控制
+     */
+    public class UserSessionManager {
+        private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+        private final Lock readLock = lock.readLock();
+        private final Lock writeLock = lock.writeLock();
+        private final Map<String, UserSession> sessions = new HashMap<>();
+        
+        public UserSession getSession(String sessionId) {
+            readLock.lock();
+            try {
+                return sessions.get(sessionId);
+            } finally {
+                readLock.unlock();
+            }
+        }
+        
+        public void putSession(String sessionId, UserSession session) {
+            writeLock.lock();
+            try {
+                sessions.put(sessionId, session);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+        
+        public void removeSession(String sessionId) {
+            writeLock.lock();
+            try {
+                sessions.remove(sessionId);
+            } finally {
+                writeLock.unlock();
+            }
+        }
+    }
+    
+    /**
+     * 使用CountDownLatch进行线程协调
+     */
+    public void processDataInParallel(List<DataChunk> dataChunks) throws InterruptedException {
+        int threadCount = Math.min(dataChunks.size(), 
+            Runtime.getRuntime().availableProcessors());
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        
+        for (int i = 0; i < threadCount; i++) {
+            final int startIndex = i * (dataChunks.size() / threadCount);
+            final int endIndex = (i == threadCount - 1) ? 
+                dataChunks.size() : (i + 1) * (dataChunks.size() / threadCount);
+            
+            executorService.submit(() -> {
+                try {
+                    processDataChunks(dataChunks.subList(startIndex, endIndex));
+                } catch (Exception e) {
+                    log.error("数据处理失败", e);
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        
+        // 等待所有任务完成
+        latch.await(30, TimeUnit.SECONDS);
+    }
+    
+    /**
+     * 使用BlockingQueue进行生产者-消费者模式
+     */
+    public class MessageProcessor {
+        private final BlockingQueue<Message> messageQueue = new LinkedBlockingQueue<>(1000);
+        private final AtomicBoolean running = new AtomicBoolean(true);
+        
+        public void startProcessing() {
+            executorService.submit(this::processMessages);
+        }
+        
+        public void addMessage(Message message) throws InterruptedException {
+            if (!messageQueue.offer(message, 5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("消息队列已满");
+            }
+        }
+        
+        private void processMessages() {
+            while (running.get()) {
+                try {
+                    Message message = messageQueue.poll(1, TimeUnit.SECONDS);
+                    if (message != null) {
+                        processMessage(message);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.info("消息处理线程被中断");
+                    break;
+                } catch (Exception e) {
+                    log.error("处理消息时发生错误", e);
+                }
+            }
+        }
+        
+        public void shutdown() {
+            running.set(false);
+        }
+    }
+    
+    /**
+     * 使用ThreadLocal进行线程本地存储
+     */
+    public class RequestContextHolder {
+        private static final ThreadLocal<RequestContext> contextHolder = 
+            ThreadLocal.withInitial(RequestContext::new);
+        
+        public static RequestContext getContext() {
+            return contextHolder.get();
+        }
+        
+        public static void setContext(RequestContext context) {
+            contextHolder.set(context);
+        }
+        
+        public static void clearContext() {
+            contextHolder.remove();
+        }
+    }
+    
+    /**
+     * 线程安全的单例模式实现
+     */
+    public class ThreadSafeSingleton {
+        private static volatile ThreadSafeSingleton instance;
+        
+        private ThreadSafeSingleton() {
+            // 私有构造函数
+        }
+        
+        public static ThreadSafeSingleton getInstance() {
+            if (instance == null) {
+                synchronized (ThreadSafeSingleton.class) {
+                    if (instance == null) {
+                        instance = new ThreadSafeSingleton();
+                    }
+                }
+            }
+            return instance;
+        }
+    }
+    
+    /**
+     * 优雅的线程池关闭
+     */
+    @PreDestroy
+    public void shutdown() {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("线程池未能在30秒内正常关闭，强制关闭");
+                executorService.shutdownNow();
+                
+                if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+                    log.error("线程池强制关闭失败");
+                }
+            }
+        } catch (InterruptedException e) {
+            log.warn("等待线程池关闭时被中断");
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    private CompletableFuture<UserProfile> getProfileAsync(Long userId) {
+        return CompletableFuture.supplyAsync(() -> {
+            // 模拟异步获取用户资料
+            return new UserProfile();
+        }, executorService);
+    }
+    
+    private UserProfile enrichProfile(UserProfile profile) {
+        // 增强用户资料
+        return profile;
+    }
+    
+    private UserProfile createDefaultProfile(Long userId) {
+        return new UserProfile();
+    }
+    
+    private void processDataChunks(List<DataChunk> chunks) {
+        // 处理数据块
+    }
+    
+    private void processMessage(Message message) {
+        // 处理消息
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此Java编码标准确保代码质量、性能和安全性，同时充分利用Java语言的现代特性*
+description:
+globs:
+alwaysApply: false
+---

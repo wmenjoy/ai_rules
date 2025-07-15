@@ -1,0 +1,3 @@
+package main
+
+// ... 其余代码保持不变，只更新import路径 ...

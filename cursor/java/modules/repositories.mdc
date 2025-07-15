@@ -1,0 +1,1018 @@
+# 数据访问层规范 (模块层规则)
+> Repository层的标准化设计和实现规范，包括JPA和MyBatis-Plus使用指南
+
+## 基础规范
+
+### Repository设计原则
+- **单一职责**: 每个Repository只负责一个聚合根的数据访问
+- **接口导向**: 面向接口编程，分离接口定义和实现
+- **技术无关**: 业务逻辑不依赖具体的持久化技术
+- **事务透明**: Repository方法不处理事务，由Service层管理
+- **查询优化**: 关注查询性能，避免N+1问题
+
+### 命名规范
+- **Repository接口**: {Entity}Repository，如UserRepository
+- **方法命名**: 使用Spring Data的标准命名约定
+- **查询方法**: find/get/query/count/exists等前缀
+- **更新方法**: save/update/delete等动词
+- **自定义查询**: 使用业务含义明确的方法名
+
+### JPA使用规范
+- **继承规范**: 继承JpaRepository或CrudRepository
+- **查询方法**: 优先使用方法名查询，复杂查询使用@Query
+- **分页支持**: 使用Pageable进行分页查询
+- **规范查询**: 使用Specification进行动态查询
+- **投影查询**: 使用接口投影或DTO投影优化查询
+
+### MyBatis-Plus规范
+- **BaseMapper**: 继承BaseMapper获得基础CRUD功能
+- **条件构造器**: 使用QueryWrapper和UpdateWrapper构建动态查询
+- **分页插件**: 使用MyBatis-Plus分页插件
+- **代码生成**: 合理使用代码生成器提升开发效率
+- **性能优化**: 关注SQL性能，合理使用索引和缓存
+
+## 强制行为
+
+### Repository接口定义
+- **@Repository注解**: Repository接口使用@Repository注解
+- **泛型声明**: 明确指定实体类型和主键类型
+- **方法签名**: 使用清晰明确的方法签名
+- **返回类型**: 合理选择返回类型（Optional、List、Page等）
+- **参数验证**: 在接口层面定义参数约束
+
+### JPA实现要求
+- **实体映射**: 正确使用JPA注解映射实体关系
+- **查询优化**: 使用@EntityGraph解决N+1问题
+- **批量操作**: 使用批量操作提升性能
+- **懒加载**: 合理使用懒加载避免性能问题
+- **缓存策略**: 配置合适的二级缓存
+
+### MyBatis-Plus实现要求
+- **Mapper配置**: 正确配置Mapper扫描路径
+- **条件构造**: 使用类型安全的条件构造器
+- **批量插入**: 使用saveBatch进行批量插入
+- **逻辑删除**: 配置逻辑删除字段
+- **自动填充**: 配置创建时间、更新时间等字段自动填充
+
+### 查询性能优化
+- **索引使用**: 确保查询字段有合适的索引
+- **查询计划**: 分析和优化查询执行计划
+- **分页查询**: 大数据量查询必须使用分页
+- **投影查询**: 只查询需要的字段，避免查询全部字段
+- **缓存策略**: 合理使用查询缓存
+
+## 禁止行为
+
+### 设计反模式禁令
+- **禁止万能Repository**: 避免在一个Repository中处理多个实体
+- **禁止业务逻辑**: Repository不包含业务逻辑，只负责数据访问
+- **禁止事务管理**: Repository方法不使用@Transactional注解
+- **禁止直接SQL**: 避免在Repository中写原生SQL（特殊情况除外）
+- **禁止跨表业务**: 复杂的跨表业务逻辑在Service层处理
+
+### 查询性能禁令
+- **禁止N+1查询**: 避免在循环中调用数据库查询
+- **禁止全表扫描**: 避免没有WHERE条件的查询
+- **禁止SELECT ***: 避免查询不需要的字段
+- **禁止无限制查询**: 查询结果必须有合理的限制
+- **禁止笛卡尔积**: 避免没有JOIN条件的多表查询
+
+### MyBatis-Plus禁令
+- **禁止硬编码字段名**: 使用Lambda表达式引用字段
+- **禁止拼接SQL**: 使用条件构造器而不是字符串拼接
+- **禁止忽略逻辑删除**: 查询时考虑逻辑删除状态
+- **禁止批量操作滥用**: 大批量操作分批处理
+- **禁止缓存滥用**: 不缓存频繁变更的数据
+
+### 安全相关禁令
+- **禁止SQL注入**: 使用参数化查询防止注入攻击
+- **禁止敏感信息查询**: 不在日志中输出敏感字段
+- **禁止权限忽略**: 查询时考虑数据权限控制
+- **禁止明文存储**: 敏感数据加密存储
+- **禁止数据泄露**: 注意查询结果的权限控制
+
+## 示例代码
+
+### 标准JPA Repository实现
+```java
+/* [AI-BLOCK-START] - 生成工具: 数据访问层规范 v2.0 */
+/**
+ * 用户数据访问接口 - JPA实现
+ * 
+ * 提供用户实体的数据访问功能，包括基础CRUD操作和业务查询方法。
+ * 继承JpaRepository获得标准的数据访问功能，并提供自定义的业务查询方法。
+ */
+@Repository
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
+    
+    /**
+     * 根据用户名查找用户（排除已删除）
+     * 
+     * 使用方法名查询，Spring Data JPA自动实现。
+     * 
+     * @param username 用户名，精确匹配
+     * @return 用户信息的Optional包装
+     */
+    Optional<User> findByUsernameAndDeletedFalse(String username);
+    
+    /**
+     * 根据邮箱查找用户（忽略大小写，排除已删除）
+     * 
+     * @param email 邮箱地址
+     * @return 用户信息的Optional包装
+     */
+    Optional<User> findByEmailIgnoreCaseAndDeletedFalse(String email);
+    
+    /**
+     * 根据ID查找用户（排除已删除）
+     * 
+     * @param id 用户ID
+     * @return 用户信息的Optional包装
+     */
+    Optional<User> findByIdAndDeletedFalse(Long id);
+    
+    /**
+     * 检查用户名是否存在（排除已删除）
+     * 
+     * @param username 用户名
+     * @return 如果存在返回true，否则返回false
+     */
+    boolean existsByUsernameAndDeletedFalse(String username);
+    
+    /**
+     * 检查邮箱是否存在（忽略大小写，排除已删除）
+     * 
+     * @param email 邮箱地址
+     * @return 如果存在返回true，否则返回false
+     */
+    boolean existsByEmailIgnoreCaseAndDeletedFalse(String email);
+    
+    /**
+     * 根据状态查找用户列表
+     * 
+     * @param status 用户状态
+     * @param pageable 分页参数
+     * @return 分页的用户列表
+     */
+    Page<User> findByStatusAndDeletedFalse(UserStatus status, Pageable pageable);
+    
+    /**
+     * 根据创建时间范围查找用户
+     * 
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @param pageable 分页参数
+     * @return 分页的用户列表
+     */
+    Page<User> findByCreateTimeBetweenAndDeletedFalse(
+        LocalDateTime startTime, 
+        LocalDateTime endTime, 
+        Pageable pageable);
+    
+    /**
+     * 根据用户名模糊查询（排除已删除）
+     * 
+     * @param username 用户名关键词
+     * @param pageable 分页参数
+     * @return 分页的用户列表
+     */
+    Page<User> findByUsernameContainingIgnoreCaseAndDeletedFalse(String username, Pageable pageable);
+    
+    /**
+     * 查询活跃用户数量
+     * 
+     * 使用@Query注解定义JPQL查询。
+     * 
+     * @return 活跃用户数量
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.status = 'ACTIVE' AND u.deleted = false")
+    long countActiveUsers();
+    
+    /**
+     * 查询指定时间内注册的用户数量
+     * 
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @return 注册用户数量
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.createTime BETWEEN :startTime AND :endTime AND u.deleted = false")
+    long countUsersByCreateTimeBetween(@Param("startTime") LocalDateTime startTime, 
+                                      @Param("endTime") LocalDateTime endTime);
+    
+    /**
+     * 查询用户基本信息投影
+     * 
+     * 使用接口投影只查询需要的字段，提升查询性能。
+     * 
+     * @param id 用户ID
+     * @return 用户基本信息投影
+     */
+    @Query("SELECT u.id as id, u.username as username, u.email as email, u.status as status " +
+           "FROM User u WHERE u.id = :id AND u.deleted = false")
+    Optional<UserBasicInfo> findUserBasicInfoById(@Param("id") Long id);
+    
+    /**
+     * 批量更新用户状态
+     * 
+     * 使用@Modifying注解标识更新操作。
+     * 
+     * @param userIds 用户ID列表
+     * @param status 新状态
+     * @return 更新的记录数
+     */
+    @Modifying
+    @Query("UPDATE User u SET u.status = :status, u.updateTime = CURRENT_TIMESTAMP " +
+           "WHERE u.id IN :userIds AND u.deleted = false")
+    int updateUserStatusBatch(@Param("userIds") List<Long> userIds, @Param("status") UserStatus status);
+    
+    /**
+     * 查询用户统计信息
+     * 
+     * 使用原生SQL查询复杂统计信息。
+     * 
+     * @return 用户统计信息
+     */
+    @Query(value = "SELECT " +
+                   "COUNT(*) as totalCount, " +
+                   "SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) as activeCount, " +
+                   "SUM(CASE WHEN status = 'LOCKED' THEN 1 ELSE 0 END) as lockedCount, " +
+                   "SUM(CASE WHEN DATE(create_time) = CURDATE() THEN 1 ELSE 0 END) as todayCount " +
+                   "FROM users WHERE deleted = false",
+           nativeQuery = true)
+    UserStatistics getUserStatistics();
+    
+    /**
+     * 使用EntityGraph解决N+1问题
+     * 
+     * 查询用户及其角色信息，一次性加载避免懒加载问题。
+     * 
+     * @param id 用户ID
+     * @return 用户及角色信息
+     */
+    @EntityGraph(attributePaths = {"roles"})
+    @Query("SELECT u FROM User u WHERE u.id = :id AND u.deleted = false")
+    Optional<User> findUserWithRoles(@Param("id") Long id);
+    
+    /**
+     * 动态条件查询
+     * 
+     * 使用Specification进行复杂的动态查询。
+     * 
+     * @param criteria 查询条件
+     * @param pageable 分页参数
+     * @return 分页的用户列表
+     */
+    default Page<User> findByCriteria(UserSearchCriteria criteria, Pageable pageable) {
+        return findAll(UserSpecifications.withCriteria(criteria), pageable);
+    }
+    
+    /**
+     * 用户基本信息投影接口
+     */
+    interface UserBasicInfo {
+        Long getId();
+        String getUsername();
+        String getEmail();
+        UserStatus getStatus();
+    }
+    
+    /**
+     * 用户统计信息投影接口
+     */
+    interface UserStatistics {
+        Long getTotalCount();
+        Long getActiveCount();
+        Long getLockedCount();
+        Long getTodayCount();
+    }
+}
+
+/**
+ * 用户查询规格类
+ * 
+ * 使用Specification进行动态查询条件构建。
+ */
+public class UserSpecifications {
+    
+    /**
+     * 根据查询条件构建Specification
+     * 
+     * @param criteria 查询条件
+     * @return Specification对象
+     */
+    public static Specification<User> withCriteria(UserSearchCriteria criteria) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            
+            // 基础条件：未删除
+            predicates.add(criteriaBuilder.equal(root.get("deleted"), false));
+            
+            // 用户名模糊查询
+            if (StringUtils.hasText(criteria.getUsername())) {
+                predicates.add(criteriaBuilder.like(
+                    criteriaBuilder.lower(root.get("username")),
+                    "%" + criteria.getUsername().toLowerCase() + "%"
+                ));
+            }
+            
+            // 邮箱模糊查询
+            if (StringUtils.hasText(criteria.getEmail())) {
+                predicates.add(criteriaBuilder.like(
+                    criteriaBuilder.lower(root.get("email")),
+                    "%" + criteria.getEmail().toLowerCase() + "%"
+                ));
+            }
+            
+            // 状态精确查询
+            if (criteria.getStatus() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), criteria.getStatus()));
+            }
+            
+            // 创建时间范围查询
+            if (criteria.getStartTime() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(
+                    root.get("createTime"), criteria.getStartTime()));
+            }
+            
+            if (criteria.getEndTime() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(
+                    root.get("createTime"), criteria.getEndTime()));
+            }
+            
+            // 角色查询
+            if (criteria.getRoleIds() != null && !criteria.getRoleIds().isEmpty()) {
+                Join<User, Role> roleJoin = root.join("roles");
+                predicates.add(roleJoin.get("id").in(criteria.getRoleIds()));
+            }
+            
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### MyBatis-Plus Repository实现
+```java
+/* [AI-BLOCK-START] - 生成工具: 数据访问层规范 v2.0 */
+/**
+ * 用户数据访问接口 - MyBatis-Plus实现
+ * 
+ * 继承BaseMapper获得基础CRUD功能，并提供自定义的业务查询方法。
+ * 使用MyBatis-Plus的条件构造器和分页插件实现复杂查询。
+ */
+@Repository
+public interface UserMapper extends BaseMapper<User> {
+    
+    /**
+     * 根据用户名查找用户（排除已删除）
+     * 
+     * @param username 用户名
+     * @return 用户信息
+     */
+    default Optional<User> findByUsername(String username) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getUsername, username)
+               .eq(User::getDeleted, false);
+        
+        User user = selectOne(wrapper);
+        return Optional.ofNullable(user);
+    }
+    
+    /**
+     * 根据邮箱查找用户（排除已删除）
+     * 
+     * @param email 邮箱地址
+     * @return 用户信息
+     */
+    default Optional<User> findByEmail(String email) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getEmail, email)
+               .eq(User::getDeleted, false);
+        
+        User user = selectOne(wrapper);
+        return Optional.ofNullable(user);
+    }
+    
+    /**
+     * 检查用户名是否存在
+     * 
+     * @param username 用户名
+     * @return 是否存在
+     */
+    default boolean existsByUsername(String username) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getUsername, username)
+               .eq(User::getDeleted, false);
+        
+        return selectCount(wrapper) > 0;
+    }
+    
+    /**
+     * 检查邮箱是否存在
+     * 
+     * @param email 邮箱地址
+     * @return 是否存在
+     */
+    default boolean existsByEmail(String email) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getEmail, email)
+               .eq(User::getDeleted, false);
+        
+        return selectCount(wrapper) > 0;
+    }
+    
+    /**
+     * 分页查询用户列表
+     * 
+     * @param page 分页参数
+     * @param criteria 查询条件
+     * @return 分页结果
+     */
+    default IPage<User> selectPageByCriteria(IPage<User> page, UserSearchCriteria criteria) {
+        LambdaQueryWrapper<User> wrapper = buildQueryWrapper(criteria);
+        return selectPage(page, wrapper);
+    }
+    
+    /**
+     * 根据状态查询用户列表
+     * 
+     * @param status 用户状态
+     * @param page 分页参数
+     * @return 分页结果
+     */
+    default IPage<User> selectPageByStatus(UserStatus status, IPage<User> page) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getStatus, status)
+               .eq(User::getDeleted, false)
+               .orderByDesc(User::getCreateTime);
+        
+        return selectPage(page, wrapper);
+    }
+    
+    /**
+     * 查询活跃用户数量
+     * 
+     * @return 活跃用户数量
+     */
+    default long countActiveUsers() {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getStatus, UserStatus.ACTIVE)
+               .eq(User::getDeleted, false);
+        
+        return selectCount(wrapper);
+    }
+    
+    /**
+     * 批量更新用户状态
+     * 
+     * @param userIds 用户ID列表
+     * @param status 新状态
+     * @return 更新的记录数
+     */
+    default int updateStatusBatch(List<Long> userIds, UserStatus status) {
+        if (userIds == null || userIds.isEmpty()) {
+            return 0;
+        }
+        
+        LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.set(User::getStatus, status)
+               .set(User::getUpdateTime, LocalDateTime.now())
+               .in(User::getId, userIds)
+               .eq(User::getDeleted, false);
+        
+        return update(null, wrapper);
+    }
+    
+    /**
+     * 软删除用户
+     * 
+     * @param id 用户ID
+     * @return 更新的记录数
+     */
+    default int softDeleteById(Long id) {
+        LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.set(User::getDeleted, true)
+               .set(User::getDeleteTime, LocalDateTime.now())
+               .eq(User::getId, id)
+               .eq(User::getDeleted, false);
+        
+        return update(null, wrapper);
+    }
+    
+    /**
+     * 批量软删除用户
+     * 
+     * @param userIds 用户ID列表
+     * @return 更新的记录数
+     */
+    default int softDeleteByIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return 0;
+        }
+        
+        LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.set(User::getDeleted, true)
+               .set(User::getDeleteTime, LocalDateTime.now())
+               .in(User::getId, userIds)
+               .eq(User::getDeleted, false);
+        
+        return update(null, wrapper);
+    }
+    
+    /**
+     * 查询用户基本信息列表（投影查询）
+     * 
+     * @param userIds 用户ID列表
+     * @return 用户基本信息列表
+     */
+    default List<UserBasicInfo> selectBasicInfoByIds(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.select(User::getId, User::getUsername, User::getEmail, User::getStatus)
+               .in(User::getId, userIds)
+               .eq(User::getDeleted, false);
+        
+        return selectList(wrapper).stream()
+               .map(user -> UserBasicInfo.builder()
+                   .id(user.getId())
+                   .username(user.getUsername())
+                   .email(user.getEmail())
+                   .status(user.getStatus())
+                   .build())
+               .collect(Collectors.toList());
+    }
+    
+    /**
+     * 构建查询条件
+     * 
+     * @param criteria 查询条件
+     * @return 查询包装器
+     */
+    private LambdaQueryWrapper<User> buildQueryWrapper(UserSearchCriteria criteria) {
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        
+        // 基础条件：未删除
+        wrapper.eq(User::getDeleted, false);
+        
+        if (criteria != null) {
+            // 用户名模糊查询
+            if (StringUtils.hasText(criteria.getUsername())) {
+                wrapper.like(User::getUsername, criteria.getUsername());
+            }
+            
+            // 邮箱模糊查询
+            if (StringUtils.hasText(criteria.getEmail())) {
+                wrapper.like(User::getEmail, criteria.getEmail());
+            }
+            
+            // 状态精确查询
+            if (criteria.getStatus() != null) {
+                wrapper.eq(User::getStatus, criteria.getStatus());
+            }
+            
+            // 创建时间范围查询
+            if (criteria.getStartTime() != null) {
+                wrapper.ge(User::getCreateTime, criteria.getStartTime());
+            }
+            
+            if (criteria.getEndTime() != null) {
+                wrapper.le(User::getCreateTime, criteria.getEndTime());
+            }
+        }
+        
+        // 默认按创建时间倒序
+        wrapper.orderByDesc(User::getCreateTime);
+        
+        return wrapper;
+    }
+    
+    /**
+     * 自定义复杂查询 - 使用XML映射
+     * 
+     * 查询用户统计信息，包含多个聚合计算。
+     * 
+     * @return 用户统计信息
+     */
+    @Select("SELECT " +
+            "COUNT(*) as totalCount, " +
+            "SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) as activeCount, " +
+            "SUM(CASE WHEN status = 'LOCKED' THEN 1 ELSE 0 END) as lockedCount, " +
+            "SUM(CASE WHEN DATE(create_time) = CURDATE() THEN 1 ELSE 0 END) as todayCount " +
+            "FROM users WHERE deleted = 0")
+    UserStatistics selectUserStatistics();
+    
+    /**
+     * 查询指定时间内的用户注册趋势
+     * 
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @return 注册趋势数据
+     */
+    @Select("SELECT DATE(create_time) as date, COUNT(*) as count " +
+            "FROM users " +
+            "WHERE create_time BETWEEN #{startTime} AND #{endTime} " +
+            "AND deleted = 0 " +
+            "GROUP BY DATE(create_time) " +
+            "ORDER BY DATE(create_time)")
+    List<UserRegistrationTrend> selectRegistrationTrend(@Param("startTime") LocalDateTime startTime,
+                                                       @Param("endTime") LocalDateTime endTime);
+}
+
+/**
+ * MyBatis-Plus服务类实现
+ * 
+ * 提供更高级的业务查询方法，封装常用的数据访问模式。
+ */
+@Service
+public class UserRepositoryServiceImpl extends ServiceImpl<UserMapper, User> implements UserRepositoryService {
+    
+    @Override
+    public Optional<User> findByUsername(String username) {
+        return baseMapper.findByUsername(username);
+    }
+    
+    @Override
+    public Optional<User> findByEmail(String email) {
+        return baseMapper.findByEmail(email);
+    }
+    
+    @Override
+    public boolean existsByUsername(String username) {
+        return baseMapper.existsByUsername(username);
+    }
+    
+    @Override
+    public boolean existsByEmail(String email) {
+        return baseMapper.existsByEmail(email);
+    }
+    
+    @Override
+    public PageResponse<User> findByCriteria(UserSearchCriteria criteria, Pageable pageable) {
+        // 转换Spring分页参数为MyBatis-Plus分页参数
+        IPage<User> page = new Page<>(pageable.getPageNumber() + 1, pageable.getPageSize());
+        
+        // 执行分页查询
+        IPage<User> result = baseMapper.selectPageByCriteria(page, criteria);
+        
+        // 转换为统一的分页响应格式
+        return PageResponse.<User>builder()
+            .content(result.getRecords())
+            .page((int) result.getCurrent() - 1)  // Spring分页从0开始
+            .size((int) result.getSize())
+            .totalPages((int) result.getPages())
+            .totalElements(result.getTotal())
+            .first(result.getCurrent() == 1)
+            .last(result.getCurrent() == result.getPages())
+            .hasNext(result.getCurrent() < result.getPages())
+            .hasPrevious(result.getCurrent() > 1)
+            .build();
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BatchOperationResult batchCreateUsers(List<CreateUserRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return BatchOperationResult.builder()
+                .operation("CREATE")
+                .total(0)
+                .success(0)
+                .failed(0)
+                .errors(Collections.emptyList())
+                .build();
+        }
+        
+        List<User> users = requests.stream()
+            .map(this::convertToUser)
+            .collect(Collectors.toList());
+        
+        // 使用MyBatis-Plus批量插入
+        boolean success = saveBatch(users, 100);  // 分批插入，每批100条
+        
+        return BatchOperationResult.builder()
+            .operation("CREATE")
+            .total(requests.size())
+            .success(success ? requests.size() : 0)
+            .failed(success ? 0 : requests.size())
+            .errors(Collections.emptyList())
+            .build();
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int updateStatusBatch(List<Long> userIds, UserStatus status) {
+        return baseMapper.updateStatusBatch(userIds, status);
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int softDeleteBatch(List<Long> userIds) {
+        return baseMapper.softDeleteByIds(userIds);
+    }
+    
+    private User convertToUser(CreateUserRequest request) {
+        User user = new User();
+        user.setUsername(request.getUsername());
+        user.setEmail(request.getEmail());
+        user.setName(request.getName());
+        user.setPhone(request.getPhone());
+        user.setStatus(UserStatus.PENDING);
+        user.setDeleted(false);
+        return user;
+    }
+}
+
+/**
+ * 用户基本信息DTO
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserBasicInfo {
+    private Long id;
+    private String username;
+    private String email;
+    private UserStatus status;
+}
+
+/**
+ * 用户统计信息DTO
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserStatistics {
+    private Long totalCount;
+    private Long activeCount;
+    private Long lockedCount;
+    private Long todayCount;
+}
+
+/**
+ * 用户注册趋势DTO
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserRegistrationTrend {
+    private LocalDate date;
+    private Long count;
+}
+/* [AI-BLOCK-END] */
+```
+
+### Repository配置和最佳实践
+```java
+/* [AI-BLOCK-START] - 生成工具: 数据访问层规范 v2.0 */
+/**
+ * JPA配置类
+ * 
+ * 配置JPA相关的设置，包括审计、命名策略、连接池等。
+ */
+@Configuration
+@EnableJpaRepositories(basePackages = "com.company.project.repository.jpa")
+@EnableJpaAuditing(auditorAwareRef = "auditorProvider")
+public class JpaConfig {
+    
+    /**
+     * 审计信息提供者
+     */
+    @Bean
+    public AuditorAware<String> auditorProvider() {
+        return () -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                return Optional.of(authentication.getName());
+            }
+            return Optional.of("system");
+        };
+    }
+    
+    /**
+     * 物理命名策略
+     */
+    @Bean
+    public PhysicalNamingStrategy physicalNamingStrategy() {
+        return new CamelCaseToUnderscoresNamingStrategy();
+    }
+    
+    /**
+     * JPA查询方法配置
+     */
+    @Bean
+    public JpaQueryMethodFactory jpaQueryMethodFactory() {
+        return new DefaultJpaQueryMethodFactory(LookupStrategy.CREATE_IF_NOT_FOUND);
+    }
+}
+
+/**
+ * MyBatis-Plus配置类
+ * 
+ * 配置MyBatis-Plus相关设置，包括分页插件、逻辑删除、自动填充等。
+ */
+@Configuration
+@MapperScan(basePackages = "com.company.project.repository.mybatis")
+public class MyBatisPlusConfig {
+    
+    /**
+     * 分页插件
+     */
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        
+        // 分页插件
+        PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor(DbType.MYSQL);
+        paginationInterceptor.setMaxLimit(1000L);  // 最大分页限制
+        paginationInterceptor.setOverflow(false);   // 溢出总页数后是否进行处理
+        interceptor.addInnerInterceptor(paginationInterceptor);
+        
+        // 乐观锁插件
+        interceptor.addInnerInterceptor(new OptimisticLockerInnerInterceptor());
+        
+        // 防全表更新与删除插件
+        interceptor.addInnerInterceptor(new BlockAttackInnerInterceptor());
+        
+        return interceptor;
+    }
+    
+    /**
+     * 全局配置
+     */
+    @Bean
+    public GlobalConfig globalConfig() {
+        GlobalConfig globalConfig = new GlobalConfig();
+        
+        // 数据库配置
+        GlobalConfig.DbConfig dbConfig = new GlobalConfig.DbConfig();
+        dbConfig.setLogicDeleteField("deleted");          // 逻辑删除字段
+        dbConfig.setLogicDeleteValue("1");                // 逻辑删除值
+        dbConfig.setLogicNotDeleteValue("0");             // 逻辑未删除值
+        dbConfig.setIdType(IdType.ASSIGN_ID);            // 主键生成策略
+        
+        globalConfig.setDbConfig(dbConfig);
+        
+        // 自动填充配置
+        globalConfig.setMetaObjectHandler(new CustomMetaObjectHandler());
+        
+        return globalConfig;
+    }
+    
+    /**
+     * 自定义元数据处理器
+     */
+    public static class CustomMetaObjectHandler implements MetaObjectHandler {
+        
+        @Override
+        public void insertFill(MetaObject metaObject) {
+            this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
+            this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+            this.strictInsertFill(metaObject, "deleted", Boolean.class, false);
+            
+            // 设置创建人和更新人
+            String currentUser = getCurrentUser();
+            this.strictInsertFill(metaObject, "createBy", String.class, currentUser);
+            this.strictInsertFill(metaObject, "updateBy", String.class, currentUser);
+        }
+        
+        @Override
+        public void updateFill(MetaObject metaObject) {
+            this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+            
+            // 设置更新人
+            String currentUser = getCurrentUser();
+            this.strictUpdateFill(metaObject, "updateBy", String.class, currentUser);
+        }
+        
+        private String getCurrentUser() {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                return authentication.getName();
+            }
+            return "system";
+        }
+    }
+}
+
+/**
+ * 数据源配置
+ * 
+ * 配置主从数据源和读写分离。
+ */
+@Configuration
+public class DataSourceConfig {
+    
+    @Bean
+    @Primary
+    @ConfigurationProperties(prefix = "spring.datasource.master")
+    public DataSource masterDataSource() {
+        return DataSourceBuilder.create().build();
+    }
+    
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource.slave")
+    public DataSource slaveDataSource() {
+        return DataSourceBuilder.create().build();
+    }
+    
+    /**
+     * 动态数据源
+     */
+    @Bean
+    public DataSource dynamicDataSource() {
+        DynamicDataSource dynamicDataSource = new DynamicDataSource();
+        
+        Map<Object, Object> targetDataSources = new HashMap<>();
+        targetDataSources.put("master", masterDataSource());
+        targetDataSources.put("slave", slaveDataSource());
+        
+        dynamicDataSource.setTargetDataSources(targetDataSources);
+        dynamicDataSource.setDefaultTargetDataSource(masterDataSource());
+        
+        return dynamicDataSource;
+    }
+    
+    /**
+     * 事务管理器
+     */
+    @Bean
+    public PlatformTransactionManager transactionManager() {
+        return new DataSourceTransactionManager(dynamicDataSource());
+    }
+}
+
+/**
+ * Repository层异常处理
+ * 
+ * 统一处理数据访问层的异常，转换为业务异常。
+ */
+@Component
+@Slf4j
+public class RepositoryExceptionHandler {
+    
+    /**
+     * 处理数据访问异常
+     */
+    @EventListener
+    public void handleDataAccessException(DataAccessException ex) {
+        log.error("数据访问异常", ex);
+        
+        if (ex instanceof DuplicateKeyException) {
+            throw new BusinessException("数据重复，请检查输入信息");
+        } else if (ex instanceof DataIntegrityViolationException) {
+            throw new BusinessException("数据完整性约束违反");
+        } else if (ex instanceof QueryTimeoutException) {
+            throw new BusinessException("查询超时，请稍后重试");
+        } else {
+            throw new BusinessException("数据操作失败，请稍后重试");
+        }
+    }
+}
+
+/**
+ * Repository性能监控
+ * 
+ * 监控数据访问层的性能指标。
+ */
+@Aspect
+@Component
+@Slf4j
+public class RepositoryPerformanceAspect {
+    
+    private final MeterRegistry meterRegistry;
+    
+    public RepositoryPerformanceAspect(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
+    
+    @Around("execution(* com.company.project.repository..*(..))")
+    public Object monitorRepositoryPerformance(ProceedingJoinPoint joinPoint) throws Throwable {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        String methodName = joinPoint.getSignature().getName();
+        String className = joinPoint.getTarget().getClass().getSimpleName();
+        
+        try {
+            Object result = joinPoint.proceed();
+            
+            sample.stop(Timer.builder("repository.method.duration")
+                .tag("class", className)
+                .tag("method", methodName)
+                .tag("status", "success")
+                .register(meterRegistry));
+            
+            return result;
+            
+        } catch (Exception e) {
+            sample.stop(Timer.builder("repository.method.duration")
+                .tag("class", className)
+                .tag("method", methodName)
+                .tag("status", "error")
+                .register(meterRegistry));
+            
+            Counter.builder

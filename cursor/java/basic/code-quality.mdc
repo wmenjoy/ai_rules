@@ -1,0 +1,203 @@
+# 代码质量控制规范 (基础层规则)
+> 代码复杂度、安全性和性能要求
+
+## 基础规范
+
+### 复杂度控制标准
+- **方法复杂度**：单个方法不超过50行，圈复杂度不超过10
+- **类复杂度**：单个类不超过500行，职责单一
+- **包结构**：按功能模块组织，层次清晰
+- **依赖管理**：避免循环依赖，依赖倒置
+
+### 性能要求
+- **响应时间**：API接口响应时间不超过2秒
+- **内存使用**：避免内存泄漏，合理使用缓存
+- **数据库查询**：避免N+1问题，使用合适的索引
+- **并发处理**：线程安全，合理使用锁机制
+
+### 安全基线
+- **输入验证**：所有外部输入必须验证
+- **SQL注入防护**：使用参数化查询
+- **XSS防护**：输出数据必须转义
+- **敏感信息保护**：密码、密钥等信息加密存储
+
+## 强制行为
+
+### 代码质量检查
+- **静态代码分析**：集成SonarQube，质量门禁必须通过
+- **单元测试覆盖率**：核心业务逻辑覆盖率不低于80%
+- **代码评审**：所有代码必须经过同行评审
+- **文档更新**：重要变更必须更新相关文档
+
+### 异常处理
+- **业务异常**：自定义异常继承RuntimeException
+- **异常链保持**：转换异常时保持原始异常信息
+- **日志记录**：异常发生时记录完整的上下文信息
+- **错误码规范**：使用统一的错误码体系
+
+### 资源管理
+- **连接管理**：数据库连接、HTTP连接必须正确关闭
+- **事务管理**：合理使用事务，避免长事务
+- **缓存管理**：设置合理的过期时间，避免内存溢出
+- **文件处理**：文件流必须在finally块中关闭
+
+## 禁止行为
+
+### 代码质量禁令
+- **禁止硬编码**：不允许在代码中写死配置信息
+- **禁止魔法数字**：数字常量必须定义为有意义的常量
+- **禁止大段注释代码**：删除无用代码，不要注释
+- **禁止重复代码**：相同逻辑必须抽取为公共方法
+- **禁止空的catch块**：必须处理异常或记录日志
+
+### 性能禁令
+- **禁止在循环中进行数据库操作**：批量处理或使用缓存
+- **禁止使用SELECT ***：明确指定需要的字段
+- **禁止在业务代码中使用Thread.sleep()**：使用异步或定时任务
+- **禁止频繁创建大对象**：合理使用对象池或缓存
+- **禁止在生产环境打印大量DEBUG日志**：控制日志级别
+
+### 安全禁令
+- **禁止明文存储密码**：使用BCrypt等加密算法
+- **禁止在日志中输出敏感信息**：脱敏处理
+- **禁止使用弱随机数生成器**：使用SecureRandom
+- **禁止忽略SSL证书验证**：生产环境必须验证证书
+- **禁止使用已知有漏洞的依赖版本**：定期更新依赖库
+
+## 示例代码
+
+### 正确的异常处理
+```java
+/* [AI-BLOCK-START] - 生成工具: 规范示例 v2.0 */
+@Service
+@Slf4j
+public class UserService {
+    
+    public User createUser(CreateUserRequest request) {
+        try {
+            // 参数验证
+            validateUserRequest(request);
+            
+            // 业务处理
+            User user = processUserCreation(request);
+            
+            log.info("User created successfully: userId={}", user.getId());
+            return user;
+            
+        } catch (ValidationException e) {
+            log.warn("User validation failed: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, e.getMessage(), e);
+            
+        } catch (DataAccessException e) {
+            log.error("Database error during user creation: {}", request.getEmail(), e);
+            throw new BusinessException(ErrorCode.DATABASE_ERROR, "User creation failed", e);
+            
+        } catch (Exception e) {
+            log.error("Unexpected error during user creation: {}", request.getEmail(), e);
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "System error", e);
+        }
+    }
+    
+    private void validateUserRequest(CreateUserRequest request) {
+        Objects.requireNonNull(request, "User request cannot be null");
+        
+        if (!EmailValidator.isValid(request.getEmail())) {
+            throw new ValidationException("Invalid email format: " + request.getEmail());
+        }
+        
+        if (StringUtils.isBlank(request.getName()) || request.getName().length() > 50) {
+            throw new ValidationException("Invalid name length: must be 1-50 characters");
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 正确的资源管理
+```java
+/* [AI-BLOCK-START] - 生成工具: 规范示例 v2.0 */
+@Service
+public class FileProcessorService {
+    
+    // 使用try-with-resources自动关闭资源
+    public String processFile(String filePath) {
+        try (BufferedReader reader = Files.newBufferedReader(Paths.get(filePath), StandardCharsets.UTF_8)) {
+            
+            return reader.lines()
+                .filter(line -> !line.trim().isEmpty())
+                .collect(Collectors.joining("\n"));
+                
+        } catch (IOException e) {
+            log.error("Failed to process file: {}", filePath, e);
+            throw new BusinessException(ErrorCode.FILE_PROCESSING_ERROR, 
+                "File processing failed: " + filePath, e);
+        }
+    }
+    
+    // 数据库批量操作
+    @Transactional
+    public void batchUpdateUsers(List<User> users) {
+        final int BATCH_SIZE = 100;
+        
+        for (int i = 0; i < users.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, users.size());
+            List<User> batch = users.subList(i, end);
+            
+            userRepository.saveAll(batch);
+            
+            // 批量提交，避免内存溢出
+            if (i % BATCH_SIZE == 0) {
+                entityManager.flush();
+                entityManager.clear();
+            }
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 正确的性能优化
+```java
+/* [AI-BLOCK-START] - 生成工具: 规范示例 v2.0 */
+@Service
+public class OrderQueryService {
+    
+    // 缓存热点数据
+    @Cacheable(value = "orders", key = "#userId", unless = "#result == null")
+    public List<Order> getUserOrders(Long userId) {
+        return orderRepository.findByUserIdWithDetails(userId);
+    }
+    
+    // 分页查询避免大结果集
+    public Page<OrderSummary> getOrderSummaries(Pageable pageable, OrderSearchCriteria criteria) {
+        // 使用Specification进行动态查询
+        Specification<Order> spec = OrderSpecifications.buildSpecification(criteria);
+        
+        Page<Order> orders = orderRepository.findAll(spec, pageable);
+        
+        // 转换为DTO，避免传输过多数据
+        List<OrderSummary> summaries = orders.getContent().stream()
+            .map(orderConverter::toSummary)
+            .collect(Collectors.toList());
+            
+        return new PageImpl<>(summaries, pageable, orders.getTotalElements());
+    }
+    
+    // 异步处理耗时操作
+    @Async("taskExecutor")
+    public CompletableFuture<Void> processOrderStatistics(Long orderId) {
+        try {
+            // 执行耗时的统计计算
+            calculateOrderMetrics(orderId);
+            updateOrderStatistics(orderId);
+            
+            return CompletableFuture.completedFuture(null);
+            
+        } catch (Exception e) {
+            log.error("Failed to process order statistics: orderId={}", orderId, e);
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```

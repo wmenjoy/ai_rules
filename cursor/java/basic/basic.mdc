@@ -1,0 +1,804 @@
+# 项目基础规范 (基础层规则)
+> 项目目录结构、技术栈版本和开发流程的基础标准
+
+## 基础规范
+
+### 技术栈版本要求
+- **Java版本**：OpenJDK 8+ (推荐JDK 11或17 LTS)
+- **Spring Boot**：2.7.x (Spring 5.3.x)
+- **Spring Security**：5.7.x
+- **Spring Data JPA**：2.7.x
+- **MySQL**：8.0.x
+- **Redis**：6.2.x或7.0.x
+- **Maven**：3.8.x+
+
+### 项目目录结构标准
+```
+project-name/
+├── pom.xml                           # Maven项目配置
+├── README.md                         # 项目说明文档
+├── .gitignore                        # Git忽略配置
+├── .editorconfig                     # 编辑器配置
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/company/project/
+│   │   │       ├── ProjectApplication.java    # 启动类
+│   │   │       ├── config/                    # 配置类
+│   │   │       │   ├── DatabaseConfig.java
+│   │   │       │   ├── RedisConfig.java
+│   │   │       │   ├── SecurityConfig.java
+│   │   │       │   └── SwaggerConfig.java
+│   │   │       ├── controller/                # 控制器层
+│   │   │       │   ├── BaseController.java
+│   │   │       │   ├── UserController.java
+│   │   │       │   └── v1/                   # API版本分组
+│   │   │       ├── service/                   # 服务层
+│   │   │       │   ├── UserService.java
+│   │   │       │   └── impl/
+│   │   │       │       └── UserServiceImpl.java
+│   │   │       ├── repository/                # 数据访问层
+│   │   │       │   ├── UserRepository.java
+│   │   │       │   └── custom/               # 自定义Repository
+│   │   │       ├── entity/                    # 实体类
+│   │   │       │   ├── BaseEntity.java
+│   │   │       │   └── User.java
+│   │   │       ├── dto/                       # 数据传输对象
+│   │   │       │   ├── request/
+│   │   │       │   │   └── CreateUserRequest.java
+│   │   │       │   └── response/
+│   │   │       │       └── UserResponse.java
+│   │   │       ├── enums/                     # 枚举类
+│   │   │       │   ├── UserStatus.java
+│   │   │       │   └── ErrorCode.java
+│   │   │       ├── exception/                 # 异常类
+│   │   │       │   ├── BusinessException.java
+│   │   │       │   └── GlobalExceptionHandler.java
+│   │   │       ├── util/                      # 工具类
+│   │   │       │   ├── DateUtil.java
+│   │   │       │   └── JsonUtil.java
+│   │   │       └── constant/                  # 常量类
+│   │   │           └── SystemConstants.java
+│   │   └── resources/
+│   │       ├── application.yml               # 主配置文件
+│   │       ├── application-dev.yml           # 开发环境配置
+│   │       ├── application-test.yml          # 测试环境配置
+│   │       ├── application-prod.yml          # 生产环境配置
+│   │       ├── logback-spring.xml           # 日志配置
+│   │       ├── mapper/                       # MyBatis映射文件
+│   │       │   └── UserMapper.xml
+│   │       ├── static/                       # 静态资源
+│   │       └── templates/                    # 模板文件
+│   └── test/
+│       ├── java/
+│       │   └── com/company/project/
+│       │       ├── controller/               # 控制器测试
+│       │       ├── service/                  # 服务层测试
+│       │       ├── repository/               # 数据访问层测试
+│       │       └── integration/              # 集成测试
+│       └── resources/
+│           ├── application-test.yml          # 测试配置
+│           └── test-data/                    # 测试数据
+├── docs/                                     # 项目文档
+│   ├── api/                                  # API文档
+│   ├── database/                             # 数据库文档
+│   └── deployment/                           # 部署文档
+└── scripts/                                  # 脚本文件
+    ├── build.sh
+    └── deploy.sh
+```
+
+### 包命名规范
+- **根包**：com.{公司域名}.{项目名称}
+- **控制器包**：.controller (API接口)
+- **服务包**：.service (业务逻辑)
+- **数据访问包**：.repository (数据访问)
+- **实体包**：.entity (数据模型)
+- **DTO包**：.dto (数据传输对象)
+- **配置包**：.config (配置类)
+- **工具包**：.util (工具类)
+
+### 开发环境配置
+- **IDE**：IntelliJ IDEA (推荐) 或 Eclipse
+- **代码格式化**：Google Java Style 或 统一的IDE配置
+- **版本控制**：Git + GitFlow工作流
+- **构建工具**：Maven 3.8+
+- **代码质量**：SonarQube + CheckStyle + PMD
+
+## 强制行为
+
+### 项目初始化要求
+- **使用标准目录结构**：严格按照Maven标准目录结构组织代码
+- **配置文件分离**：按环境分离配置文件，使用profile管理
+- **依赖版本管理**：使用dependencyManagement统一管理版本
+- **文档完整性**：项目必须包含README.md和API文档
+
+### 依赖管理要求
+- **版本兼容性**：确保所有依赖版本兼容，避免冲突
+- **安全漏洞检查**：定期检查依赖的安全漏洞，及时更新
+- **依赖最小化**：只引入必要的依赖，避免重复功能的库
+- **传递依赖管理**：明确排除不需要的传递依赖
+
+### 配置管理要求
+- **敏感信息保护**：不在配置文件中存储明文密码和密钥
+- **环境变量使用**：敏感配置使用环境变量或配置中心
+- **配置验证**：启动时验证必要配置项的存在和有效性
+- **配置文档化**：重要配置项必须有注释说明
+
+### 代码组织要求
+- **单一职责**：每个包、类、方法都有明确的职责
+- **层次清晰**：严格按照分层架构组织代码
+- **命名一致**：包名、类名、方法名遵循统一的命名规范
+- **导入管理**：及时清理未使用的导入，避免*号导入
+
+## 禁止行为
+
+### 项目结构禁令
+- **禁止混乱的包结构**：不允许将不同层次的类放在同一个包中
+- **禁止循环依赖**：包和类之间不能有循环依赖关系
+- **禁止深层嵌套包**：包层次不超过6层
+- **禁止无意义的包名**：包名必须有明确的含义
+
+### 依赖管理禁令
+- **禁止版本冲突**：不允许存在相同功能的不同版本依赖
+- **禁止快照版本**：生产环境不使用SNAPSHOT版本的依赖
+- **禁止本地jar包**：不将jar包直接放入项目代码库中
+- **禁止过期依赖**：不使用已经停止维护的过期依赖
+
+### 配置管理禁令
+- **禁止硬编码配置**：不在Java代码中硬编码配置信息
+- **禁止明文密码**：配置文件中不存储明文密码
+- **禁止混用配置格式**：不在同一项目中混用properties和yml格式
+- **禁止重复配置**：避免在不同配置文件中重复相同的配置
+
+### 开发环境禁令
+- **禁止个人配置入库**：IDE个人配置不提交到版本控制
+- **禁止临时代码入库**：测试代码、调试代码不提交到主分支
+- **禁止忽略构建警告**：构建过程中的警告必须处理
+- **禁止跳过测试**：不在构建过程中跳过单元测试
+
+## 示例代码
+
+### 标准的启动类配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 项目基础规范 v2.0 */
+package com.company.project;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+/**
+ * 项目启动类
+ * 
+ * 提供Spring Boot应用程序的入口点，并启用必要的功能模块。
+ * 
+ * @author 开发团队
+ * @version 1.0
+ * @since 2024-01-01
+ */
+@SpringBootApplication(scanBasePackages = "com.company.project")
+@EnableJpaAuditing(auditorAwareRef = "auditorProvider")
+@EnableTransactionManagement
+@EnableCaching
+@EnableAsync
+public class ProjectApplication {
+    
+    /**
+     * 应用程序主入口
+     * 
+     * @param args 命令行参数
+     */
+    public static void main(String[] args) {
+        // 设置系统属性
+        System.setProperty("spring.profiles.default", "dev");
+        
+        // 启动Spring Boot应用
+        SpringApplication application = new SpringApplication(ProjectApplication.class);
+        
+        // 设置应用属性
+        application.setRegisterShutdownHook(true);
+        
+        // 运行应用
+        application.run(args);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 标准的基础实体类
+```java
+/* [AI-BLOCK-START] - 生成工具: 项目基础规范 v2.0 */
+package com.company.project.entity;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import javax.persistence.*;
+import java.time.LocalDateTime;
+
+/**
+ * 基础实体类
+ * 
+ * 提供所有实体类的公共字段，包括审计字段和软删除标记。
+ * 所有业务实体都应该继承此类。
+ * 
+ * @author 开发团队
+ * @version 1.0
+ */
+@MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)
+public abstract class BaseEntity {
+    
+    /**
+     * 创建时间
+     */
+    @CreatedDate
+    @Column(name = "create_time", nullable = false, updatable = false)
+    private LocalDateTime createTime;
+    
+    /**
+     * 更新时间
+     */
+    @LastModifiedDate
+    @Column(name = "update_time", nullable = false)
+    private LocalDateTime updateTime;
+    
+    /**
+     * 创建人
+     */
+    @CreatedBy
+    @Column(name = "created_by", length = 50, updatable = false)
+    private String createdBy;
+    
+    /**
+     * 更新人
+     */
+    @LastModifiedBy
+    @Column(name = "updated_by", length = 50)
+    private String updatedBy;
+    
+    /**
+     * 版本号 - 乐观锁
+     */
+    @Version
+    @Column(name = "version")
+    @JsonIgnore
+    private Long version;
+    
+    /**
+     * 软删除标记
+     */
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = false;
+    
+    // Getter和Setter方法
+    public LocalDateTime getCreateTime() {
+        return createTime;
+    }
+    
+    public void setCreateTime(LocalDateTime createTime) {
+        this.createTime = createTime;
+    }
+    
+    public LocalDateTime getUpdateTime() {
+        return updateTime;
+    }
+    
+    public void setUpdateTime(LocalDateTime updateTime) {
+        this.updateTime = updateTime;
+    }
+    
+    public String getCreatedBy() {
+        return createdBy;
+    }
+    
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+    
+    public String getUpdatedBy() {
+        return updatedBy;
+    }
+    
+    public void setUpdatedBy(String updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+    
+    public Long getVersion() {
+        return version;
+    }
+    
+    public void setVersion(Long version) {
+        this.version = version;
+    }
+    
+    public Boolean getDeleted() {
+        return deleted;
+    }
+    
+    public void setDeleted(Boolean deleted) {
+        this.deleted = deleted;
+    }
+    
+    /**
+     * 软删除实体
+     */
+    public void markAsDeleted() {
+        this.deleted = true;
+    }
+    
+    /**
+     * 恢复已删除的实体
+     */
+    public void restore() {
+        this.deleted = false;
+    }
+    
+    /**
+     * 检查实体是否已被删除
+     */
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(this.deleted);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 标准的配置文件示例
+```yaml
+# [AI-BLOCK-START] - 生成工具: 项目基础规范 v2.0
+# application.yml - 主配置文件
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  application:
+    name: ${APP_NAME:project-name}
+    version: ${APP_VERSION:1.0.0}
+  
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${DB_URL:jdbc:mysql://localhost:3306/project_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+  
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.SnakeCasePhysicalNamingStrategy
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+  
+  # Redis配置
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DB:0}
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 200
+        max-idle: 20
+        min-idle: 5
+        max-wait: 3000ms
+  
+  # 缓存配置
+  cache:
+    type: redis
+    cache-names:
+      - users
+      - products
+    redis:
+      time-to-live: 3600000  # 1小时
+      key-prefix: "${spring.application.name}:"
+      use-key-prefix: true
+  
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# 服务器配置
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: ${CONTEXT_PATH:/api}
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 10
+    connection-timeout: 20000
+    uri-encoding: UTF-8
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+# 日志配置
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.company.project: ${APP_LOG_LEVEL:DEBUG}
+    org.springframework.security: WARN
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_PARAM_LOG_LEVEL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{50}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{50}] - %msg%n"
+
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# 应用自定义配置
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:mySecretKey}
+      expiration: ${JWT_EXPIRATION:86400} # 24小时
+      refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800} # 7天
+  
+  file:
+    upload:
+      path: ${FILE_UPLOAD_PATH:/tmp/uploads}
+      max-size: ${FILE_MAX_SIZE:10MB}
+      allowed-types: jpg,jpeg,png,gif,pdf,doc,docx
+  
+  api:
+    rate-limit:
+      enabled: ${RATE_LIMIT_ENABLED:true}
+      requests-per-minute: ${RATE_LIMIT_RPM:100}
+# [AI-BLOCK-END]
+```
+
+### 标准的Maven配置
+```xml
+<!-- [AI-BLOCK-START] - 生成工具: 项目基础规范 v2.0 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- 项目基本信息 -->
+    <groupId>com.company</groupId>
+    <artifactId>project-name</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Project Name</name>
+    <description>项目描述</description>
+    <url>https://github.com/company/project-name</url>
+
+    <!-- 项目属性 -->
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        
+        <!-- 版本管理 -->
+        <spring-boot.version>2.7.18</spring-boot.version>
+        <mysql.version>8.0.33</mysql.version>
+        <redis.version>4.0.1</redis.version>
+        <junit.version>5.9.3</junit.version>
+        <mockito.version>4.11.0</mockito.version>
+        <testcontainers.version>1.18.3</testcontainers.version>
+        
+        <!-- 插件版本 -->
+        <maven-compiler-plugin.version>3.11.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.1.2</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.1.2</maven-failsafe-plugin.version>
+        <jacoco-maven-plugin.version>0.8.10</jacoco-maven-plugin.version>
+        <checkstyle-maven-plugin.version>3.3.0</checkstyle-maven-plugin.version>
+        <sonar-maven-plugin.version>3.9.1.2184</sonar-maven-plugin.version>
+    </properties>
+
+    <!-- 依赖管理 -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- 项目依赖 -->
+    <dependencies>
+        <!-- Spring Boot Starters -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- 数据库驱动 -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
+        </dependency>
+
+        <!-- 工具类库 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- 测试依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!-- 构建配置 -->
+    <build>
+        <plugins>
+            <!-- Spring Boot插件 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 编译插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                </configuration>
+            </plugin>
+
+            <!-- 单元测试插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>**/*IntegrationTest.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- 集成测试插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${maven-failsafe-plugin.version}</version>
+                <configuration>
+                    <includes>
+                        <include>**/*IntegrationTest.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 代码覆盖率插件 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>CLASS</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 代码检查插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>${checkstyle-maven-plugin.version}</version>
+                <configuration>
+                    <configLocation>checkstyle.xml</configLocation>
+                    <encoding>UTF-8</encoding>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>true</failsOnError>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>validate</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- SonarQube插件 -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar-maven-plugin.version}</version>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- 开发者信息 -->
+    <developers>
+        <developer>
+            <id>team</id>
+            <name>开发团队</name>
+            <email>dev-team@company.com</email>
+            <organization>Company Name</organization>
+        </developer>
+    </developers>
+
+    <!-- SCM信息 -->
+    <scm>
+        <connection>scm:git:git://github.com/company/project-name.git</connection>
+        <developerConnection>scm:git:ssh://github.com:company/project-name.git</developerConnection>
+        <url>http://github.com/company/project-name/tree/master</url>
+    </scm>
+</project>
+<!-- [AI-BLOCK-END] -->
+```
+
+---
+
+*此项目基础规范建立了标准化的项目结构和开发环境，确保团队开发的一致性和高效性*
+description:
+globs:
+alwaysApply: false
+---

@@ -1,12 +1,26 @@
+# 编译输出
+/bin
+/checker
+
+# IDE文件
+.idea/
+.vscode/
+
+# 依赖
+/vendor/
+
+# 测试覆盖率
+coverage.out
+
+# 系统文件
+.DS_Store
+
 demo
 go-demo/
 java-demo
 node_modules
 .aider*
-.idea
-.vscode
 prompt-backend
 prompt-front
-.DS_Store
 main
 **/main

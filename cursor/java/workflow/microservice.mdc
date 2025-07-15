@@ -1,0 +1,897 @@
+# 微服务开发流程 (流程层规则)
+> 微服务架构设计、服务拆分和服务间通信的标准化开发流程
+
+## 基础规范
+
+### 微服务设计原则
+- **单一职责**：每个微服务专注于单一的业务功能
+- **自治性**：服务独立开发、部署和扩展
+- **去中心化**：数据管理和治理去中心化
+- **容错性**：服务故障不影响整个系统
+- **可观测性**：完善的监控、日志和链路追踪
+
+### 服务拆分策略
+- **领域驱动设计**：基于业务领域边界拆分服务
+- **数据分离**：每个服务拥有独立的数据存储
+- **接口设计**：基于API契约进行服务交互
+- **版本管理**：API版本向后兼容策略
+- **服务边界**：明确服务之间的职责边界
+
+### 通信机制
+- **同步通信**：HTTP/REST、gRPC
+- **异步通信**：消息队列、事件驱动
+- **服务发现**：注册中心、负载均衡
+- **断路器**：故障隔离和快速失败
+- **重试机制**：指数退避重试策略
+
+### 配置管理
+- **配置中心**：集中化配置管理
+- **环境隔离**：开发、测试、生产环境配置分离
+- **动态配置**：运行时配置热更新
+- **配置加密**：敏感配置信息加密存储
+- **配置版本**：配置变更历史追踪
+
+## 强制行为
+
+### 服务架构设计
+- **独立部署**：每个微服务独立打包和部署
+- **数据库分离**：每个服务使用独立的数据库
+- **无状态设计**：服务实例无状态，支持水平扩展
+- **健康检查**：提供健康检查端点
+- **优雅关闭**：支持优雅停机机制
+
+### API设计要求
+- **RESTful规范**：遵循REST设计原则
+- **API版本控制**：通过URL或Header管理版本
+- **接口文档**：使用OpenAPI规范生成文档
+- **参数验证**：严格的输入参数验证
+- **错误处理**：标准化的错误响应格式
+
+### 服务间调用
+- **服务发现**：通过注册中心发现服务
+- **负载均衡**：客户端或服务器端负载均衡
+- **超时控制**：设置合理的调用超时时间
+- **重试策略**：实现指数退避重试
+- **断路器模式**：防止级联故障
+
+### 数据一致性
+- **最终一致性**：接受最终一致性模型
+- **补偿事务**：Saga模式处理分布式事务
+- **事件溯源**：记录所有状态变更事件
+- **幂等性**：确保操作的幂等性
+- **数据同步**：异步数据同步机制
+
+## 禁止行为
+
+### 服务设计禁令
+- **禁止共享数据库**：微服务不能共享数据库实例
+- **禁止同步调用链过长**：避免深层的同步调用链
+- **禁止紧耦合**：服务间不能有紧密的代码耦合
+- **禁止共享业务逻辑**：业务逻辑不能跨服务共享
+- **禁止忽略服务边界**：严格遵守服务边界定义
+
+### 通信禁令
+- **禁止直接数据库访问**：服务不能直接访问其他服务的数据库
+- **禁止同步事务**：不使用分布式同步事务
+- **禁止循环依赖**：服务间不能有循环调用依赖
+- **禁止缓存穿透**：避免缓存失效导致的连锁调用
+- **禁止忽略网络分区**：必须考虑网络分区场景
+
+### 部署禁令
+- **禁止共享运行环境**：微服务不共享JVM或容器
+- **禁止集中式日志存储在本地**：日志必须集中收集
+- **禁止硬编码服务地址**：使用服务发现机制
+- **禁止忽略监控**：每个服务必须有监控和告警
+- **禁止单点故障**：避免系统中的单点故障
+
+### 数据禁令
+- **禁止跨服务事务**：不使用跨服务的强一致性事务
+- **禁止共享缓存**：服务不能共享缓存实例
+- **禁止数据冗余过度**：适度的数据冗余，避免过度冗余
+- **禁止忽略数据隐私**：跨服务数据传输要脱敏
+- **禁止实时数据同步**：避免实时同步导致的性能问题
+
+## 示例代码
+
+### 微服务启动类配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 微服务开发流程 v2.0 */
+@SpringBootApplication
+@EnableEurekaClient
+@EnableFeignClients(basePackages = "com.company.project.client")
+@EnableCircuitBreaker
+@EnableConfigurationProperties
+@EnableAsync
+@Slf4j
+public class UserServiceApplication {
+    
+    public static void main(String[] args) {
+        // 设置服务名称
+        System.setProperty("spring.application.name", "user-service");
+        
+        // 启动Spring Boot应用
+        SpringApplication application = new SpringApplication(UserServiceApplication.class);
+        
+        // 设置默认Profile
+        application.setDefaultProperties(Collections.singletonMap(
+            "spring.profiles.default", "dev"));
+        
+        // 添加应用启动监听器
+        application.addListeners(new ApplicationStartupListener());
+        
+        ConfigurableApplicationContext context = application.run(args);
+        
+        // 注册优雅关闭钩子
+        context.registerShutdownHook();
+        
+        log.info("User Service started successfully");
+    }
+    
+    /**
+     * 服务信息配置
+     */
+    @Bean
+    public ServiceInfo serviceInfo() {
+        return ServiceInfo.builder()
+            .serviceName("user-service")
+            .version("1.0.0")
+            .description("用户管理微服务")
+            .build();
+    }
+    
+    /**
+     * 应用启动监听器
+     */
+    private static class ApplicationStartupListener implements ApplicationListener<ApplicationReadyEvent> {
+        @Override
+        public void onApplicationEvent(ApplicationReadyEvent event) {
+            Environment env = event.getApplicationContext().getEnvironment();
+            String port = env.getProperty("server.port", "8080");
+            String contextPath = env.getProperty("server.servlet.context-path", "");
+            
+            log.info("User Service is running at: http://localhost:{}{}", port, contextPath);
+            log.info("Health check: http://localhost:{}{}/actuator/health", port, contextPath);
+            log.info("API documentation: http://localhost:{}{}/swagger-ui.html", port, contextPath);
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### Feign客户端配置
+```java
+/* [AI-BLOCK-START] - 生成工具: 微服务开发流程 v2.0 */
+/**
+ * 订单服务Feign客户端
+ */
+@FeignClient(
+    name = "order-service",
+    configuration = OrderServiceFeignConfig.class,
+    fallback = OrderServiceFallback.class
+)
+public interface OrderServiceClient {
+    
+    /**
+     * 获取用户订单列表
+     */
+    @GetMapping("/api/v1/orders/user/{userId}")
+    ApiResponse<List<OrderSummary>> getUserOrders(@PathVariable("userId") Long userId);
+    
+    /**
+     * 创建订单
+     */
+    @PostMapping("/api/v1/orders")
+    ApiResponse<OrderResponse> createOrder(@RequestBody CreateOrderRequest request);
+    
+    /**
+     * 获取订单详情
+     */
+    @GetMapping("/api/v1/orders/{orderId}")
+    ApiResponse<OrderResponse> getOrderById(@PathVariable("orderId") Long orderId);
+    
+    /**
+     * 取消订单
+     */
+    @PostMapping("/api/v1/orders/{orderId}/cancel")
+    ApiResponse<Void> cancelOrder(@PathVariable("orderId") Long orderId, 
+                                 @RequestBody CancelOrderRequest request);
+}
+
+/**
+ * Feign客户端配置
+ */
+@Configuration
+public class OrderServiceFeignConfig {
+    
+    /**
+     * Feign日志级别配置
+     */
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        return Logger.Level.BASIC;
+    }
+    
+    /**
+     * 请求拦截器 - 添加认证头
+     */
+    @Bean
+    public RequestInterceptor requestInterceptor() {
+        return template -> {
+            // 传递认证信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getDetails() instanceof OAuth2AuthenticationDetails) {
+                OAuth2AuthenticationDetails details = (OAuth2AuthenticationDetails) authentication.getDetails();
+                template.header("Authorization", "Bearer " + details.getTokenValue());
+            }
+            
+            // 传递追踪ID
+            String traceId = MDC.get("traceId");
+            if (StringUtils.hasText(traceId)) {
+                template.header("X-Trace-Id", traceId);
+            }
+            
+            // 设置Content-Type
+            template.header("Content-Type", "application/json");
+        };
+    }
+    
+    /**
+     * 错误解码器
+     */
+    @Bean
+    public ErrorDecoder errorDecoder() {
+        return new FeignErrorDecoder();
+    }
+    
+    /**
+     * 重试配置
+     */
+    @Bean
+    public Retryer retryer() {
+        // 最大重试3次，初始间隔100ms，最大间隔1000ms
+        return new Retryer.Default(100, 1000, 3);
+    }
+    
+    /**
+     * 超时配置
+     */
+    @Bean
+    public Request.Options options() {
+        // 连接超时5秒，读取超时10秒
+        return new Request.Options(5000, 10000);
+    }
+}
+
+/**
+ * 订单服务降级处理
+ */
+@Component
+@Slf4j
+public class OrderServiceFallback implements OrderServiceClient {
+    
+    @Override
+    public ApiResponse<List<OrderSummary>> getUserOrders(Long userId) {
+        log.warn("Order service is unavailable, returning empty order list for user: {}", userId);
+        return ApiResponse.success(Collections.emptyList(), "订单服务暂时不可用");
+    }
+    
+    @Override
+    public ApiResponse<OrderResponse> createOrder(CreateOrderRequest request) {
+        log.error("Order service is unavailable, failed to create order");
+        throw new ServiceUnavailableException("订单服务暂时不可用，请稍后重试");
+    }
+    
+    @Override
+    public ApiResponse<OrderResponse> getOrderById(Long orderId) {
+        log.warn("Order service is unavailable, cannot get order: {}", orderId);
+        throw new ServiceUnavailableException("订单服务暂时不可用，请稍后重试");
+    }
+    
+    @Override
+    public ApiResponse<Void> cancelOrder(Long orderId, CancelOrderRequest request) {
+        log.error("Order service is unavailable, failed to cancel order: {}", orderId);
+        throw new ServiceUnavailableException("订单服务暂时不可用，请稍后重试");
+    }
+}
+
+/**
+ * Feign错误解码器
+ */
+public class FeignErrorDecoder implements ErrorDecoder {
+    
+    private final ErrorDecoder defaultErrorDecoder = new Default();
+    
+    @Override
+    public Exception decode(String methodKey, Response response) {
+        switch (response.status()) {
+            case 400:
+                return new IllegalArgumentException("请求参数错误");
+            case 404:
+                return new ResourceNotFoundException("请求的资源不存在");
+            case 503:
+                return new ServiceUnavailableException("服务暂时不可用");
+            default:
+                return defaultErrorDecoder.decode(methodKey, response);
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 分布式事务处理
+```java
+/* [AI-BLOCK-START] - 生成工具: 微服务开发流程 v2.0 */
+/**
+ * 订单处理Saga协调器
+ * 使用Saga模式处理分布式事务
+ */
+@Service
+@Slf4j
+public class OrderProcessingSaga {
+    
+    private final InventoryServiceClient inventoryServiceClient;
+    private final PaymentServiceClient paymentServiceClient;
+    private final OrderRepository orderRepository;
+    private final SagaManager sagaManager;
+    
+    public OrderProcessingSaga(InventoryServiceClient inventoryServiceClient,
+                              PaymentServiceClient paymentServiceClient,
+                              OrderRepository orderRepository,
+                              SagaManager sagaManager) {
+        this.inventoryServiceClient = inventoryServiceClient;
+        this.paymentServiceClient = paymentServiceClient;
+        this.orderRepository = orderRepository;
+        this.sagaManager = sagaManager;
+    }
+    
+    /**
+     * 处理订单创建的分布式事务
+     */
+    @SagaStart
+    public void processOrderCreation(CreateOrderRequest request) {
+        String sagaId = UUID.randomUUID().toString();
+        
+        log.info("Starting order processing saga: {}", sagaId);
+        
+        // 创建Saga实例
+        SagaDefinition<OrderCreationData> saga = SagaDefinition.<OrderCreationData>create()
+            .step("reserveInventory")
+                .invokeParticipant(this::reserveInventory)
+                .withCompensation(this::cancelInventoryReservation)
+            .step("processPayment")
+                .invokeParticipant(this::processPayment)
+                .withCompensation(this::refundPayment)
+            .step("createOrder")
+                .invokeParticipant(this::createOrder)
+                .withCompensation(this::cancelOrder)
+            .step("sendNotification")
+                .invokeParticipant(this::sendOrderNotification)
+            .build();
+        
+        // 初始化Saga数据
+        OrderCreationData sagaData = OrderCreationData.builder()
+            .sagaId(sagaId)
+            .userId(request.getUserId())
+            .orderItems(request.getOrderItems())
+            .totalAmount(request.getTotalAmount())
+            .paymentMethod(request.getPaymentMethod())
+            .build();
+        
+        // 开始执行Saga
+        sagaManager.start(saga, sagaData);
+    }
+    
+    /**
+     * 步骤1：库存预留
+     */
+    private SagaStepResult reserveInventory(OrderCreationData data) {
+        try {
+            log.info("Reserving inventory for saga: {}", data.getSagaId());
+            
+            ReserveInventoryRequest request = ReserveInventoryRequest.builder()
+                .sagaId(data.getSagaId())
+                .orderItems(data.getOrderItems())
+                .build();
+            
+            ApiResponse<ReservationResult> response = inventoryServiceClient.reserveInventory(request);
+            
+            if (response.getCode() == 200 && response.getData().isSuccess()) {
+                data.setReservationId(response.getData().getReservationId());
+                log.info("Inventory reserved successfully: {}", data.getReservationId());
+                return SagaStepResult.success(data);
+            } else {
+                log.error("Failed to reserve inventory: {}", response.getMessage());
+                return SagaStepResult.failure(new InventoryReservationException(response.getMessage()));
+            }
+            
+        } catch (Exception e) {
+            log.error("Error reserving inventory for saga: {}", data.getSagaId(), e);
+            return SagaStepResult.failure(e);
+        }
+    }
+    
+    /**
+     * 补偿操作：取消库存预留
+     */
+    private SagaStepResult cancelInventoryReservation(OrderCreationData data) {
+        try {
+            if (StringUtils.hasText(data.getReservationId())) {
+                log.info("Cancelling inventory reservation: {}", data.getReservationId());
+                
+                inventoryServiceClient.cancelReservation(data.getReservationId());
+                log.info("Inventory reservation cancelled: {}", data.getReservationId());
+            }
+            return SagaStepResult.success(data);
+            
+        } catch (Exception e) {
+            log.error("Failed to cancel inventory reservation: {}", data.getReservationId(), e);
+            return SagaStepResult.failure(e);
+        }
+    }
+    
+    /**
+     * 步骤2：处理支付
+     */
+    private SagaStepResult processPayment(OrderCreationData data) {
+        try {
+            log.info("Processing payment for saga: {}", data.getSagaId());
+            
+            ProcessPaymentRequest request = ProcessPaymentRequest.builder()
+                .sagaId(data.getSagaId())
+                .userId(data.getUserId())
+                .amount(data.getTotalAmount())
+                .paymentMethod(data.getPaymentMethod())
+                .build();
+            
+            ApiResponse<PaymentResult> response = paymentServiceClient.processPayment(request);
+            
+            if (response.getCode() == 200 && response.getData().isSuccess()) {
+                data.setPaymentId(response.getData().getPaymentId());
+                log.info("Payment processed successfully: {}", data.getPaymentId());
+                return SagaStepResult.success(data);
+            } else {
+                log.error("Failed to process payment: {}", response.getMessage());
+                return SagaStepResult.failure(new PaymentProcessingException(response.getMessage()));
+            }
+            
+        } catch (Exception e) {
+            log.error("Error processing payment for saga: {}", data.getSagaId(), e);
+            return SagaStepResult.failure(e);
+        }
+    }
+    
+    /**
+     * 补偿操作：退款
+     */
+    private SagaStepResult refundPayment(OrderCreationData data) {
+        try {
+            if (StringUtils.hasText(data.getPaymentId())) {
+                log.info("Refunding payment: {}", data.getPaymentId());
+                
+                RefundRequest request = RefundRequest.builder()
+                    .paymentId(data.getPaymentId())
+                    .amount(data.getTotalAmount())
+                    .reason("订单处理失败")
+                    .build();
+                
+                paymentServiceClient.refund(request);
+                log.info("Payment refunded: {}", data.getPaymentId());
+            }
+            return SagaStepResult.success(data);
+            
+        } catch (Exception e) {
+            log.error("Failed to refund payment: {}", data.getPaymentId(), e);
+            return SagaStepResult.failure(e);
+        }
+    }
+    
+    /**
+     * 步骤3：创建订单
+     */
+    private SagaStepResult createOrder(OrderCreationData data) {
+        try {
+            log.info("Creating order for saga: {}", data.getSagaId());
+            
+            Order order = Order.builder()
+                .orderNo(generateOrderNo())
+                .userId(data.getUserId())
+                .totalAmount(data.getTotalAmount())
+                .status(OrderStatus.PAID)
+                .reservationId(data.getReservationId())
+                .paymentId(data.getPaymentId())
+                .sagaId(data.getSagaId())
+                .build();
+            
+            // 添加订单项
+            data.getOrderItems().forEach(item -> {
+                OrderItem orderItem = OrderItem.builder()
+                    .productId(item.getProductId())
+                    .quantity(item.getQuantity())
+                    .price(item.getPrice())
+                    .build();
+                order.addOrderItem(orderItem);
+            });
+            
+            Order savedOrder = orderRepository.save(order);
+            data.setOrderId(savedOrder.getId());
+            
+            log.info("Order created successfully: {}", savedOrder.getId());
+            return SagaStepResult.success(data);
+            
+        } catch (Exception e) {
+            log.error("Error creating order for saga: {}", data.getSagaId(), e);
+            return SagaStepResult.failure(e);
+        }
+    }
+    
+    /**
+     * 补偿操作：取消订单
+     */
+    private SagaStepResult cancelOrder(OrderCreationData data) {
+        try {
+            if (data.getOrderId() != null) {
+                log.info("Cancelling order: {}", data.getOrderId());
+                
+                Order order = orderRepository.findById(data.getOrderId())
+                    .orElseThrow(() -> new OrderNotFoundException("订单不存在: " + data.getOrderId()));
+                
+                order.cancel("分布式事务失败");
+                orderRepository.save(order);
+                
+                log.info("Order cancelled: {}", data.getOrderId());
+            }
+            return SagaStepResult.success(data);
+            
+        } catch (Exception e) {
+            log.error("Failed to cancel order: {}", data.getOrderId(), e);
+            return SagaStepResult.failure(e);
+        }
+    }
+    
+    /**
+     * 步骤4：发送通知
+     */
+    private SagaStepResult sendOrderNotification(OrderCreationData data) {
+        try {
+            log.info("Sending order notification for saga: {}", data.getSagaId());
+            
+            // 异步发送通知，不影响主流程
+            CompletableFuture.runAsync(() -> {
+                try {
+                    // 发送订单确认邮件
+                    // notificationService.sendOrderConfirmation(data.getOrderId());
+                    log.info("Order notification sent for order: {}", data.getOrderId());
+                } catch (Exception e) {
+                    log.warn("Failed to send order notification", e);
+                    // 通知失败不影响订单创建
+                }
+            });
+            
+            return SagaStepResult.success(data);
+            
+        } catch (Exception e) {
+            log.warn("Error sending order notification for saga: {}", data.getSagaId(), e);
+            // 通知发送失败不回滚整个事务
+            return SagaStepResult.success(data);
+        }
+    }
+    
+    private String generateOrderNo() {
+        return "ORD" + System.currentTimeMillis() + 
+               String.format("%04d", (int)(Math.random() * 10000));
+    }
+}
+
+/**
+ * Saga数据载体
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderCreationData {
+    private String sagaId;
+    private Long userId;
+    private List<OrderItemRequest> orderItems;
+    private BigDecimal totalAmount;
+    private PaymentMethod paymentMethod;
+    private String reservationId;
+    private String paymentId;
+    private Long orderId;
+}
+/* [AI-BLOCK-END] */
+```
+
+### 服务监控和健康检查
+```java
+/* [AI-BLOCK-START] - 生成工具: 微服务开发流程 v2.0 */
+/**
+ * 微服务健康检查配置
+ */
+@Component
+@Slf4j
+public class MicroserviceHealthIndicators {
+    
+    private final OrderServiceClient orderServiceClient;
+    private final InventoryServiceClient inventoryServiceClient;
+    private final PaymentServiceClient paymentServiceClient;
+    private final MeterRegistry meterRegistry;
+    
+    public MicroserviceHealthIndicators(OrderServiceClient orderServiceClient,
+                                       InventoryServiceClient inventoryServiceClient,
+                                       PaymentServiceClient paymentServiceClient,
+                                       MeterRegistry meterRegistry) {
+        this.orderServiceClient = orderServiceClient;
+        this.inventoryServiceClient = inventoryServiceClient;
+        this.paymentServiceClient = paymentServiceClient;
+        this.meterRegistry = meterRegistry;
+    }
+    
+    /**
+     * 依赖服务健康检查
+     */
+    @Bean
+    public HealthIndicator dependentServicesHealthIndicator() {
+        return () -> {
+            Health.Builder builder = Health.up();
+            
+            // 检查订单服务
+            boolean orderServiceHealthy = checkServiceHealth("order-service", () -> {
+                ApiResponse<?> response = orderServiceClient.healthCheck();
+                return response.getCode() == 200;
+            });
+            
+            // 检查库存服务
+            boolean inventoryServiceHealthy = checkServiceHealth("inventory-service", () -> {
+                ApiResponse<?> response = inventoryServiceClient.healthCheck();
+                return response.getCode() == 200;
+            });
+            
+            // 检查支付服务
+            boolean paymentServiceHealthy = checkServiceHealth("payment-service", () -> {
+                ApiResponse<?> response = paymentServiceClient.healthCheck();
+                return response.getCode() == 200;
+            });
+            
+            // 更新健康状态
+            builder.withDetail("orderService", orderServiceHealthy ? "UP" : "DOWN")
+                   .withDetail("inventoryService", inventoryServiceHealthy ? "UP" : "DOWN")
+                   .withDetail("paymentService", paymentServiceHealthy ? "UP" : "DOWN");
+            
+            // 如果任何依赖服务不健康，标记为DOWN
+            if (!orderServiceHealthy || !inventoryServiceHealthy || !paymentServiceHealthy) {
+                builder.down();
+            }
+            
+            return builder.build();
+        };
+    }
+    
+    /**
+     * 业务指标健康检查
+     */
+    @Bean
+    public HealthIndicator businessMetricsHealthIndicator() {
+        return () -> {
+            Health.Builder builder = Health.up();
+            
+            try {
+                // 检查近5分钟的错误率
+                double errorRate = getErrorRate(Duration.ofMinutes(5));
+                builder.withDetail("errorRate", String.format("%.2f%%", errorRate * 100));
+                
+                if (errorRate > 0.1) { // 错误率超过10%
+                    builder.down().withDetail("reason", "错误率过高");
+                }
+                
+                // 检查响应时间
+                double avgResponseTime = getAverageResponseTime(Duration.ofMinutes(5));
+                builder.withDetail("avgResponseTime", String.format("%.2fms", avgResponseTime));
+                
+                if (avgResponseTime > 5000) { // 平均响应时间超过5秒
+                    builder.down().withDetail("reason", "响应时间过长");
+                }
+                
+                // 检查内存使用率
+                MemoryUsage heapMemory = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+                double memoryUsage = (double) heapMemory.getUsed() / heapMemory.getMax();
+                builder.withDetail("memoryUsage", String.format("%.2f%%", memoryUsage * 100));
+                
+                if (memoryUsage > 0.9) { // 内存使用率超过90%
+                    builder.down().withDetail("reason", "内存使用率过高");
+                }
+                
+            } catch (Exception e) {
+                log.error("Error checking business metrics", e);
+                builder.down().withDetail("error", e.getMessage());
+            }
+            
+            return builder.build();
+        };
+    }
+    
+    /**
+     * 数据库连接健康检查
+     */
+    @Bean
+    public HealthIndicator customDatabaseHealthIndicator(DataSource dataSource) {
+        return () -> {
+            try (Connection connection = dataSource.getConnection()) {
+                Health.Builder builder = Health.up();
+                
+                // 检查连接是否有效
+                if (connection.isValid(5)) {
+                    builder.withDetail("database", "UP");
+                    
+                    // 检查连接池状态
+                    if (dataSource instanceof HikariDataSource) {
+                        HikariDataSource hikariDS = (HikariDataSource) dataSource;
+                        HikariPoolMXBean poolBean = hikariDS.getHikariPoolMXBean();
+                        
+                        builder.withDetail("activeConnections", poolBean.getActiveConnections())
+                               .withDetail("idleConnections", poolBean.getIdleConnections())
+                               .withDetail("totalConnections", poolBean.getTotalConnections())
+                               .withDetail("threadsAwaitingConnection", poolBean.getThreadsAwaitingConnection());
+                    }
+                } else {
+                    builder.down().withDetail("database", "Connection invalid");
+                }
+                
+                return builder.build();
+                
+            } catch (SQLException e) {
+                log.error("Database health check failed", e);
+                return Health.down()
+                    .withDetail("database", "DOWN")
+                    .withDetail("error", e.getMessage())
+                    .build();
+            }
+        };
+    }
+    
+    /**
+     * 检查服务健康状态
+     */
+    private boolean checkServiceHealth(String serviceName, Supplier<Boolean> healthCheck) {
+        try {
+            Timer.Sample sample = Timer.start(meterRegistry);
+            boolean healthy = healthCheck.get();
+            
+            sample.stop(Timer.builder("service.health.check")
+                .tag("service", serviceName)
+                .tag("status", healthy ? "success" : "failure")
+                .register(meterRegistry));
+            
+            // 记录健康检查指标
+            meterRegistry.counter("service.health.check.total",
+                "service", serviceName,
+                "status", healthy ? "success" : "failure").increment();
+            
+            return healthy;
+            
+        } catch (Exception e) {
+            log.warn("Health check failed for service: {}", serviceName, e);
+            
+            meterRegistry.counter("service.health.check.total",
+                "service", serviceName,
+                "status", "error").increment();
+            
+            return false;
+        }
+    }
+    
+    /**
+     * 获取错误率
+     */
+    private double getErrorRate(Duration period) {
+        try {
+            Search search = Search.in(meterRegistry)
+                .name("http.server.requests")
+                .tag("status", "5xx");
+            
+            double errorCount = search.counters().stream()
+                .mapToDouble(Counter::count)
+                .sum();
+            
+            double totalCount = Search.in(meterRegistry)
+                .name("http.server.requests")
+                .counters().stream()
+                .mapToDouble(Counter::count)
+                .sum();
+            
+            return totalCount > 0 ? errorCount / totalCount : 0;
+            
+        } catch (Exception e) {
+            log.warn("Failed to calculate error rate", e);
+            return 0;
+        }
+    }
+    
+    /**
+     * 获取平均响应时间
+     */
+    private double getAverageResponseTime(Duration period) {
+        try {
+            Timer timer = Timer.builder("http.server.requests")
+                .register(meterRegistry);
+            
+            return timer.mean(TimeUnit.MILLISECONDS);
+            
+        } catch (Exception e) {
+            log.warn("Failed to calculate average response time", e);
+            return 0;
+        }
+    }
+}
+
+/**
+ * 微服务配置信息
+ */
+@ConfigurationProperties(prefix = "microservice")
+@Data
+@Component
+public class MicroserviceProperties {
+    
+    /**
+     * 服务基本信息
+     */
+    private ServiceInfo service = new ServiceInfo();
+    
+    /**
+     * 依赖服务配置
+     */
+    private Map<String, DependentService> dependencies = new HashMap<>();
+    
+    /**
+     * 熔断器配置
+     */
+    private CircuitBreaker circuitBreaker = new CircuitBreaker();
+    
+    /**
+     * 重试配置
+     */
+    private Retry retry = new Retry();
+    
+    @Data
+    public static class ServiceInfo {
+        private String name;
+        private String version;
+        private String description;
+        private List<String> tags = new ArrayList<>();
+    }
+    
+    @Data
+    public static class DependentService {
+        private String name;
+        private String url;
+        private boolean required = true;
+        private int timeout = 5000;
+        private int retryAttempts = 3;
+    }
+    
+    @Data
+    public static class CircuitBreaker {
+        private boolean enabled = true;
+        private int failureThreshold = 5;
+        private int successThreshold = 3;
+        private Duration timeout = Duration.ofSeconds(10);
+    }
+    
+    @Data
+    public static class Retry {
+        private boolean enabled = true;
+        private int maxAttempts = 3;
+        private Duration delay = Duration.ofMillis(500);
+        private double multiplier = 2.0;
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此微服务开发流程规范建立了完整的微服务架构开发标准，确保服务的独立性、可靠性和可观测性*
+description:
+globs:
+alwaysApply: false
+---

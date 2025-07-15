@@ -1,0 +1,914 @@
+# 综合数据层开发规范
+> 涵盖SQL、MySQL、Redis的企业级数据处理标准
+
+## 🎯 数据层架构原则
+
+### 分层职责定义 [MUST - L1]
+- **Entity层**：数据模型定义，字段映射，关系维护
+- **Repository层**：数据访问抽象，查询封装，事务边界
+- **Cache层**：缓存策略，数据一致性，过期管理
+- **Database层**：表结构设计，索引优化，数据约束
+
+## 🔧 Entity设计规范
+
+### JPA Entity标准 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 数据层规范 v1.0
+@Entity
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_email", columnList = "email", unique = true),
+    @Index(name = "idx_users_status_create_time", columnList = "status,create_time"),
+    @Index(name = "idx_users_update_time", columnList = "update_time")
+})
+@EntityListeners(AuditingEntityListener.class)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+public class User {
+    
+    /**
+     * 主键ID - 使用雪花算法生成
+     */
+    @Id
+    @EqualsAndHashCode.Include
+    private Long id;
+    
+    /**
+     * 用户名 - 业务唯一标识
+     */
+    @Column(name = "username", length = 50, nullable = false, unique = true)
+    @Size(min = 3, max = 50)
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
+    private String username;
+    
+    /**
+     * 邮箱 - 联系方式
+     */
+    @Column(name = "email", length = 100, nullable = false, unique = true)
+    @Email(message = "邮箱格式无效")
+    private String email;
+    
+    /**
+     * 手机号 - 可选联系方式
+     */
+    @Column(name = "phone", length = 20)
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式无效")
+    private String phone;
+    
+    /**
+     * 密码哈希 - 安全存储
+     */
+    @Column(name = "password_hash", length = 255, nullable = false)
+    @JsonIgnore  // 防止序列化泄露
+    private String passwordHash;
+    
+    /**
+     * 用户状态 - 枚举类型
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    private UserStatus status;
+    
+    /**
+     * 用户角色 - 多对多关系
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_roles",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    @JsonIgnore  // 避免循环引用
+    private Set<Role> roles = new HashSet<>();
+    
+    /**
+     * 用户配置 - 一对一关系
+     */
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private UserProfile profile;
+    
+    /**
+     * 用户订单 - 一对多关系
+     */
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<Order> orders = new ArrayList<>();
+    
+    /**
+     * 创建时间 - 自动审计
+     */
+    @CreatedDate
+    @Column(name = "create_time", nullable = false, updatable = false)
+    private LocalDateTime createTime;
+    
+    /**
+     * 更新时间 - 自动审计
+     */
+    @LastModifiedDate
+    @Column(name = "update_time", nullable = false)
+    private LocalDateTime updateTime;
+    
+    /**
+     * 创建人 - 自动审计
+     */
+    @CreatedBy
+    @Column(name = "created_by", length = 50, updatable = false)
+    private String createdBy;
+    
+    /**
+     * 更新人 - 自动审计
+     */
+    @LastModifiedBy
+    @Column(name = "updated_by", length = 50)
+    private String updatedBy;
+    
+    /**
+     * 版本号 - 乐观锁
+     */
+    @Version
+    @Column(name = "version")
+    private Long version;
+    
+    /**
+     * 软删除标记
+     */
+    @Column(name = "deleted", nullable = false)
+    @Builder.Default
+    private Boolean deleted = false;
+    
+    /**
+     * 业务方法 - 封装业务逻辑
+     */
+    public void activate() {
+        this.status = UserStatus.ACTIVE;
+    }
+    
+    public void deactivate() {
+        this.status = UserStatus.INACTIVE;
+    }
+    
+    public boolean isActive() {
+        return UserStatus.ACTIVE.equals(this.status);
+    }
+    
+    public void addRole(Role role) {
+        this.roles.add(role);
+        role.getUsers().add(this);
+    }
+    
+    public void removeRole(Role role) {
+        this.roles.remove(role);
+        role.getUsers().remove(this);
+    }
+}
+
+/**
+ * 用户状态枚举
+ */
+public enum UserStatus {
+    PENDING("待激活"),
+    ACTIVE("已激活"), 
+    INACTIVE("已禁用"),
+    LOCKED("已锁定"),
+    DELETED("已删除");
+    
+    private final String description;
+    
+    UserStatus(String description) {
+        this.description = description;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 🔧 SQL编写规范
+
+### 查询优化标准 [MUST - L1]
+```sql
+-- [AI-BLOCK-START] - 生成工具: SQL规范 v1.0
+
+-- ✅ 正确的SELECT查询
+-- 1. 明确指定字段，避免SELECT *
+-- 2. 使用别名提高可读性
+-- 3. 合理使用索引字段进行过滤
+SELECT 
+    u.id,
+    u.username,
+    u.email,
+    u.status,
+    u.create_time,
+    p.avatar,
+    p.nickname
+FROM users u
+LEFT JOIN user_profiles p ON u.id = p.user_id
+WHERE u.status = 'ACTIVE'
+  AND u.create_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+  AND u.deleted = FALSE
+ORDER BY u.create_time DESC
+LIMIT 20 OFFSET 0;
+
+-- ✅ 复杂关联查询优化
+-- 1. 优先使用内连接
+-- 2. 将过滤条件前置
+-- 3. 合理使用子查询
+SELECT 
+    u.id,
+    u.username,
+    u.email,
+    COUNT(o.id) AS order_count,
+    SUM(o.total_amount) AS total_spent
+FROM users u
+INNER JOIN orders o ON u.id = o.user_id
+WHERE u.status = 'ACTIVE'
+  AND o.status IN ('COMPLETED', 'SHIPPED')
+  AND o.create_time >= DATE_SUB(NOW(), INTERVAL 1 YEAR)
+GROUP BY u.id, u.username, u.email
+HAVING COUNT(o.id) >= 5
+ORDER BY total_spent DESC
+LIMIT 100;
+
+-- ✅ 分页查询优化
+-- 使用覆盖索引避免回表
+SELECT u.*
+FROM users u
+INNER JOIN (
+    SELECT id 
+    FROM users 
+    WHERE status = 'ACTIVE' 
+      AND deleted = FALSE
+    ORDER BY create_time DESC
+    LIMIT 20 OFFSET 1000
+) temp ON u.id = temp.id
+ORDER BY u.create_time DESC;
+
+-- ✅ 更新操作规范
+-- 1. 使用WHERE条件防止误操作
+-- 2. 更新版本号实现乐观锁
+-- 3. 记录操作时间和操作人
+UPDATE users 
+SET 
+    status = 'INACTIVE',
+    update_time = NOW(),
+    updated_by = 'admin',
+    version = version + 1
+WHERE id = 12345 
+  AND version = 1
+  AND deleted = FALSE;
+
+-- ✅ 删除操作规范
+-- 优先使用软删除
+UPDATE users 
+SET 
+    deleted = TRUE,
+    status = 'DELETED',
+    update_time = NOW(),
+    updated_by = 'system'
+WHERE id IN (12345, 12346, 12347)
+  AND deleted = FALSE;
+
+-- ✅ 批量插入优化
+INSERT INTO user_login_logs (
+    user_id, 
+    login_time, 
+    ip_address, 
+    user_agent,
+    create_time
+) VALUES 
+(1001, '2023-12-01 10:00:00', '192.168.1.100', 'Chrome/119.0', NOW()),
+(1002, '2023-12-01 10:01:00', '192.168.1.101', 'Firefox/118.0', NOW()),
+(1003, '2023-12-01 10:02:00', '192.168.1.102', 'Safari/17.0', NOW());
+
+-- [AI-BLOCK-END]
+```
+
+### 索引设计规范 [MUST - L1]
+```sql
+-- [AI-BLOCK-START] - 生成工具: SQL规范 v1.0
+
+-- ✅ 主键索引设计
+-- 使用BIGINT类型，支持大数据量
+ALTER TABLE users 
+ADD PRIMARY KEY (id);
+
+-- ✅ 唯一索引设计
+-- 业务唯一性约束
+CREATE UNIQUE INDEX uk_users_username ON users(username);
+CREATE UNIQUE INDEX uk_users_email ON users(email);
+
+-- ✅ 普通索引设计
+-- 1. 高频查询字段建立索引
+CREATE INDEX idx_users_status ON users(status);
+CREATE INDEX idx_users_create_time ON users(create_time);
+
+-- 2. 复合索引设计 - 遵循最左前缀原则
+-- 状态 + 创建时间（状态过滤 + 时间排序场景）
+CREATE INDEX idx_users_status_create_time ON users(status, create_time);
+
+-- 3. 覆盖索引设计 - 避免回表查询
+-- 用户列表查询覆盖索引
+CREATE INDEX idx_users_list_query ON users(status, deleted, id, username, email, create_time);
+
+-- ✅ 函数索引设计（MySQL 8.0+）
+-- 支持表达式查询
+CREATE INDEX idx_users_email_domain ON users((SUBSTRING_INDEX(email, '@', -1)));
+
+-- ✅ 分区表索引设计
+-- 按月分区的订单表
+CREATE TABLE orders (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    create_time DATETIME NOT NULL,
+    INDEX idx_orders_user_id (user_id),
+    INDEX idx_orders_status (status),
+    INDEX idx_orders_create_time (create_time)
+) PARTITION BY RANGE (YEAR(create_time) * 100 + MONTH(create_time)) (
+    PARTITION p202301 VALUES LESS THAN (202302),
+    PARTITION p202302 VALUES LESS THAN (202303),
+    PARTITION p202303 VALUES LESS THAN (202304),
+    PARTITION p_future VALUES LESS THAN MAXVALUE
+);
+
+-- ✅ 索引维护SQL
+-- 查看索引使用情况
+SELECT 
+    TABLE_NAME,
+    INDEX_NAME,
+    CARDINALITY,
+    NULLABLE,
+    INDEX_TYPE
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'your_database'
+  AND TABLE_NAME = 'users'
+ORDER BY TABLE_NAME, SEQ_IN_INDEX;
+
+-- 分析索引效率
+EXPLAIN SELECT * FROM users 
+WHERE status = 'ACTIVE' 
+  AND create_time >= '2023-12-01'
+ORDER BY create_time DESC
+LIMIT 20;
+
+-- [AI-BLOCK-END]
+```
+
+## 🔧 Redis缓存规范
+
+### Key命名规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Redis规范 v1.0
+
+/**
+ * Redis Key命名工具类
+ */
+@Component
+public class RedisKeyBuilder {
+    
+    // Key前缀常量
+    private static final String APP_PREFIX = "myapp";
+    private static final String SEPARATOR = ":";
+    
+    // 业务模块前缀
+    public static final String USER_MODULE = "user";
+    public static final String ORDER_MODULE = "order";
+    public static final String PRODUCT_MODULE = "product";
+    
+    // 数据类型后缀
+    public static final String CACHE_SUFFIX = "cache";
+    public static final String LOCK_SUFFIX = "lock";
+    public static final String COUNTER_SUFFIX = "counter";
+    public static final String LIST_SUFFIX = "list";
+    public static final String SET_SUFFIX = "set";
+    
+    /**
+     * 构建用户缓存Key
+     * 格式: myapp:user:cache:userId
+     */
+    public static String buildUserCacheKey(Long userId) {
+        return String.join(SEPARATOR, APP_PREFIX, USER_MODULE, CACHE_SUFFIX, String.valueOf(userId));
+    }
+    
+    /**
+     * 构建用户分布式锁Key
+     * 格式: myapp:user:lock:userId
+     */
+    public static String buildUserLockKey(Long userId) {
+        return String.join(SEPARATOR, APP_PREFIX, USER_MODULE, LOCK_SUFFIX, String.valueOf(userId));
+    }
+    
+    /**
+     * 构建订单缓存Key
+     * 格式: myapp:order:cache:orderId
+     */
+    public static String buildOrderCacheKey(String orderId) {
+        return String.join(SEPARATOR, APP_PREFIX, ORDER_MODULE, CACHE_SUFFIX, orderId);
+    }
+    
+    /**
+     * 构建用户订单列表Key
+     * 格式: myapp:user:order:list:userId
+     */
+    public static String buildUserOrderListKey(Long userId) {
+        return String.join(SEPARATOR, APP_PREFIX, USER_MODULE, ORDER_MODULE, LIST_SUFFIX, String.valueOf(userId));
+    }
+    
+    /**
+     * 构建计数器Key
+     * 格式: myapp:module:counter:type:date
+     */
+    public static String buildCounterKey(String module, String type, String date) {
+        return String.join(SEPARATOR, APP_PREFIX, module, COUNTER_SUFFIX, type, date);
+    }
+    
+    /**
+     * 构建会话Key
+     * 格式: myapp:session:sessionId
+     */
+    public static String buildSessionKey(String sessionId) {
+        return String.join(SEPARATOR, APP_PREFIX, "session", sessionId);
+    }
+    
+    /**
+     * 构建验证码Key
+     * 格式: myapp:captcha:type:target
+     */
+    public static String buildCaptchaKey(String type, String target) {
+        return String.join(SEPARATOR, APP_PREFIX, "captcha", type, target);
+    }
+}
+
+/**
+ * Redis操作服务
+ */
+@Service
+@Slf4j
+public class RedisService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
+    
+    public RedisService(RedisTemplate<String, Object> redisTemplate,
+                       StringRedisTemplate stringRedisTemplate) {
+        this.redisTemplate = redisTemplate;
+        this.stringRedisTemplate = stringRedisTemplate;
+    }
+    
+    /**
+     * 设置缓存 - 带过期时间
+     */
+    public void setCache(String key, Object value, Duration timeout) {
+        try {
+            redisTemplate.opsForValue().set(key, value, timeout);
+            log.debug("Set cache: key={}, timeout={}", key, timeout);
+        } catch (Exception e) {
+            log.error("Failed to set cache: key={}", key, e);
+        }
+    }
+    
+    /**
+     * 获取缓存
+     */
+    public <T> T getCache(String key, Class<T> clazz) {
+        try {
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value != null && clazz.isInstance(value)) {
+                return clazz.cast(value);
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get cache: key={}", key, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 删除缓存
+     */
+    public void deleteCache(String key) {
+        try {
+            redisTemplate.delete(key);
+            log.debug("Deleted cache: key={}", key);
+        } catch (Exception e) {
+            log.error("Failed to delete cache: key={}", key, e);
+        }
+    }
+    
+    /**
+     * 批量删除缓存 - 按模式匹配
+     */
+    public void deleteCacheByPattern(String pattern) {
+        try {
+            Set<String> keys = redisTemplate.keys(pattern);
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+                log.debug("Deleted cache by pattern: pattern={}, count={}", pattern, keys.size());
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete cache by pattern: pattern={}", pattern, e);
+        }
+    }
+    
+    /**
+     * 设置分布式锁
+     */
+    public boolean setLock(String lockKey, String value, Duration timeout) {
+        try {
+            Boolean result = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, value, timeout);
+            return Boolean.TRUE.equals(result);
+        } catch (Exception e) {
+            log.error("Failed to set lock: lockKey={}", lockKey, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 释放分布式锁 - Lua脚本保证原子性
+     */
+    public boolean releaseLock(String lockKey, String value) {
+        try {
+            String script = "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                           "return redis.call('del', KEYS[1]) " +
+                           "else return 0 end";
+            Long result = stringRedisTemplate.execute(
+                new DefaultRedisScript<>(script, Long.class),
+                Collections.singletonList(lockKey),
+                value
+            );
+            return Long.valueOf(1).equals(result);
+        } catch (Exception e) {
+            log.error("Failed to release lock: lockKey={}", lockKey, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 计数器递增
+     */
+    public Long increment(String key, long delta, Duration timeout) {
+        try {
+            Long result = stringRedisTemplate.opsForValue().increment(key, delta);
+            if (timeout != null) {
+                stringRedisTemplate.expire(key, timeout);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Failed to increment: key={}", key, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 列表操作 - 左推入
+     */
+    public void listLeftPush(String key, Object value, Duration timeout) {
+        try {
+            redisTemplate.opsForList().leftPush(key, value);
+            if (timeout != null) {
+                redisTemplate.expire(key, timeout);
+            }
+        } catch (Exception e) {
+            log.error("Failed to left push list: key={}", key, e);
+        }
+    }
+    
+    /**
+     * 列表操作 - 范围获取
+     */
+    public List<Object> listRange(String key, long start, long end) {
+        try {
+            return redisTemplate.opsForList().range(key, start, end);
+        } catch (Exception e) {
+            log.error("Failed to get list range: key={}", key, e);
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 集合操作 - 添加成员
+     */
+    public void setAdd(String key, Object... values) {
+        try {
+            redisTemplate.opsForSet().add(key, values);
+        } catch (Exception e) {
+            log.error("Failed to add set members: key={}", key, e);
+        }
+    }
+    
+    /**
+     * 有序集合操作 - 添加成员
+     */
+    public void zsetAdd(String key, Object value, double score) {
+        try {
+            redisTemplate.opsForZSet().add(key, value, score);
+        } catch (Exception e) {
+            log.error("Failed to add zset member: key={}", key, e);
+        }
+    }
+    
+    /**
+     * 管道操作 - 批量执行
+     */
+    public List<Object> executePipeline(List<Runnable> operations) {
+        return redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            public Object execute(RedisOperations operations) throws DataAccessException {
+                for (Runnable operation : operations) {
+                    operation.run();
+                }
+                return null;
+            }
+        });
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 缓存策略规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: Redis规范 v1.0
+
+/**
+ * 缓存策略实现
+ */
+@Service
+@Slf4j
+public class UserCacheService {
+    
+    private final RedisService redisService;
+    private final UserRepository userRepository;
+    
+    // 缓存过期时间配置
+    private static final Duration USER_CACHE_TTL = Duration.ofHours(1);
+    private static final Duration USER_LIST_CACHE_TTL = Duration.ofMinutes(30);
+    private static final Duration USER_LOCK_TTL = Duration.ofSeconds(30);
+    
+    public UserCacheService(RedisService redisService, UserRepository userRepository) {
+        this.redisService = redisService;
+        this.userRepository = userRepository;
+    }
+    
+    /**
+     * Cache-Aside模式 - 获取用户
+     */
+    public User getUserById(Long userId) {
+        String cacheKey = RedisKeyBuilder.buildUserCacheKey(userId);
+        
+        // 1. 先查缓存
+        User cachedUser = redisService.getCache(cacheKey, User.class);
+        if (cachedUser != null) {
+            log.debug("Cache hit for user: {}", userId);
+            return cachedUser;
+        }
+        
+        // 2. 缓存未命中，查数据库
+        log.debug("Cache miss for user: {}", userId);
+        User user = userRepository.findById(userId).orElse(null);
+        
+        // 3. 写入缓存（即使是null也要缓存，防止缓存穿透）
+        if (user != null) {
+            redisService.setCache(cacheKey, user, USER_CACHE_TTL);
+        } else {
+            // 空值缓存，较短过期时间
+            redisService.setCache(cacheKey, new NullUser(), Duration.ofMinutes(5));
+        }
+        
+        return user;
+    }
+    
+    /**
+     * Write-Through模式 - 更新用户
+     */
+    @Transactional
+    public User updateUser(Long userId, User updatedUser) {
+        String cacheKey = RedisKeyBuilder.buildUserCacheKey(userId);
+        String lockKey = RedisKeyBuilder.buildUserLockKey(userId);
+        String lockValue = UUID.randomUUID().toString();
+        
+        // 1. 获取分布式锁
+        if (!redisService.setLock(lockKey, lockValue, USER_LOCK_TTL)) {
+            throw new BusinessException("用户正在被其他操作修改，请稍后重试");
+        }
+        
+        try {
+            // 2. 更新数据库
+            User savedUser = userRepository.save(updatedUser);
+            
+            // 3. 更新缓存
+            redisService.setCache(cacheKey, savedUser, USER_CACHE_TTL);
+            
+            // 4. 清除相关列表缓存
+            invalidateUserListCaches(userId);
+            
+            return savedUser;
+            
+        } finally {
+            // 5. 释放锁
+            redisService.releaseLock(lockKey, lockValue);
+        }
+    }
+    
+    /**
+     * Write-Behind模式 - 异步写入
+     */
+    @Async
+    public void updateUserAsync(User user) {
+        try {
+            // 延迟写入数据库
+            Thread.sleep(100);
+            userRepository.save(user);
+            
+            // 更新缓存
+            String cacheKey = RedisKeyBuilder.buildUserCacheKey(user.getId());
+            redisService.setCache(cacheKey, user, USER_CACHE_TTL);
+            
+        } catch (Exception e) {
+            log.error("Async user update failed: {}", user.getId(), e);
+        }
+    }
+    
+    /**
+     * 缓存预热 - 系统启动时预加载热点数据
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void warmupCache() {
+        log.info("Starting cache warmup...");
+        
+        // 预加载活跃用户
+        List<User> activeUsers = userRepository.findTop1000ByStatusOrderByUpdateTimeDesc(UserStatus.ACTIVE);
+        
+        for (User user : activeUsers) {
+            String cacheKey = RedisKeyBuilder.buildUserCacheKey(user.getId());
+            redisService.setCache(cacheKey, user, USER_CACHE_TTL);
+        }
+        
+        log.info("Cache warmup completed, loaded {} users", activeUsers.size());
+    }
+    
+    /**
+     * 多级缓存策略 - L1本地缓存 + L2Redis缓存
+     */
+    @Cacheable(value = "userCache", key = "#userId", unless = "#result == null")
+    public User getUserWithLocalCache(Long userId) {
+        // 本地缓存未命中，查询Redis缓存
+        return getUserById(userId);
+    }
+    
+    /**
+     * 缓存更新策略 - 更新本地和Redis缓存
+     */
+    @CacheEvict(value = "userCache", key = "#userId")
+    public void evictUserCache(Long userId) {
+        String cacheKey = RedisKeyBuilder.buildUserCacheKey(userId);
+        redisService.deleteCache(cacheKey);
+    }
+    
+    /**
+     * 缓存一致性保证 - 事务后处理
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleUserUpdated(UserUpdatedEvent event) {
+        // 事务提交后清除缓存，保证一致性
+        evictUserCache(event.getUserId());
+        invalidateUserListCaches(event.getUserId());
+    }
+    
+    /**
+     * 防止缓存穿透 - 布隆过滤器
+     */
+    public boolean userExists(Long userId) {
+        // 使用布隆过滤器快速判断用户是否存在
+        String bloomKey = "user:bloom:filter";
+        // 简化实现，实际应使用Redis布隆过滤器模块
+        return redisService.getCache(bloomKey + ":" + userId, Boolean.class) != null;
+    }
+    
+    /**
+     * 防止缓存雪崩 - 随机过期时间
+     */
+    private Duration getRandomTtl(Duration baseTtl) {
+        long baseSeconds = baseTtl.getSeconds();
+        long randomSeconds = (long) (baseSeconds * 0.1 * Math.random()); // 10%随机波动
+        return Duration.ofSeconds(baseSeconds + randomSeconds);
+    }
+    
+    /**
+     * 清除用户相关列表缓存
+     */
+    private void invalidateUserListCaches(Long userId) {
+        // 清除用户订单列表缓存
+        String orderListKey = RedisKeyBuilder.buildUserOrderListKey(userId);
+        redisService.deleteCache(orderListKey);
+        
+        // 清除用户相关的其他列表缓存
+        String pattern = "myapp:user:*:list:" + userId;
+        redisService.deleteCacheByPattern(pattern);
+    }
+    
+    /**
+     * 空对象，防止缓存穿透
+     */
+    private static class NullUser {
+        // 标记对象，表示数据库中不存在该用户
+    }
+}
+
+/**
+ * Redis配置类
+ */
+@Configuration
+@EnableCaching
+public class RedisConfig {
+    
+    /**
+     * Redis连接配置
+     */
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
+        config.setHostName("localhost");
+        config.setPort(6379);
+        config.setDatabase(0);
+        
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+            .commandTimeout(Duration.ofSeconds(5))
+            .poolConfig(buildPoolConfig())
+            .build();
+            
+        return new LettuceConnectionFactory(config, clientConfig);
+    }
+    
+    /**
+     * Redis Template配置
+     */
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(LettuceConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        
+        // Key序列化
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(new StringRedisSerializer());
+        
+        // Value序列化 - 使用Jackson
+        Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(Object.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        objectMapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL);
+        serializer.setObjectMapper(objectMapper);
+        
+        template.setValueSerializer(serializer);
+        template.setHashValueSerializer(serializer);
+        
+        template.afterPropertiesSet();
+        return template;
+    }
+    
+    /**
+     * 连接池配置
+     */
+    private GenericObjectPoolConfig buildPoolConfig() {
+        GenericObjectPoolConfig poolConfig = new GenericObjectPoolConfig();
+        poolConfig.setMaxTotal(20);
+        poolConfig.setMaxIdle(10);
+        poolConfig.setMinIdle(5);
+        poolConfig.setMaxWaitMillis(3000);
+        poolConfig.setTestOnBorrow(true);
+        poolConfig.setTestOnReturn(true);
+        return poolConfig;
+    }
+    
+    /**
+     * 缓存管理器配置
+     */
+    @Bean
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofHours(1))
+            .disableCachingNullValues()
+            .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(new GenericJackson2JsonRedisSerializer()));
+            
+        return RedisCacheManager.builder(connectionFactory)
+            .cacheDefaults(config)
+            .build();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+---
+
+*此综合数据层规范涵盖了Entity设计、SQL优化、Redis缓存的企业级标准，确保数据处理的高性能和一致性*
+description:
+globs:
+alwaysApply: false
+---

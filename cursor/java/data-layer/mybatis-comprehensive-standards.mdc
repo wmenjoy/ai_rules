@@ -1,0 +1,1097 @@
+# MyBatis/MyBatis-Plus 综合规范 (数据层规则)
+> MyBatis原生框架和MyBatis-Plus增强框架的完整使用规范
+
+## 🎯 规范目标
+- **统一标准**: 建立MyBatis/MyBatis-Plus的统一使用标准
+- **性能优化**: 提供数据库操作性能优化的最佳实践
+- **安全防护**: 防止SQL注入和数据安全问题
+- **可维护性**: 确保代码的可读性和可维护性
+
+## 📋 技术栈版本要求
+
+### 核心依赖版本
+- **MyBatis**: 3.5.7+
+- **MyBatis-Plus**: 3.4.3+
+- **MyBatis-Spring**: 2.0.6+
+- **MySQL Connector**: 8.0.25+
+- **HikariCP**: 4.0.3+
+- **PageHelper**: 5.3.0+
+
+## 🔧 配置规范
+
+### 1. 项目依赖配置
+```xml
+<!-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet -->
+<dependencies>
+    <!-- MyBatis-Plus Starter -->
+    <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>mybatis-plus-boot-starter</artifactId>
+        <version>3.4.3</version>
+    </dependency>
+    
+    <!-- MyBatis-Plus代码生成器 -->
+    <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>mybatis-plus-generator</artifactId>
+        <version>3.4.1</version>
+        <scope>test</scope>
+    </dependency>
+    
+    <!-- 分页插件 -->
+    <dependency>
+        <groupId>com.github.pagehelper</groupId>
+        <artifactId>pagehelper-spring-boot-starter</artifactId>
+        <version>5.3.0</version>
+    </dependency>
+    
+    <!-- 数据库连接池 -->
+    <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>HikariCP</artifactId>
+    </dependency>
+    
+    <!-- MySQL驱动 -->
+    <dependency>
+        <groupId>mysql</groupId>
+        <artifactId>mysql-connector-java</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+    
+    <!-- 模板引擎（代码生成用） -->
+    <dependency>
+        <groupId>org.apache.velocity</groupId>
+        <artifactId>velocity-engine-core</artifactId>
+        <version>2.3</version>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+<!-- [AI-BLOCK-END] -->
+```
+
+### 2. 应用配置文件
+```yaml
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# application.yml
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/database_name?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:password}
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      auto-commit: true
+      idle-timeout: 30000
+      pool-name: MyBatisHikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+      leak-detection-threshold: 60000
+
+# MyBatis-Plus配置
+mybatis-plus:
+  # 配置文件位置
+  config-location: classpath:mybatis-config.xml
+  # 映射文件位置
+  mapper-locations: classpath*:mapper/**/*.xml
+  # 实体类包路径
+  type-aliases-package: com.example.entity
+  # 类型处理器包路径
+  type-handlers-package: com.example.handler
+  # 全局配置
+  global-config:
+    # 数据库配置
+    db-config:
+      # 主键策略
+      id-type: ASSIGN_ID
+      # 表名前缀
+      table-prefix: ""
+      # 表名下划线命名
+      table-underline: true
+      # 字段下划线命名
+      column-underline: true
+      # 逻辑删除配置
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      # 自动填充配置
+      insert-strategy: NOT_NULL
+      update-strategy: NOT_NULL
+      select-strategy: NOT_NULL
+  # MyBatis原生配置
+  configuration:
+    # 开启驼峰命名转换
+    map-underscore-to-camel-case: true
+    # 开启二级缓存
+    cache-enabled: true
+    # 延迟加载配置
+    lazy-loading-enabled: true
+    aggressive-lazy-loading: false
+    # 超时时间
+    default-statement-timeout: 30
+    # 获取数据的策略
+    default-fetch-size: 100
+    # 允许JDBC支持自动生成主键
+    use-generated-keys: true
+    # 配置默认的执行器
+    default-executor-type: SIMPLE
+    # 指定当结果集中值为null时是否调用映射对象的setter方法
+    call-setters-on-nulls: true
+    # 日志实现
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 分页插件配置
+pagehelper:
+  helper-dialect: mysql
+  reasonable: true
+  support-methods-arguments: true
+  params: count=countSql
+  page-size-zero: true
+  auto-runtime-dialect: true
+
+# 日志配置
+logging:
+  level:
+    com.example.mapper: DEBUG
+    com.baomidou.mybatisplus: DEBUG
+    org.springframework.jdbc: DEBUG
+# [AI-BLOCK-END] -->
+```
+
+### 3. MyBatis-Plus配置类
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Configuration
+@EnableTransactionManagement
+@MapperScan(basePackages = {"com.example.mapper"})
+@Slf4j
+public class MyBatisPlusConfig {
+    
+    /**
+     * MyBatis-Plus插件配置
+     */
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        
+        // 1. 分页插件 - 必须配置
+        PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor();
+        paginationInterceptor.setDbType(DbType.MYSQL);
+        paginationInterceptor.setMaxLimit(1000L); // 最大分页限制
+        paginationInterceptor.setOverflow(false); // 溢出总页数后是否进行处理
+        paginationInterceptor.setOptimizeJoin(true); // 优化JOIN查询
+        interceptor.addInnerInterceptor(paginationInterceptor);
+        
+        // 2. 乐观锁插件 - 必须配置
+        OptimisticLockerInnerInterceptor optimisticLockerInterceptor = 
+            new OptimisticLockerInnerInterceptor();
+        interceptor.addInnerInterceptor(optimisticLockerInterceptor);
+        
+        // 3. 防止全表更新与删除插件 - 必须配置
+        BlockAttackInnerInterceptor blockAttackInterceptor = 
+            new BlockAttackInnerInterceptor();
+        interceptor.addInnerInterceptor(blockAttackInterceptor);
+        
+        // 4. SQL性能规范插件 - 必须配置
+        IllegalSQLInnerInterceptor illegalSQLInterceptor = 
+            new IllegalSQLInnerInterceptor();
+        interceptor.addInnerInterceptor(illegalSQLInterceptor);
+        
+        // 5. 动态表名插件 - 根据需要配置
+        DynamicTableNameInnerInterceptor dynamicTableNameInterceptor = 
+            new DynamicTableNameInnerInterceptor();
+        dynamicTableNameInterceptor.setTableNameHandler((sql, tableName) -> {
+            // 动态表名处理逻辑
+            return tableName;
+        });
+        interceptor.addInnerInterceptor(dynamicTableNameInterceptor);
+        
+        return interceptor;
+    }
+    
+    /**
+     * 全局配置
+     */
+    @Bean
+    public GlobalConfig globalConfig() {
+        GlobalConfig globalConfig = new GlobalConfig();
+        
+        // 数据库配置
+        GlobalConfig.DbConfig dbConfig = new GlobalConfig.DbConfig();
+        dbConfig.setIdType(IdType.ASSIGN_ID); // 主键策略
+        dbConfig.setTableUnderline(true); // 表名下划线命名
+        dbConfig.setColumnUnderline(true); // 字段下划线命名
+        dbConfig.setLogicDeleteField("deleted"); // 逻辑删除字段
+        dbConfig.setLogicDeleteValue("1"); // 逻辑删除值
+        dbConfig.setLogicNotDeleteValue("0"); // 逻辑未删除值
+        
+        globalConfig.setDbConfig(dbConfig);
+        
+        // 自动填充配置
+        globalConfig.setMetaObjectHandler(new CustomMetaObjectHandler());
+        
+        return globalConfig;
+    }
+    
+    /**
+     * 自定义元数据处理器
+     */
+    @Component
+    public static class CustomMetaObjectHandler implements MetaObjectHandler {
+        
+        @Override
+        public void insertFill(MetaObject metaObject) {
+            // 创建时间
+            this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
+            // 更新时间
+            this.strictInsertFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+            // 创建人
+            this.strictInsertFill(metaObject, "createBy", String.class, getCurrentUserId());
+            // 更新人
+            this.strictInsertFill(metaObject, "updateBy", String.class, getCurrentUserId());
+            // 逻辑删除
+            this.strictInsertFill(metaObject, "deleted", Integer.class, 0);
+        }
+        
+        @Override
+        public void updateFill(MetaObject metaObject) {
+            // 更新时间
+            this.strictUpdateFill(metaObject, "updateTime", LocalDateTime.class, LocalDateTime.now());
+            // 更新人
+            this.strictUpdateFill(metaObject, "updateBy", String.class, getCurrentUserId());
+        }
+        
+        private String getCurrentUserId() {
+            // 获取当前用户ID的逻辑
+            try {
+                // 从Spring Security上下文获取当前用户
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+                    return ((UserDetails) authentication.getPrincipal()).getUsername();
+                }
+            } catch (Exception e) {
+                log.warn("获取当前用户失败", e);
+            }
+            return "system"; // 默认值
+        }
+    }
+    
+    /**
+     * SQL注入器
+     */
+    @Bean
+    public ISqlInjector sqlInjector() {
+        return new DefaultSqlInjector();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 🏗️ 实体类规范
+
+### 1. 基础实体类设计
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 基础实体类
+ */
+@Data
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public abstract class BaseEntity implements Serializable {
+    
+    private static final long serialVersionUID = 1L;
+    
+    /**
+     * 主键ID
+     */
+    @TableId(type = IdType.ASSIGN_ID)
+    private Long id;
+    
+    /**
+     * 创建时间
+     */
+    @TableField(value = "create_time", fill = FieldFill.INSERT)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createTime;
+    
+    /**
+     * 更新时间
+     */
+    @TableField(value = "update_time", fill = FieldFill.INSERT_UPDATE)
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updateTime;
+    
+    /**
+     * 创建人
+     */
+    @TableField(value = "create_by", fill = FieldFill.INSERT)
+    private String createBy;
+    
+    /**
+     * 更新人
+     */
+    @TableField(value = "update_by", fill = FieldFill.INSERT_UPDATE)
+    private String updateBy;
+    
+    /**
+     * 逻辑删除：1-已删除，0-未删除
+     */
+    @TableLogic
+    @TableField("deleted")
+    @JsonIgnore
+    private Integer deleted;
+    
+    /**
+     * 版本号（乐观锁）
+     */
+    @Version
+    @TableField("version")
+    private Integer version;
+}
+
+/**
+ * 用户实体类示例
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@TableName("users")
+public class User extends BaseEntity {
+    
+    /**
+     * 用户名
+     */
+    @TableField("username")
+    @NotBlank(message = "用户名不能为空")
+    @Length(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间")
+    private String username;
+    
+    /**
+     * 邮箱
+     */
+    @TableField("email")
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+    
+    /**
+     * 手机号
+     */
+    @TableField("phone")
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    /**
+     * 密码
+     */
+    @TableField("password")
+    @JsonIgnore
+    private String password;
+    
+    /**
+     * 用户状态：1-正常，0-禁用
+     */
+    @TableField("status")
+    @Builder.Default
+    private Integer status = 1;
+    
+    /**
+     * 部门ID
+     */
+    @TableField("dept_id")
+    private Long deptId;
+    
+    /**
+     * 用户角色（非数据库字段）
+     */
+    @TableField(exist = false)
+    private List<Role> roles;
+    
+    /**
+     * 最后登录时间
+     */
+    @TableField("last_login_time")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime lastLoginTime;
+}
+// [AI-BLOCK-END]
+```
+
+## 🔍 Mapper接口规范
+
+### 1. 标准Mapper接口设计
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 用户Mapper接口
+ * 继承BaseMapper获得基础CRUD功能
+ */
+@Mapper
+public interface UserMapper extends BaseMapper<User> {
+    
+    /**
+     * 根据用户名查询用户
+     * @param username 用户名
+     * @return 用户信息
+     */
+    @Select("SELECT * FROM users WHERE username = #{username} AND deleted = 0")
+    User selectByUsername(@Param("username") String username);
+    
+    /**
+     * 根据邮箱查询用户
+     * @param email 邮箱
+     * @return 用户信息
+     */
+    @Select("SELECT * FROM users WHERE email = #{email} AND deleted = 0")
+    User selectByEmail(@Param("email") String email);
+    
+    /**
+     * 根据部门ID查询用户列表
+     * @param deptId 部门ID
+     * @return 用户列表
+     */
+    @Select("SELECT * FROM users WHERE dept_id = #{deptId} AND deleted = 0 ORDER BY create_time DESC")
+    List<User> selectByDeptId(@Param("deptId") Long deptId);
+    
+    /**
+     * 分页查询用户列表（复杂查询使用XML）
+     * @param page 分页参数
+     * @param queryDTO 查询条件
+     * @return 用户分页列表
+     */
+    IPage<User> selectUserPage(IPage<User> page, @Param("query") UserQueryDTO queryDTO);
+    
+    /**
+     * 批量插入用户
+     * @param users 用户列表
+     * @return 影响行数
+     */
+    int insertBatch(@Param("users") List<User> users);
+    
+    /**
+     * 根据条件统计用户数量
+     * @param queryDTO 查询条件
+     * @return 用户数量
+     */
+    long countByCondition(@Param("query") UserQueryDTO queryDTO);
+    
+    /**
+     * 查询用户统计信息
+     * @param deptId 部门ID
+     * @return 用户统计信息
+     */
+    UserStatisticsVO selectUserStatistics(@Param("deptId") Long deptId);
+    
+    /**
+     * 更新用户最后登录时间
+     * @param userId 用户ID
+     * @param lastLoginTime 最后登录时间
+     * @return 影响行数
+     */
+    @Update("UPDATE users SET last_login_time = #{lastLoginTime}, update_time = NOW() WHERE id = #{userId}")
+    int updateLastLoginTime(@Param("userId") Long userId, @Param("lastLoginTime") LocalDateTime lastLoginTime);
+    
+    /**
+     * 批量更新用户状态
+     * @param userIds 用户ID列表
+     * @param status 状态
+     * @return 影响行数
+     */
+    @Update("<script>" +
+            "UPDATE users SET status = #{status}, update_time = NOW() WHERE id IN " +
+            "<foreach collection='userIds' item='id' open='(' separator=',' close=')'>" +
+            "#{id}" +
+            "</foreach>" +
+            "</script>")
+    int updateStatusBatch(@Param("userIds") List<Long> userIds, @Param("status") Integer status);
+    
+    /**
+     * 查询用户及其角色信息
+     * @param userId 用户ID
+     * @return 用户及角色信息
+     */
+    UserWithRolesVO selectUserWithRoles(@Param("userId") Long userId);
+}
+// [AI-BLOCK-END]
+```
+
+### 2. XML映射文件规范
+```xml
+<!-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.UserMapper">
+    
+    <!-- 缓存配置 -->
+    <cache eviction="LRU" flushInterval="60000" size="512" readOnly="true"/>
+    
+    <!-- 基础结果映射 -->
+    <resultMap id="BaseResultMap" type="User">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="email" property="email" jdbcType="VARCHAR"/>
+        <result column="phone" property="phone" jdbcType="VARCHAR"/>
+        <result column="password" property="password" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="INTEGER"/>
+        <result column="dept_id" property="deptId" jdbcType="BIGINT"/>
+        <result column="last_login_time" property="lastLoginTime" jdbcType="TIMESTAMP"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP"/>
+        <result column="create_by" property="createBy" jdbcType="VARCHAR"/>
+        <result column="update_by" property="updateBy" jdbcType="VARCHAR"/>
+        <result column="deleted" property="deleted" jdbcType="INTEGER"/>
+        <result column="version" property="version" jdbcType="INTEGER"/>
+    </resultMap>
+    
+    <!-- 用户角色关联结果映射 -->
+    <resultMap id="UserWithRolesResultMap" type="UserWithRolesVO" extends="BaseResultMap">
+        <collection property="roles" ofType="Role" columnPrefix="role_">
+            <id column="id" property="id" jdbcType="BIGINT"/>
+            <result column="name" property="name" jdbcType="VARCHAR"/>
+            <result column="code" property="code" jdbcType="VARCHAR"/>
+            <result column="description" property="description" jdbcType="VARCHAR"/>
+        </collection>
+    </resultMap>
+    
+    <!-- 基础查询字段 -->
+    <sql id="Base_Column_List">
+        id, username, email, phone, password, status, dept_id, last_login_time,
+        create_time, update_time, create_by, update_by, deleted, version
+    </sql>
+    
+    <!-- 用户角色关联查询字段 -->
+    <sql id="User_Role_Column_List">
+        u.id, u.username, u.email, u.phone, u.status, u.dept_id, u.last_login_time,
+        u.create_time, u.update_time, u.create_by, u.update_by, u.deleted, u.version,
+        r.id as role_id, r.name as role_name, r.code as role_code, r.description as role_description
+    </sql>
+    
+    <!-- 动态查询条件 -->
+    <sql id="Query_Condition">
+        <where>
+            deleted = 0
+            <if test="query.username != null and query.username != ''">
+                AND username LIKE CONCAT('%', #{query.username}, '%')
+            </if>
+            <if test="query.email != null and query.email != ''">
+                AND email LIKE CONCAT('%', #{query.email}, '%')
+            </if>
+            <if test="query.phone != null and query.phone != ''">
+                AND phone = #{query.phone}
+            </if>
+            <if test="query.status != null">
+                AND status = #{query.status}
+            </if>
+            <if test="query.deptId != null">
+                AND dept_id = #{query.deptId}
+            </if>
+            <if test="query.startTime != null">
+                AND create_time >= #{query.startTime}
+            </if>
+            <if test="query.endTime != null">
+                AND create_time <= #{query.endTime}
+            </if>
+        </where>
+    </sql>
+    
+    <!-- 排序条件 -->
+    <sql id="Order_By">
+        ORDER BY
+        <choose>
+            <when test="query.orderBy != null and query.orderBy != ''">
+                ${query.orderBy}
+                <if test="query.orderDirection != null and query.orderDirection != ''">
+                    ${query.orderDirection}
+                </if>
+            </when>
+            <otherwise>
+                create_time DESC
+            </otherwise>
+        </choose>
+    </sql>
+    
+    <!-- 分页查询用户列表 -->
+    <select id="selectUserPage" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM users
+        <include refid="Query_Condition"/>
+        <include refid="Order_By"/>
+    </select>
+    
+    <!-- 批量插入用户 -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO users (
+            username, email, phone, password, status, dept_id,
+            create_time, update_time, create_by, update_by, deleted, version
+        ) VALUES
+        <foreach collection="users" item="user" separator=",">
+            (
+                #{user.username}, #{user.email}, #{user.phone}, #{user.password}, 
+                #{user.status}, #{user.deptId}, #{user.createTime}, #{user.updateTime}, 
+                #{user.createBy}, #{user.updateBy}, 0, 0
+            )
+        </foreach>
+    </insert>
+    
+    <!-- 根据条件统计用户数量 -->
+    <select id="countByCondition" parameterType="UserQueryDTO" resultType="long">
+        SELECT COUNT(*)
+        FROM users
+        <include refid="Query_Condition"/>
+    </select>
+    
+    <!-- 查询用户统计信息 -->
+    <select id="selectUserStatistics" parameterType="Long" resultType="UserStatisticsVO">
+        SELECT
+            COUNT(*) as totalCount,
+            SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as activeCount,
+            SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as inactiveCount,
+            SUM(CASE WHEN DATE(create_time) = CURDATE() THEN 1 ELSE 0 END) as todayCount,
+            SUM(CASE WHEN DATE(last_login_time) = CURDATE() THEN 1 ELSE 0 END) as todayLoginCount
+        FROM users
+        WHERE deleted = 0
+        <if test="deptId != null">
+            AND dept_id = #{deptId}
+        </if>
+    </select>
+    
+    <!-- 查询用户及其角色信息 -->
+    <select id="selectUserWithRoles" parameterType="Long" resultMap="UserWithRolesResultMap">
+        SELECT
+        <include refid="User_Role_Column_List"/>
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.user_id
+        LEFT JOIN roles r ON ur.role_id = r.id
+        WHERE u.id = #{userId} AND u.deleted = 0
+        ORDER BY r.id
+    </select>
+    
+</mapper>
+<!-- [AI-BLOCK-END] -->
+```
+
+## 🚀 Service层使用规范
+
+### 1. 标准Service实现
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Transactional(rollbackFor = Exception.class)
+@Slf4j
+public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+    
+    private final UserMapper userMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final PasswordEncoder passwordEncoder;
+    
+    public UserServiceImpl(UserMapper userMapper, 
+                          RedisTemplate<String, Object> redisTemplate,
+                          PasswordEncoder passwordEncoder) {
+        this.userMapper = userMapper;
+        this.redisTemplate = redisTemplate;
+        this.passwordEncoder = passwordEncoder;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean createUser(UserCreateDTO createDTO) {
+        // 1. 参数验证
+        validateCreateParam(createDTO);
+        
+        // 2. 业务验证
+        validateUserUniqueness(createDTO);
+        
+        // 3. 构建用户对象
+        User user = buildUserFromCreateDTO(createDTO);
+        
+        // 4. 保存用户
+        boolean result = this.save(user);
+        
+        // 5. 清除相关缓存
+        if (result) {
+            clearUserCache(user.getId());
+        }
+        
+        return result;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateUser(Long userId, UserUpdateDTO updateDTO) {
+        // 1. 查询用户
+        User user = this.getById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        
+        // 2. 使用条件构造器进行动态更新
+        LambdaUpdateWrapper<User> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(User::getId, userId);
+        
+        // 3. 动态设置更新字段
+        if (StringUtils.isNotBlank(updateDTO.getEmail())) {
+            validateEmailUniqueness(updateDTO.getEmail(), userId);
+            updateWrapper.set(User::getEmail, updateDTO.getEmail());
+        }
+        
+        if (StringUtils.isNotBlank(updateDTO.getPhone())) {
+            updateWrapper.set(User::getPhone, updateDTO.getPhone());
+        }
+        
+        if (updateDTO.getStatus() != null) {
+            updateWrapper.set(User::getStatus, updateDTO.getStatus());
+        }
+        
+        if (updateDTO.getDeptId() != null) {
+            updateWrapper.set(User::getDeptId, updateDTO.getDeptId());
+        }
+        
+        // 4. 执行更新
+        boolean result = this.update(updateWrapper);
+        
+        // 5. 清除缓存
+        if (result) {
+            clearUserCache(userId);
+        }
+        
+        return result;
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public IPage<User> getUserPage(UserQueryDTO queryDTO, int pageNum, int pageSize) {
+        // 1. 参数验证和处理
+        if (pageNum <= 0) pageNum = 1;
+        if (pageSize <= 0) pageSize = 10;
+        if (pageSize > 100) pageSize = 100; // 限制最大页面大小
+        
+        // 2. 构建分页对象
+        Page<User> page = new Page<>(pageNum, pageSize);
+        
+        // 3. 构建查询条件
+        LambdaQueryWrapper<User> queryWrapper = buildQueryWrapper(queryDTO);
+        
+        // 4. 执行查询
+        return this.page(page, queryWrapper);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserById(Long userId) {
+        // 1. 先查缓存
+        String cacheKey = "user:id:" + userId;
+        User cachedUser = (User) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedUser != null) {
+            return cachedUser;
+        }
+        
+        // 2. 查数据库
+        User user = this.getById(userId);
+        
+        // 3. 缓存结果
+        if (user != null) {
+            redisTemplate.opsForValue().set(cacheKey, user, Duration.ofMinutes(30));
+        }
+        
+        return user;
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserByUsername(String username) {
+        // 1. 参数验证
+        if (StringUtils.isBlank(username)) {
+            throw new BusinessException("用户名不能为空");
+        }
+        
+        // 2. 先查缓存
+        String cacheKey = "user:username:" + username;
+        User cachedUser = (User) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedUser != null) {
+            return cachedUser;
+        }
+        
+        // 3. 查数据库
+        User user = userMapper.selectByUsername(username);
+        
+        // 4. 缓存结果
+        if (user != null) {
+            redisTemplate.opsForValue().set(cacheKey, user, Duration.ofMinutes(30));
+        }
+        
+        return user;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean batchCreateUsers(List<UserCreateDTO> createDTOList) {
+        if (CollectionUtils.isEmpty(createDTOList)) {
+            return true;
+        }
+        
+        // 1. 批量验证
+        validateBatchCreateParam(createDTOList);
+        
+        // 2. 转换为用户对象
+        List<User> users = createDTOList.stream()
+                .map(this::buildUserFromCreateDTO)
+                .collect(Collectors.toList());
+        
+        // 3. 批量保存
+        return this.saveBatch(users, 1000); // 每批1000条
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean deleteUser(Long userId) {
+        // 1. 检查用户是否存在
+        User user = this.getById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+        
+        // 2. 执行逻辑删除
+        boolean result = this.removeById(userId);
+        
+        // 3. 清除缓存
+        if (result) {
+            clearUserCache(userId);
+        }
+        
+        return result;
+    }
+    
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateLastLoginTime(Long userId) {
+        int result = userMapper.updateLastLoginTime(userId, LocalDateTime.now());
+        return result > 0;
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public UserStatisticsVO getUserStatistics(Long deptId) {
+        return userMapper.selectUserStatistics(deptId);
+    }
+    
+    /**
+     * 构建查询条件
+     */
+    private LambdaQueryWrapper<User> buildQueryWrapper(UserQueryDTO queryDTO) {
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        
+        queryWrapper.like(StringUtils.isNotBlank(queryDTO.getUsername()), 
+                         User::getUsername, queryDTO.getUsername())
+                   .like(StringUtils.isNotBlank(queryDTO.getEmail()), 
+                         User::getEmail, queryDTO.getEmail())
+                   .eq(queryDTO.getStatus() != null, 
+                       User::getStatus, queryDTO.getStatus())
+                   .eq(queryDTO.getDeptId() != null, 
+                       User::getDeptId, queryDTO.getDeptId())
+                   .ge(queryDTO.getStartTime() != null, 
+                       User::getCreateTime, queryDTO.getStartTime())
+                   .le(queryDTO.getEndTime() != null, 
+                       User::getCreateTime, queryDTO.getEndTime());
+        
+        // 排序
+        if (StringUtils.isNotBlank(queryDTO.getOrderBy())) {
+            if ("createTime".equals(queryDTO.getOrderBy())) {
+                queryWrapper.orderBy(true, "ASC".equals(queryDTO.getOrderDirection()), 
+                                   User::getCreateTime);
+            } else if ("updateTime".equals(queryDTO.getOrderBy())) {
+                queryWrapper.orderBy(true, "ASC".equals(queryDTO.getOrderDirection()), 
+                                   User::getUpdateTime);
+            }
+        } else {
+            queryWrapper.orderByDesc(User::getCreateTime);
+        }
+        
+        return queryWrapper;
+    }
+    
+    /**
+     * 从创建DTO构建用户对象
+     */
+    private User buildUserFromCreateDTO(UserCreateDTO createDTO) {
+        return User.builder()
+                .username(createDTO.getUsername())
+                .email(createDTO.getEmail())
+                .phone(createDTO.getPhone())
+                .password(passwordEncoder.encode(createDTO.getPassword()))
+                .status(1)
+                .deptId(createDTO.getDeptId())
+                .build();
+    }
+    
+    /**
+     * 验证创建参数
+     */
+    private void validateCreateParam(UserCreateDTO createDTO) {
+        if (createDTO == null) {
+            throw new BusinessException("用户信息不能为空");
+        }
+        if (StringUtils.isBlank(createDTO.getUsername())) {
+            throw new BusinessException("用户名不能为空");
+        }
+        if (StringUtils.isBlank(createDTO.getEmail())) {
+            throw new BusinessException("邮箱不能为空");
+        }
+        if (StringUtils.isBlank(createDTO.getPassword())) {
+            throw new BusinessException("密码不能为空");
+        }
+    }
+    
+    /**
+     * 验证用户唯一性
+     */
+    private void validateUserUniqueness(UserCreateDTO createDTO) {
+        // 检查用户名是否已存在
+        LambdaQueryWrapper<User> usernameQuery = new LambdaQueryWrapper<>();
+        usernameQuery.eq(User::getUsername, createDTO.getUsername());
+        if (this.count(usernameQuery) > 0) {
+            throw new BusinessException("用户名已存在");
+        }
+        
+        // 检查邮箱是否已存在
+        LambdaQueryWrapper<User> emailQuery = new LambdaQueryWrapper<>();
+        emailQuery.eq(User::getEmail, createDTO.getEmail());
+        if (this.count(emailQuery) > 0) {
+            throw new BusinessException("邮箱已存在");
+        }
+    }
+    
+    /**
+     * 验证邮箱唯一性（更新时）
+     */
+    private void validateEmailUniqueness(String email, Long excludeUserId) {
+        LambdaQueryWrapper<User> emailQuery = new LambdaQueryWrapper<>();
+        emailQuery.eq(User::getEmail, email)
+                 .ne(User::getId, excludeUserId);
+        if (this.count(emailQuery) > 0) {
+            throw new BusinessException("邮箱已存在");
+        }
+    }
+    
+    /**
+     * 验证批量创建参数
+     */
+    private void validateBatchCreateParam(List<UserCreateDTO> createDTOList) {
+        Set<String> usernameSet = new HashSet<>();
+        Set<String> emailSet = new HashSet<>();
+        
+        for (UserCreateDTO createDTO : createDTOList) {
+            validateCreateParam(createDTO);
+            
+            if (!usernameSet.add(createDTO.getUsername())) {
+                throw new BusinessException("用户名重复：" + createDTO.getUsername());
+            }
+            if (!emailSet.add(createDTO.getEmail())) {
+                throw new BusinessException("邮箱重复：" + createDTO.getEmail());
+            }
+        }
+    }
+    
+    /**
+     * 清除用户缓存
+     */
+    private void clearUserCache(Long userId) {
+        try {
+            // 清除用户ID缓存
+            redisTemplate.delete("user:id:" + userId);
+            
+            // 清除用户名缓存
+            User user = this.getById(userId);
+            if (user != null) {
+                redisTemplate.delete("user:username:" + user.getUsername());
+            }
+            
+            // 清除其他相关缓存
+            redisTemplate.delete("user:roles:" + userId);
+            
+        } catch (Exception e) {
+            log.warn("清除用户缓存失败: userId={}", userId, e);
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## ⚠️ 禁止行为
+
+### 1. 配置相关禁令
+- **禁止跳过插件配置**: 必须配置分页、乐观锁、防攻击等核心插件
+- **禁止硬编码数据库配置**: 敏感信息必须使用环境变量或配置中心
+- **禁止忽略逻辑删除配置**: 必须配置逻辑删除字段和值
+- **禁止不配置自动填充**: 审计字段必须配置自动填充
+- **禁止不配置连接池**: 必须使用HikariCP等连接池
+
+### 2. 实体类设计禁令
+- **禁止不继承BaseEntity**: 所有实体必须继承基础实体类
+- **禁止忽略表名映射**: 使用@TableName明确指定表名
+- **禁止不配置逻辑删除**: 必须使用@TableLogic注解
+- **禁止不配置乐观锁**: 重要实体必须配置@Version字段
+- **禁止忽略字段验证**: 必须使用Bean Validation注解
+
+### 3. Mapper接口禁令
+- **禁止不继承BaseMapper**: 所有Mapper必须继承BaseMapper
+- **禁止直接使用字符串字段名**: 使用Lambda表达式引用字段
+- **禁止忽略参数注解**: 多参数方法必须使用@Param注解
+- **禁止复杂查询使用注解**: 复杂查询必须使用XML映射文件
+- **禁止不处理SQL异常**: 必须适当处理和转换SQL异常
+
+### 4. Service层使用禁令
+- **禁止不使用条件构造器**: 动态查询必须使用QueryWrapper
+- **禁止忽略事务注解**: 数据修改操作必须配置事务
+- **禁止不处理异常**: 必须处理和转换底层异常
+- **禁止不清理缓存**: 数据变更后必须清理相关缓存
+- **禁止长事务**: 避免长时间持有事务
+
+### 5. 性能相关禁令
+- **禁止不使用分页**: 大数据量查询必须使用分页
+- **禁止查询全部字段**: 只查询需要的字段
+- **禁止N+1查询**: 避免在循环中执行查询
+- **禁止不使用索引**: 查询条件必须使用索引字段
+- **禁止批量操作不分批**: 大批量操作必须分批处理
+
+### 6. 安全相关禁令
+- **禁止SQL注入**: 必须使用参数化查询
+- **禁止忽略权限控制**: 必须实现数据权限控制
+- **禁止明文存储密码**: 密码必须加密存储
+- **禁止不验证输入**: 必须验证所有输入参数
+- **禁止忽略审计日志**: 重要操作必须记录审计日志
+
+## 📈 性能优化建议
+
+### 1. 查询优化
+- 使用索引字段进行查询条件
+- 避免SELECT *，只查询需要的字段
+- 合理使用分页，避免大数据量查询
+- 使用批量操作代替单条操作
+- 合理使用缓存策略
+
+### 2. 连接池优化
+- 合理配置连接池大小
+- 设置合适的超时时间
+- 开启连接泄漏检测
+- 监控连接池状态
+
+### 3. 事务优化
+- 控制事务边界，避免长事务
+- 合理使用事务传播级别
+- 避免事务中调用外部服务
+- 使用只读事务优化查询
+
+这个综合规范文件提供了MyBatis和MyBatis-Plus的完整使用指南，涵盖了从配置到实际使用的所有方面，确保开发团队能够正确、高效地使用这些数据访问框架。
+description:
+globs:
+alwaysApply: false
+---

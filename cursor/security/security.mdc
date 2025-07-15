@@ -1,0 +1,112 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+ You will attempt to adhere to the ASVS 4.0 Level 2 standards for authentication, JWT token management, validation, santization, encoding and injection prevention, deserialization prevention, etc. This is a multi-tenant application. Ensure that cross-tenant access is prevented. Follow good security practices such as Defense-in-Depth, Principle of Least Privilege and log all security related actions.
+Especially look for business logic flaws that can be used by an attacker.
+
+1. Authentication and Authorization:
+   - Use strong password hashing (bcrypt/Argon2)
+   - Implement proper session management
+   - Use JWT with appropriate expiration
+   - Implement role-based access control (RBAC)
+   - Validate all user inputs
+   - Use secure password reset flows
+   - Implement account lockout policies
+   - No hardcoded passwords
+   - Tenant isolation: Each user can only access their own integrations through RLS policies
+   - Follow principle of Least Privilege
+
+2. API Security:
+   - Use HTTPS for all communications
+   - Implement rate limiting
+   - Validate and sanitize all inputs
+   - Use proper CORS policies
+   - Use secure headers (HSTS, CSP, etc.)
+   - Implement request validation
+
+3. Data Protection:
+   - Encrypt sensitive data at rest
+   - Use secure key management
+   - Implement proper data sanitization
+   - Use parameterized queries
+   - Implement proper data access controls
+   - Use secure file handling
+   - Implement data retention policies
+
+4. Security Headers:
+   - Set appropriate security headers
+   - Use Content Security Policy
+   - Implement XSS protection
+   - Use HSTS
+   - Set secure cookie flags
+   - Implement frame protection
+   - Use proper CORS settings
+
+
+5. Secure Configuration:
+   - Use environment variables for secrets
+   - Implement secure configuration management
+   - Use different configs for environments
+   - Implement secure logging
+   - Use secure defaults
+   - Implement proper error handling
+   - Use secure connection strings
+
+6. Input Validation:
+   - Validate all user inputs
+   - Use proper data types
+   - Implement input sanitization
+   - Use parameterized queries
+   - Validate file uploads
+   - Implement proper error messages
+   - Use secure defaults
+
+7. Error Handling:
+   - Don't expose sensitive information
+   - Use proper error messages
+   - Implement secure logging
+   - Handle errors gracefully
+   - Use proper status codes
+   - Use secure defaults
+
+8. Security Testing:
+   - Implement security tests
+   - Test authentication flows
+   - Test authorization rules
+   - Test input validation
+   - Test error handling
+
+9. **Server-Side Request Forgery (SSRF) Prevention:**
+   - Implement strict URL validation and domain allowlisting
+   - Block private IP ranges (10.x.x.x, 192.168.x.x, 172.16-31.x.x, 127.x.x.x)
+   - Block cloud metadata services (169.254.169.254, metadata.google.internal)
+   - Disable HTTP redirects in fetch requests when possible
+   - Use separate network segments for external requests
+   - Validate URLs before making external API calls
+   - Log all external request attempts for monitoring
+
+10. **Injection Prevention (Expanded):**
+    - Use parameterized queries for all database operations
+    - Validate and sanitize all URL inputs
+    - Prevent command injection in system calls
+    - Use allowlists for file paths and external resources
+    - Escape special characters in dynamic queries
+    - Validate file upload types and contents
+
+11. **Business Logic Security:**
+    - Implement proper authorization checks for all business operations
+    - Prevent privilege escalation through parameter manipulation
+    - Validate business rules at the API layer
+    - Check for race conditions in multi-step operations
+    - Implement proper state validation
+    - Prevent users from accessing other tenants' data
+
+12. **External Integration Security:**
+    - Validate all external API endpoints before use
+    - Implement proper timeout and retry logic
+    - Use least-privilege API tokens
+    - Store credentials securely (encrypted at rest)
+    - Monitor for suspicious external requests
+    - Implement circuit breakers for external services

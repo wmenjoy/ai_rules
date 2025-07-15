@@ -1,0 +1,139 @@
+# Java编程规范体系概览
+> 为AI编程工具提供系统化、可执行的Java开发规范
+
+## 🎯 规范目标
+
+- **系统性**：覆盖Java开发的所有关键方面
+- **可执行性**：每个规范都可通过工具验证
+- **AI友好**：结构化格式，便于AI工具理解和应用
+- **持续演进**：支持版本管理和持续改进
+
+## 📋 规范体系架构
+
+### 1. 核心规范层 (Core Standards)
+```
+core/
+├── java-coding-standards.mdc      # Java编码规范
+├── naming-conventions.mdc         # 命名规范
+├── project-structure.mdc          # 项目结构规范
+└── design-principles.mdc          # 设计原则
+```
+
+### 2. 框架技术层 (Framework & Technology)
+```
+frameworks/
+├── spring-boot-standards.mdc      # Spring Boot规范
+├── mybatis-plus-standards.mdc     # MyBatis Plus规范
+├── testing-standards.mdc          # 测试规范
+└── security-standards.mdc         # 安全规范
+```
+
+### 3. 数据存储层 (Data Layer)
+```
+data-layer/
+├── sql-standards.mdc              # SQL规范
+├── mysql-standards.mdc            # MySQL数据库规范
+├── redis-standards.mdc            # Redis缓存规范
+└── data-modeling.mdc              # 数据建模规范
+```
+
+### 4. 中间件集成层 (Middleware Integration)
+```
+middleware/
+├── kafka-standards.mdc            # Kafka消息队列规范
+├── elasticsearch-standards.mdc    # Elasticsearch搜索规范
+└── integration-patterns.mdc       # 集成模式规范
+```
+
+### 5. 运维监控层 (Operations & Monitoring)
+```
+operations/
+├── logging-standards.mdc          # 日志规范
+├── monitoring-standards.mdc       # 监控规范
+├── deployment-standards.mdc       # 部署规范
+└── performance-standards.mdc      # 性能规范
+```
+
+### 6. AI辅助开发层 (AI-Assisted Development)
+```
+ai-assisted/
+├── ai-code-generation.mdc         # AI代码生成规范
+├── code-review-standards.mdc      # 代码审查规范
+└── quality-assurance.mdc          # 质量保证规范
+```
+
+## 🔄 规范管理流程
+
+### 版本控制策略
+- **主版本号**：重大架构变更或不兼容变更
+- **次版本号**：新增规范或重要更新  
+- **修订号**：错误修正和小改进
+
+### 规范优先级
+- **MUST** (必须): 强制执行的规范
+- **SHOULD** (应该): 推荐的最佳实践
+- **MAY** (可以): 可选的建议
+
+### 验证机制
+- 静态代码分析工具集成
+- IDE配置模板
+- CI/CD流水线检查
+- 自动化规范验证
+
+## 📊 技术栈对应关系
+
+| 技术栈 | 对应规范文件 | 优先级 |
+|--------|-------------|--------|
+| Java 8 | java-coding-standards.mdc | MUST |
+| Spring Boot 2.2.0 | spring-boot-standards.mdc | MUST |
+| MySQL 5.8 | sql-standards.mdc, mysql-standards.mdc | MUST |
+| Redis 4 | redis-standards.mdc | SHOULD |
+| Kafka 0.10.0.0 | kafka-standards.mdc | SHOULD |
+| Elasticsearch | elasticsearch-standards.mdc | SHOULD |
+| MyBatis-Plus 3.4.3 | mybatis-plus-standards.mdc | MUST |
+
+## 🚀 实施计划
+
+### 阶段1：核心规范建立 (第1-2周)
+- [x] 创建规范体系架构
+- [ ] 完善Java编码规范
+- [ ] 详化SQL规范
+- [ ] 补充Spring Boot规范
+
+### 阶段2：中间件规范补充 (第3-4周)
+- [ ] Redis使用规范
+- [ ] Kafka操作规范
+- [ ] Elasticsearch规范
+
+### 阶段3：工具集成验证 (第5-6周)
+- [ ] 静态分析工具配置
+- [ ] IDE模板创建
+- [ ] CI/CD集成
+
+## 📖 使用指南
+
+### 对于开发者
+1. 查阅对应技术栈的规范文件
+2. 使用IDE模板和配置
+3. 运行自动化检查工具
+4. 提交代码前验证规范合规性
+
+### 对于AI工具
+1. 解析规范文件结构和优先级
+2. 根据上下文应用相应规范
+3. 生成符合规范的代码
+4. 提供规范检查和建议
+
+## 🔗 相关资源
+
+- [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)
+- [Spring Boot Best Practices](https://spring.io/guides)
+- [Effective Java 3rd Edition](https://www.oracle.com/technical-resources/articles/java/effective-java.html)
+- [Clean Code Principles](https://clean-code-developer.com/)
+
+---
+*此规范体系持续演进，欢迎提供改进建议和反馈*
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,1201 @@
+# Kafka消息队列规范
+
+## 🎯 规范目标
+- 建立Kafka消息系统的统一使用标准
+- 确保消息的可靠传输和高性能处理
+- 提供消息版本管理和向后兼容策略
+- 建立完善的监控和运维体系
+
+## 📋 主题设计规范
+
+### 主题命名规范
+
+#### MUST - 必须遵守
+```text
+✅ 标准命名格式：{环境}.{服务}.{业务域}.{事件类型}.{版本}
+
+正确示例：
+dev.user-service.account.user-created.v1
+prod.order-service.payment.payment-completed.v1
+test.notification-service.email.email-sent.v2
+
+❌ 错误示例：
+userCreated                    # 缺少环境和服务信息
+user.created                   # 缺少版本信息
+UserCreatedEvent               # 使用驼峰命名
+user_created_event             # 使用下划线
+```
+
+### 主题配置规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Kafka主题配置常量
+ */
+public class KafkaTopicConfig {
+    
+    // 环境前缀
+    public static final String ENV_DEV = "dev";
+    public static final String ENV_TEST = "test";
+    public static final String ENV_PROD = "prod";
+    
+    // 服务名称
+    public static final String USER_SERVICE = "user-service";
+    public static final String ORDER_SERVICE = "order-service";
+    public static final String PAYMENT_SERVICE = "payment-service";
+    public static final String NOTIFICATION_SERVICE = "notification-service";
+    
+    // 业务域
+    public static final String DOMAIN_ACCOUNT = "account";
+    public static final String DOMAIN_ORDER = "order";
+    public static final String DOMAIN_PAYMENT = "payment";
+    public static final String DOMAIN_NOTIFICATION = "notification";
+    
+    // 事件类型
+    public static final String EVENT_CREATED = "created";
+    public static final String EVENT_UPDATED = "updated";
+    public static final String EVENT_DELETED = "deleted";
+    public static final String EVENT_COMPLETED = "completed";
+    public static final String EVENT_FAILED = "failed";
+    
+    /**
+     * 构建主题名称
+     */
+    public static String buildTopicName(String env, String service, String domain, 
+                                       String eventType, String version) {
+        return String.join(".", env, service, domain, eventType, version);
+    }
+}
+
+/**
+ * 主题管理服务
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class KafkaTopicManager {
+    
+    private final KafkaAdmin kafkaAdmin;
+    
+    @Value("${spring.profiles.active:dev}")
+    private String environment;
+    
+    /**
+     * 创建主题
+     */
+    public void createTopic(String service, String domain, String eventType, 
+                           String version, int partitions, short replicationFactor) {
+        
+        String topicName = KafkaTopicConfig.buildTopicName(
+            environment, service, domain, eventType, version);
+        
+        NewTopic topic = TopicBuilder.name(topicName)
+            .partitions(partitions)
+            .replicas(replicationFactor)
+            .config(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
+            .config(TopicConfig.RETENTION_MS_CONFIG, "604800000") // 7天
+            .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
+            .build();
+        
+        try {
+            kafkaAdmin.createOrModifyTopics(topic);
+            log.info("Kafka主题创建成功: {}", topicName);
+        } catch (Exception e) {
+            log.error("Kafka主题创建失败: {}", topicName, e);
+        }
+    }
+    
+    /**
+     * 获取主题信息
+     */
+    public void describeTopics(String... topicNames) {
+        try {
+            DescribeTopicsResult result = kafkaAdmin.describeTopics(Arrays.asList(topicNames));
+            result.all().get().forEach((name, description) -> {
+                log.info("主题信息: name={}, partitions={}", 
+                    name, description.partitions().size());
+            });
+        } catch (Exception e) {
+            log.error("获取主题信息失败", e);
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 消息格式规范
+
+### 标准消息结构
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 标准消息基类
+ */
+@Data
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "messageType")
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = UserCreatedEvent.class, name = "UserCreatedEvent"),
+    @JsonSubTypes.Type(value = OrderCompletedEvent.class, name = "OrderCompletedEvent"),
+    @JsonSubTypes.Type(value = PaymentProcessedEvent.class, name = "PaymentProcessedEvent")
+})
+public abstract class BaseMessage {
+    
+    /**
+     * 消息ID，全局唯一
+     */
+    @JsonProperty("messageId")
+    private String messageId = UUID.randomUUID().toString();
+    
+    /**
+     * 消息类型
+     */
+    @JsonProperty("messageType")
+    private String messageType;
+    
+    /**
+     * 消息版本
+     */
+    @JsonProperty("version")
+    private String version = "1.0";
+    
+    /**
+     * 事件时间戳
+     */
+    @JsonProperty("timestamp")
+    private Long timestamp = System.currentTimeMillis();
+    
+    /**
+     * 来源服务
+     */
+    @JsonProperty("source")
+    private String source;
+    
+    /**
+     * 关联ID（用于消息追踪）
+     */
+    @JsonProperty("correlationId")
+    private String correlationId;
+    
+    /**
+     * 重试次数
+     */
+    @JsonProperty("retryCount")
+    private Integer retryCount = 0;
+    
+    /**
+     * 消息头部信息
+     */
+    @JsonProperty("headers")
+    private Map<String, String> headers = new HashMap<>();
+    
+    public BaseMessage() {
+        this.messageType = this.getClass().getSimpleName();
+    }
+}
+
+/**
+ * 用户创建事件
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserCreatedEvent extends BaseMessage {
+    
+    @JsonProperty("userId")
+    private Long userId;
+    
+    @JsonProperty("username")
+    private String username;
+    
+    @JsonProperty("email")
+    private String email;
+    
+    @JsonProperty("createdBy")
+    private String createdBy;
+    
+    @JsonProperty("userProfile")
+    private UserProfile userProfile;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UserProfile {
+        private String firstName;
+        private String lastName;
+        private String phone;
+        private String address;
+    }
+    
+    public UserCreatedEvent(User user) {
+        super();
+        this.userId = user.getId();
+        this.username = user.getUsername();
+        this.email = user.getEmail();
+        this.createdBy = user.getCreatedBy();
+        this.setSource("user-service");
+        
+        if (user.getProfile() != null) {
+            this.userProfile = UserProfile.builder()
+                .firstName(user.getProfile().getFirstName())
+                .lastName(user.getProfile().getLastName())
+                .phone(user.getProfile().getPhone())
+                .address(user.getProfile().getAddress())
+                .build();
+        }
+    }
+}
+
+/**
+ * 订单完成事件
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderCompletedEvent extends BaseMessage {
+    
+    @JsonProperty("orderId")
+    private Long orderId;
+    
+    @JsonProperty("orderNo")
+    private String orderNo;
+    
+    @JsonProperty("userId")
+    private Long userId;
+    
+    @JsonProperty("totalAmount")
+    private BigDecimal totalAmount;
+    
+    @JsonProperty("orderItems")
+    private List<OrderItem> orderItems;
+    
+    @JsonProperty("completedTime")
+    private LocalDateTime completedTime;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OrderItem {
+        private Long productId;
+        private String productName;
+        private Integer quantity;
+        private BigDecimal price;
+    }
+    
+    public OrderCompletedEvent(Order order) {
+        super();
+        this.orderId = order.getId();
+        this.orderNo = order.getOrderNo();
+        this.userId = order.getUserId();
+        this.totalAmount = order.getTotalAmount();
+        this.completedTime = order.getCompletedTime();
+        this.setSource("order-service");
+        
+        if (order.getItems() != null) {
+            this.orderItems = order.getItems().stream()
+                .map(item -> OrderItem.builder()
+                    .productId(item.getProductId())
+                    .productName(item.getProductName())
+                    .quantity(item.getQuantity())
+                    .price(item.getPrice())
+                    .build())
+                .collect(Collectors.toList());
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 生产者规范
+
+### 生产者配置
+```yaml
+# ✅ Kafka生产者配置
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      # 序列化配置
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      
+      # 性能配置
+      batch-size: 16384        # 批量发送大小 16KB
+      linger-ms: 10           # 批量发送延迟时间
+      buffer-memory: 33554432 # 缓冲区大小 32MB
+      
+      # 可靠性配置
+      acks: all               # 等待所有副本确认
+      retries: 3              # 重试次数
+      retry-backoff-ms: 1000  # 重试间隔
+      
+      # 幂等性配置
+      enable-idempotence: true
+      max-in-flight-requests-per-connection: 1
+      
+      # 压缩配置
+      compression-type: lz4
+      
+      # 自定义配置
+      properties:
+        max.request.size: 1048576  # 1MB
+        request.timeout.ms: 30000  # 30秒
+```
+
+### 生产者实现
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Kafka消息生产者服务
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class KafkaMessageProducer {
+    
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    
+    @Value("${spring.profiles.active:dev}")
+    private String environment;
+    
+    /**
+     * 发送用户创建事件
+     */
+    public void sendUserCreatedEvent(User user) {
+        UserCreatedEvent event = new UserCreatedEvent(user);
+        event.setCorrelationId(generateCorrelationId());
+        
+        String topicName = KafkaTopicConfig.buildTopicName(
+            environment, KafkaTopicConfig.USER_SERVICE, 
+            KafkaTopicConfig.DOMAIN_ACCOUNT, KafkaTopicConfig.EVENT_CREATED, "v1");
+        
+        sendMessage(topicName, user.getId().toString(), event);
+    }
+    
+    /**
+     * 发送订单完成事件
+     */
+    public void sendOrderCompletedEvent(Order order) {
+        OrderCompletedEvent event = new OrderCompletedEvent(order);
+        event.setCorrelationId(generateCorrelationId());
+        
+        String topicName = KafkaTopicConfig.buildTopicName(
+            environment, KafkaTopicConfig.ORDER_SERVICE,
+            KafkaTopicConfig.DOMAIN_ORDER, KafkaTopicConfig.EVENT_COMPLETED, "v1");
+        
+        sendMessage(topicName, order.getOrderNo(), event);
+    }
+    
+    /**
+     * 通用消息发送方法
+     */
+    public void sendMessage(String topicName, String key, Object message) {
+        try {
+            // 设置消息头
+            ProducerRecord<String, Object> record = new ProducerRecord<>(topicName, key, message);
+            record.headers().add("messageType", message.getClass().getSimpleName().getBytes());
+            record.headers().add("timestamp", String.valueOf(System.currentTimeMillis()).getBytes());
+            record.headers().add("source", environment.getBytes());
+            
+            // 异步发送消息
+            ListenableFuture<SendResult<String, Object>> future = kafkaTemplate.send(record);
+            
+            // 添加回调处理
+            future.addCallback(new ListenableFutureCallback<SendResult<String, Object>>() {
+                @Override
+                public void onSuccess(SendResult<String, Object> result) {
+                    RecordMetadata metadata = result.getRecordMetadata();
+                    log.info("消息发送成功: topic={}, partition={}, offset={}, key={}", 
+                        metadata.topic(), metadata.partition(), metadata.offset(), key);
+                }
+                
+                @Override
+                public void onFailure(Throwable ex) {
+                    log.error("消息发送失败: topic={}, key={}, message={}", 
+                        topicName, key, message, ex);
+                    
+                    // 发送到死信队列或重试队列
+                    handleSendFailure(topicName, key, message, ex);
+                }
+            });
+            
+        } catch (Exception e) {
+            log.error("消息发送异常: topic={}, key={}", topicName, key, e);
+            throw new MessageSendException("消息发送失败", e);
+        }
+    }
+    
+    /**
+     * 批量发送消息
+     */
+    public void sendBatchMessages(String topicName, Map<String, Object> messages) {
+        List<ProducerRecord<String, Object>> records = messages.entrySet().stream()
+            .map(entry -> {
+                ProducerRecord<String, Object> record = new ProducerRecord<>(
+                    topicName, entry.getKey(), entry.getValue());
+                record.headers().add("batchId", generateBatchId().getBytes());
+                return record;
+            })
+            .collect(Collectors.toList());
+        
+        // 使用事务发送批量消息
+        kafkaTemplate.executeInTransaction(operations -> {
+            records.forEach(record -> operations.send(record));
+            return null;
+        });
+        
+        log.info("批量消息发送完成: topic={}, count={}", topicName, messages.size());
+    }
+    
+    /**
+     * 发送延迟消息（通过时间戳）
+     */
+    public void sendDelayedMessage(String topicName, String key, Object message, long delayMs) {
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                sendMessage(topicName, key, message);
+            }
+        }, delayMs);
+        
+        log.info("延迟消息已安排: topic={}, key={}, delay={}ms", topicName, key, delayMs);
+    }
+    
+    private void handleSendFailure(String topicName, String key, Object message, Throwable ex) {
+        // 构建失败消息记录
+        FailedMessage failedMessage = FailedMessage.builder()
+            .originalTopic(topicName)
+            .key(key)
+            .message(message)
+            .errorMessage(ex.getMessage())
+            .failureTime(LocalDateTime.now())
+            .retryCount(0)
+            .build();
+        
+        // 发送到重试队列
+        String retryTopic = topicName + ".retry";
+        try {
+            kafkaTemplate.send(retryTopic, key, failedMessage);
+            log.info("失败消息已发送到重试队列: retryTopic={}, key={}", retryTopic, key);
+        } catch (Exception retryEx) {
+            log.error("发送到重试队列失败: retryTopic={}, key={}", retryTopic, key, retryEx);
+        }
+    }
+    
+    private String generateCorrelationId() {
+        return "corr-" + UUID.randomUUID().toString();
+    }
+    
+    private String generateBatchId() {
+        return "batch-" + System.currentTimeMillis() + "-" + ThreadLocalRandom.current().nextInt(1000);
+    }
+}
+
+/**
+ * 失败消息记录
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class FailedMessage {
+    private String originalTopic;
+    private String key;
+    private Object message;
+    private String errorMessage;
+    private LocalDateTime failureTime;
+    private Integer retryCount;
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 消费者规范
+
+### 消费者配置
+```yaml
+# ✅ Kafka消费者配置
+spring:
+  kafka:
+    consumer:
+      # 基础配置
+      group-id: ${spring.application.name}-consumer-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      
+      # 消费配置
+      auto-offset-reset: earliest
+      enable-auto-commit: false  # 手动提交偏移量
+      fetch-min-size: 1
+      fetch-max-wait: 500
+      max-poll-records: 500
+      
+      # JSON反序列化配置
+      properties:
+        spring.json.trusted.packages: "cn.org.bjca.footstone.event"
+        spring.json.type.mapping: |
+          UserCreatedEvent:cn.org.bjca.footstone.event.UserCreatedEvent,
+          OrderCompletedEvent:cn.org.bjca.footstone.event.OrderCompletedEvent
+        
+    # 监听器配置
+    listener:
+      ack-mode: manual_immediate  # 手动确认模式
+      concurrency: 3              # 并发消费者数量
+      poll-timeout: 3000          # 轮询超时时间
+      type: batch                 # 批量消费模式
+```
+
+### 消费者实现
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 用户事件消费者
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class UserEventConsumer {
+    
+    private final UserService userService;
+    private final NotificationService notificationService;
+    private final MeterRegistry meterRegistry;
+    
+    private final Counter processedCounter = Counter.builder("kafka.message.processed")
+        .description("处理的消息数量")
+        .register(meterRegistry);
+    
+    private final Timer processingTimer = Timer.builder("kafka.message.processing.time")
+        .description("消息处理时间")
+        .register(meterRegistry);
+    
+    /**
+     * 消费用户创建事件
+     */
+    @KafkaListener(
+        topics = "${app.kafka.topics.user-created:dev.user-service.account.user-created.v1}",
+        groupId = "${spring.application.name}-user-consumer",
+        containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void handleUserCreatedEvent(
+            @Payload UserCreatedEvent event,
+            @Header Map<String, Object> headers,
+            Acknowledgment acknowledgment,
+            ConsumerRecord<String, UserCreatedEvent> record) {
+        
+        Timer.Sample sample = Timer.start(meterRegistry);
+        
+        try {
+            log.info("收到用户创建事件: userId={}, messageId={}, offset={}", 
+                event.getUserId(), event.getMessageId(), record.offset());
+            
+            // 幂等性检查
+            if (isMessageProcessed(event.getMessageId())) {
+                log.info("消息已处理，跳过: messageId={}", event.getMessageId());
+                acknowledgment.acknowledge();
+                return;
+            }
+            
+            // 处理业务逻辑
+            processUserCreatedEvent(event);
+            
+            // 标记消息已处理
+            markMessageProcessed(event.getMessageId());
+            
+            // 手动确认消息
+            acknowledgment.acknowledge();
+            
+            // 记录指标
+            processedCounter.increment(Tags.of("event", "user-created", "status", "success"));
+            
+            log.info("用户创建事件处理完成: userId={}, messageId={}", 
+                event.getUserId(), event.getMessageId());
+            
+        } catch (Exception e) {
+            log.error("用户创建事件处理失败: userId={}, messageId={}", 
+                event.getUserId(), event.getMessageId(), e);
+            
+            // 记录失败指标
+            processedCounter.increment(Tags.of("event", "user-created", "status", "error"));
+            
+            // 处理失败逻辑
+            handleProcessingFailure(event, e, acknowledgment);
+            
+        } finally {
+            sample.stop(processingTimer);
+        }
+    }
+    
+    /**
+     * 批量消费订单事件
+     */
+    @KafkaListener(
+        topics = "${app.kafka.topics.order-completed:dev.order-service.order.order-completed.v1}",
+        groupId = "${spring.application.name}-order-consumer",
+        containerFactory = "batchKafkaListenerContainerFactory"
+    )
+    public void handleOrderCompletedEvents(
+            List<ConsumerRecord<String, OrderCompletedEvent>> records,
+            Acknowledgment acknowledgment) {
+        
+        try {
+            log.info("收到批量订单完成事件: count={}", records.size());
+            
+            List<OrderCompletedEvent> events = records.stream()
+                .map(ConsumerRecord::value)
+                .collect(Collectors.toList());
+            
+            // 批量处理事件
+            processOrderCompletedEventsBatch(events);
+            
+            // 确认所有消息
+            acknowledgment.acknowledge();
+            
+            processedCounter.increment(Tags.of("event", "order-completed", "status", "success"), 
+                records.size());
+            
+            log.info("批量订单完成事件处理完成: count={}", records.size());
+            
+        } catch (Exception e) {
+            log.error("批量订单完成事件处理失败: count={}", records.size(), e);
+            
+            // 逐个处理失败的消息
+            handleBatchProcessingFailure(records, e, acknowledgment);
+        }
+    }
+    
+    /**
+     * 错误主题消费者
+     */
+    @KafkaListener(
+        topics = "${app.kafka.topics.error:error-topic}",
+        groupId = "${spring.application.name}-error-consumer"
+    )
+    public void handleErrorMessages(
+            @Payload Object errorMessage,
+            @Header Map<String, Object> headers,
+            Acknowledgment acknowledgment) {
+        
+        try {
+            log.warn("收到错误消息: headers={}, message={}", headers, errorMessage);
+            
+            // 记录错误消息到数据库或监控系统
+            recordErrorMessage(errorMessage, headers);
+            
+            acknowledgment.acknowledge();
+            
+        } catch (Exception e) {
+            log.error("错误消息处理失败", e);
+        }
+    }
+    
+    private void processUserCreatedEvent(UserCreatedEvent event) {
+        // 发送欢迎邮件
+        notificationService.sendWelcomeEmail(event.getEmail(), event.getUsername());
+        
+        // 创建用户统计记录
+        userService.createUserStats(event.getUserId());
+        
+        // 初始化用户偏好设置
+        userService.initializeUserPreferences(event.getUserId());
+    }
+    
+    private void processOrderCompletedEventsBatch(List<OrderCompletedEvent> events) {
+        // 批量更新用户积分
+        Map<Long, BigDecimal> userPoints = events.stream()
+            .collect(Collectors.groupingBy(
+                OrderCompletedEvent::getUserId,
+                Collectors.reducing(BigDecimal.ZERO, 
+                    OrderCompletedEvent::getTotalAmount, BigDecimal::add)));
+        
+        userService.batchUpdateUserPoints(userPoints);
+        
+        // 批量发送订单完成通知
+        List<String> emails = events.stream()
+            .map(event -> userService.getUserEmail(event.getUserId()))
+            .collect(Collectors.toList());
+        
+        notificationService.batchSendOrderCompletedNotifications(emails, events);
+    }
+    
+    private boolean isMessageProcessed(String messageId) {
+        // 检查Redis或数据库中是否已处理该消息
+        return userService.isMessageProcessed(messageId);
+    }
+    
+    private void markMessageProcessed(String messageId) {
+        // 在Redis或数据库中标记消息已处理
+        userService.markMessageProcessed(messageId);
+    }
+    
+    private void handleProcessingFailure(UserCreatedEvent event, Exception e, 
+                                       Acknowledgment acknowledgment) {
+        
+        // 增加重试次数
+        event.setRetryCount(event.getRetryCount() + 1);
+        
+        if (event.getRetryCount() >= 3) {
+            // 达到最大重试次数，发送到死信队列
+            sendToDeadLetterQueue(event, e);
+            acknowledgment.acknowledge(); // 确认消息，避免无限重试
+        } else {
+            // 发送到重试队列
+            sendToRetryQueue(event);
+            acknowledgment.acknowledge();
+        }
+    }
+    
+    private void handleBatchProcessingFailure(List<ConsumerRecord<String, OrderCompletedEvent>> records, 
+                                            Exception e, Acknowledgment acknowledgment) {
+        // 批量处理失败时，逐个重试
+        for (ConsumerRecord<String, OrderCompletedEvent> record : records) {
+            try {
+                processOrderCompletedEventsBatch(Collections.singletonList(record.value()));
+            } catch (Exception individualException) {
+                log.error("单个订单事件处理失败: orderId={}", 
+                    record.value().getOrderId(), individualException);
+                sendToDeadLetterQueue(record.value(), individualException);
+            }
+        }
+        
+        acknowledgment.acknowledge();
+    }
+    
+    private void sendToRetryQueue(Object event) {
+        // 发送到重试主题
+        String retryTopic = "retry-topic";
+        // kafkaTemplate.send(retryTopic, event);
+        log.info("消息已发送到重试队列: messageId={}", 
+            event instanceof BaseMessage ? ((BaseMessage) event).getMessageId() : "unknown");
+    }
+    
+    private void sendToDeadLetterQueue(Object event, Exception e) {
+        // 发送到死信队列
+        String dlqTopic = "dead-letter-topic";
+        // kafkaTemplate.send(dlqTopic, event);
+        log.error("消息已发送到死信队列: messageId={}, error={}", 
+            event instanceof BaseMessage ? ((BaseMessage) event).getMessageId() : "unknown", 
+            e.getMessage());
+    }
+    
+    private void recordErrorMessage(Object errorMessage, Map<String, Object> headers) {
+        // 记录错误消息到监控系统
+        log.error("记录错误消息: headers={}, message={}", headers, errorMessage);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 事务和可靠性
+
+### 事务生产者配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Kafka事务配置
+ */
+@Configuration
+@EnableKafka
+@EnableTransactionManagement
+public class KafkaTransactionConfig {
+    
+    @Bean
+    @Primary
+    public ProducerFactory<String, Object> producerFactory() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        
+        // 事务配置
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "tx-");
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        props.put(ProducerConfig.RETRIES_CONFIG, 3);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
+        
+        return new DefaultKafkaProducerFactory<>(props);
+    }
+    
+    @Bean
+    public KafkaTemplate<String, Object> kafkaTemplate() {
+        return new KafkaTemplate<>(producerFactory());
+    }
+    
+    @Bean
+    public PlatformTransactionManager kafkaTransactionManager() {
+        KafkaTransactionManager manager = new KafkaTransactionManager(producerFactory());
+        manager.setTransactionSynchronization(AbstractPlatformTransactionManager.SYNCHRONIZATION_ON_ACTUAL_TRANSACTION);
+        return manager;
+    }
+}
+
+/**
+ * 事务消息服务
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TransactionalMessageService {
+    
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final UserService userService;
+    private final OrderService orderService;
+    
+    /**
+     * 事务性创建用户和发送消息
+     */
+    @Transactional("kafkaTransactionManager")
+    public void createUserWithEvent(CreateUserRequest request) {
+        try {
+            // 1. 创建用户
+            User user = userService.createUser(request);
+            
+            // 2. 发送用户创建事件
+            UserCreatedEvent event = new UserCreatedEvent(user);
+            String topicName = "dev.user-service.account.user-created.v1";
+            
+            kafkaTemplate.send(topicName, user.getId().toString(), event);
+            
+            // 3. 更新用户统计
+            userService.updateUserCount();
+            
+            log.info("事务性用户创建完成: userId={}", user.getId());
+            
+        } catch (Exception e) {
+            log.error("事务性用户创建失败", e);
+            throw new RuntimeException("用户创建事务失败", e);
+        }
+    }
+    
+    /**
+     * 分布式事务处理订单
+     */
+    @Transactional
+    @KafkaTransactional
+    public void processOrderTransaction(Long orderId) {
+        try {
+            // 1. 更新订单状态
+            Order order = orderService.updateOrderStatus(orderId, OrderStatus.PROCESSING);
+            
+            // 2. 扣减库存
+            order.getItems().forEach(item -> 
+                orderService.decreaseProductStock(item.getProductId(), item.getQuantity()));
+            
+            // 3. 发送订单处理事件
+            OrderProcessingEvent event = new OrderProcessingEvent(order);
+            kafkaTemplate.send("dev.order-service.order.order-processing.v1", 
+                order.getOrderNo(), event);
+            
+            // 4. 创建支付记录
+            orderService.createPaymentRecord(order);
+            
+            log.info("订单事务处理完成: orderId={}", orderId);
+            
+        } catch (Exception e) {
+            log.error("订单事务处理失败: orderId={}", orderId, e);
+            throw new RuntimeException("订单处理事务失败", e);
+        }
+    }
+    
+    /**
+     * 使用Kafka事务执行批量操作
+     */
+    public void executeBatchOperationInTransaction(List<Long> userIds) {
+        kafkaTemplate.executeInTransaction(operations -> {
+            userIds.forEach(userId -> {
+                try {
+                    // 获取用户信息
+                    User user = userService.findById(userId);
+                    
+                    // 发送用户更新事件
+                    UserUpdatedEvent event = new UserUpdatedEvent(user);
+                    operations.send("dev.user-service.account.user-updated.v1", 
+                        userId.toString(), event);
+                    
+                    // 更新用户最后活跃时间
+                    userService.updateLastActiveTime(userId);
+                    
+                } catch (Exception e) {
+                    log.error("批量操作处理用户失败: userId={}", userId, e);
+                    throw new RuntimeException("批量操作失败", e);
+                }
+            });
+            
+            return null;
+        });
+        
+        log.info("批量事务操作完成: userCount={}", userIds.size());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 监控和运维
+
+### 监控配置
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Kafka监控服务
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class KafkaMonitoringService {
+    
+    private final MeterRegistry meterRegistry;
+    private final KafkaAdmin kafkaAdmin;
+    
+    // 监控指标
+    private final Gauge consumerLag = Gauge.builder("kafka.consumer.lag")
+        .description("消费者延迟")
+        .register(meterRegistry);
+    
+    private final Counter messageCount = Counter.builder("kafka.message.count")
+        .description("消息数量")
+        .register(meterRegistry);
+    
+    private final Timer messageProcessingTime = Timer.builder("kafka.message.processing.time")
+        .description("消息处理时间")
+        .register(meterRegistry);
+    
+    /**
+     * 监控消费者延迟
+     */
+    @Scheduled(fixedRate = 30000) // 每30秒执行一次
+    public void monitorConsumerLag() {
+        try {
+            AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+            
+            // 获取所有消费者组
+            ListConsumerGroupsResult consumerGroups = adminClient.listConsumerGroups();
+            consumerGroups.all().get().forEach(consumerGroup -> {
+                try {
+                    // 获取消费者组详情
+                    DescribeConsumerGroupsResult groupDescription = 
+                        adminClient.describeConsumerGroups(Collections.singletonList(consumerGroup.groupId()));
+                    
+                    ConsumerGroupDescription description = groupDescription.all().get()
+                        .get(consumerGroup.groupId());
+                    
+                    if (description.state() == ConsumerGroupState.STABLE) {
+                        // 获取消费者延迟信息
+                        ListConsumerGroupOffsetsResult offsetsResult = 
+                            adminClient.listConsumerGroupOffsets(consumerGroup.groupId());
+                        
+                        Map<TopicPartition, OffsetAndMetadata> offsets = offsetsResult.partitionsToOffsetAndMetadata().get();
+                        
+                        offsets.forEach((topicPartition, offsetMetadata) -> {
+                            long currentOffset = offsetMetadata.offset();
+                            
+                            // 获取主题分区的最新偏移量
+                            long latestOffset = getLatestOffset(topicPartition);
+                            long lag = latestOffset - currentOffset;
+                            
+                            // 记录延迟指标
+                            Gauge.builder("kafka.consumer.lag")
+                                .tag("group", consumerGroup.groupId())
+                                .tag("topic", topicPartition.topic())
+                                .tag("partition", String.valueOf(topicPartition.partition()))
+                                .register(meterRegistry, lag);
+                            
+                            if (lag > 1000) { // 延迟超过1000条消息时告警
+                                log.warn("消费者延迟过高: group={}, topic={}, partition={}, lag={}", 
+                                    consumerGroup.groupId(), topicPartition.topic(), 
+                                    topicPartition.partition(), lag);
+                            }
+                        });
+                    }
+                    
+                } catch (Exception e) {
+                    log.error("监控消费者组失败: group={}", consumerGroup.groupId(), e);
+                }
+            });
+            
+        } catch (Exception e) {
+            log.error("监控消费者延迟失败", e);
+        }
+    }
+    
+    /**
+     * 监控主题分区信息
+     */
+    @Scheduled(fixedRate = 60000) // 每1分钟执行一次
+    public void monitorTopicPartitions() {
+        try {
+            AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+            
+            // 获取所有主题
+            ListTopicsResult topicsResult = adminClient.listTopics();
+            Set<String> topicNames = topicsResult.names().get();
+            
+            // 获取主题描述
+            DescribeTopicsResult topicDescriptions = adminClient.describeTopics(topicNames);
+            topicDescriptions.all().get().forEach((topicName, description) -> {
+                
+                int partitionCount = description.partitions().size();
+                
+                // 记录分区数量指标
+                Gauge.builder("kafka.topic.partitions")
+                    .tag("topic", topicName)
+                    .register(meterRegistry, partitionCount);
+                
+                // 检查副本状态
+                description.partitions().forEach(partition -> {
+                    int replicationFactor = partition.replicas().size();
+                    int inSyncReplicas = partition.isr().size();
+                    
+                    if (inSyncReplicas < replicationFactor) {
+                        log.warn("主题分区副本不同步: topic={}, partition={}, replicas={}, isr={}", 
+                            topicName, partition.partition(), replicationFactor, inSyncReplicas);
+                    }
+                });
+                
+                log.debug("主题监控: topic={}, partitions={}", topicName, partitionCount);
+            });
+            
+        } catch (Exception e) {
+            log.error("监控主题分区失败", e);
+        }
+    }
+    
+    /**
+     * 健康检查
+     */
+    @EventListener
+    public void handleKafkaHealthCheck(HealthCheckEvent event) {
+        try {
+            // 检查Kafka连接状态
+            AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+            DescribeClusterResult clusterResult = adminClient.describeCluster();
+            
+            int nodeCount = clusterResult.nodes().get().size();
+            String clusterId = clusterResult.clusterId().get();
+            
+            log.info("Kafka集群健康检查: clusterId={}, nodes={}", clusterId, nodeCount);
+            
+            // 记录集群节点数指标
+            Gauge.builder("kafka.cluster.nodes")
+                .register(meterRegistry, nodeCount);
+            
+        } catch (Exception e) {
+            log.error("Kafka健康检查失败", e);
+            
+            // 记录健康检查失败指标
+            Counter.builder("kafka.health.check.failed")
+                .register(meterRegistry)
+                .increment();
+        }
+    }
+    
+    /**
+     * 记录消息处理指标
+     */
+    public void recordMessageProcessed(String topic, String consumerGroup, boolean success, long processingTimeMs) {
+        String status = success ? "success" : "error";
+        
+        messageCount.increment(Tags.of(
+            "topic", topic,
+            "consumer_group", consumerGroup,
+            "status", status
+        ));
+        
+        messageProcessingTime.record(processingTimeMs, TimeUnit.MILLISECONDS, Tags.of(
+            "topic", topic,
+            "consumer_group", consumerGroup
+        ));
+    }
+    
+    private long getLatestOffset(TopicPartition topicPartition) {
+        // 实现获取最新偏移量的逻辑
+        // 这里需要使用KafkaConsumer或AdminClient来获取
+        return 0L;
+    }
+}
+
+/**
+ * Kafka健康检查指示器
+ */
+@Component
+@RequiredArgsConstructor
+public class KafkaHealthIndicator implements HealthIndicator {
+    
+    private final KafkaAdmin kafkaAdmin;
+    
+    @Override
+    public Health health() {
+        try {
+            AdminClient adminClient = AdminClient.create(kafkaAdmin.getConfigurationProperties());
+            
+            // 检查集群连接
+            DescribeClusterResult clusterResult = adminClient.describeCluster();
+            Collection<Node> nodes = clusterResult.nodes().get(5, TimeUnit.SECONDS);
+            
+            if (nodes.isEmpty()) {
+                return Health.down()
+                    .withDetail("error", "No Kafka nodes available")
+                    .build();
+            }
+            
+            return Health.up()
+                .withDetail("cluster", clusterResult.clusterId().get())
+                .withDetail("nodes", nodes.size())
+                .withDetail("brokers", nodes.stream()
+                    .map(node -> node.host() + ":" + node.port())
+                    .collect(Collectors.toList()))
+                .build();
+                
+        } catch (Exception e) {
+            return Health.down()
+                .withDetail("error", e.getMessage())
+                .withException(e)
+                .build();
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## ✅ 检查清单
+
+### 主题设计检查
+- [ ] 主题命名遵循标准格式：{环境}.{服务}.{域}.{事件}.{版本}
+- [ ] 分区数量根据预期吞吐量合理设置
+- [ ] 副本因子满足高可用要求
+- [ ] 消息保留期限符合业务需求
+
+### 消息格式检查
+- [ ] 消息包含必要的元数据字段
+- [ ] 消息支持版本管理和向后兼容
+- [ ] 消息大小控制在合理范围内
+- [ ] 敏感信息已加密或脱敏
+
+### 生产者检查
+- [ ] 启用幂等性和事务支持
+- [ ] 配置合适的重试策略
+- [ ] 实现发送失败处理逻辑
+- [ ] 批量发送优化配置
+
+### 消费者检查
+- [ ] 实现幂等性消费逻辑
+- [ ] 配置合理的并发消费数量
+- [ ] 手动提交偏移量
+- [ ] 异常处理和重试机制完善
+
+### 监控检查
+- [ ] 监控消费者延迟
+- [ ] 监控消息处理时间
+- [ ] 监控错误率和重试次数
+- [ ] 设置关键指标告警
+
+---
+*遵循以上Kafka规范，确保消息系统的高可靠性、高性能和可维护性*
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,660 @@
+# 控制器层规范 (模块层规则)
+> RESTful API设计、参数验证和响应封装的标准化规范
+
+## 基础规范
+
+### RESTful API设计原则
+- **资源导向**：URL表示资源，HTTP方法表示操作
+- **统一接口**：使用标准HTTP方法（GET、POST、PUT、DELETE）
+- **无状态**：每个请求包含处理所需的所有信息
+- **分层系统**：API设计支持中间层（缓存、负载均衡等）
+- **版本管理**：API版本通过URL路径或Header管理
+
+### URL设计规范
+- **资源路径**：使用名词复数形式，如 `/api/v1/users`
+- **层次结构**：反映资源的层次关系，如 `/api/v1/users/{id}/orders`
+- **参数传递**：查询参数用于过滤、排序、分页
+- **动作资源**：非CRUD操作使用动词，如 `/api/v1/users/{id}/activate`
+- **一致性**：整个项目保持命名风格一致
+
+### HTTP状态码使用
+- **200 OK**：GET、PUT成功
+- **201 Created**：POST创建成功
+- **204 No Content**：DELETE成功
+- **400 Bad Request**：客户端请求错误
+- **401 Unauthorized**：未认证
+- **403 Forbidden**：已认证但无权限
+- **404 Not Found**：资源不存在
+- **409 Conflict**：资源冲突
+- **500 Internal Server Error**：服务器内部错误
+
+### 响应格式标准
+- **统一包装**：所有API响应使用统一的包装格式
+- **数据类型**：使用明确的数据类型（ISO日期格式等）
+- **错误信息**：提供清晰的错误码和描述
+- **分页信息**：分页接口包含完整的分页元数据
+
+## 强制行为
+
+### 控制器类设计
+- **@RestController注解**：标识RESTful控制器
+- **@RequestMapping注解**：定义基础路径和版本
+- **@Validated注解**：启用参数验证
+- **构造器注入**：使用构造器注入依赖，避免@Autowired
+
+### 参数验证要求
+- **@Valid注解**：对请求体进行验证
+- **@NotNull、@NotBlank**：基础校验注解
+- **@Size、@Min、@Max**：长度和数值范围校验
+- **自定义验证器**：复杂业务规则使用自定义验证注解
+
+### 异常处理要求
+- **全局异常处理**：使用@ControllerAdvice处理异常
+- **业务异常映射**：将业务异常映射为HTTP状态码
+- **错误信息国际化**：支持多语言错误消息
+- **安全信息过滤**：不在错误响应中暴露敏感信息
+
+### 安全控制要求
+- **权限注解**：使用@PreAuthorize进行方法级权限控制
+- **输入校验**：验证所有外部输入参数
+- **输出过滤**：过滤敏感字段，使用@JsonIgnore
+- **CSRF保护**：POST、PUT、DELETE请求启用CSRF保护
+
+## 禁止行为
+
+### API设计禁令
+- **禁止动词URL**：URL中不使用动词，如 `/getUsers`
+- **禁止暴露内部结构**：URL不反映内部实现细节
+- **禁止不一致的命名**：同一概念必须使用相同的命名
+- **禁止忽略HTTP状态码**：必须返回合适的HTTP状态码
+- **禁止过深的URL层次**：URL层次不超过4层
+
+### 参数处理禁令
+- **禁止直接使用HttpServletRequest**：优先使用Spring MVC的参数绑定
+- **禁止跳过参数验证**：所有外部输入必须验证
+- **禁止在URL中传递敏感信息**：密码、令牌等不通过URL传递
+- **禁止无限制的参数大小**：设置合理的参数大小限制
+- **禁止忽略参数类型转换异常**：处理参数类型转换异常
+
+### 响应处理禁令
+- **禁止返回内部异常信息**：不向客户端暴露系统内部异常
+- **禁止不一致的响应格式**：所有API使用统一的响应格式
+- **禁止在响应中包含敏感信息**：密码、内部ID等不返回给客户端
+- **禁止忽略响应编码**：确保正确的字符编码
+- **禁止大量数据一次性返回**：使用分页避免性能问题
+
+### 安全相关禁令
+- **禁止绕过权限检查**：不提供绕过权限验证的接口
+- **禁止在日志中记录敏感参数**：密码等敏感信息不记录到日志
+- **禁止忽略HTTPS**：生产环境强制使用HTTPS
+- **禁止暴露系统信息**：错误响应不暴露系统版本、路径等信息
+- **禁止不安全的CORS配置**：避免允许所有域的跨域访问
+
+## 示例代码
+
+### 标准的RESTful控制器
+```java
+/* [AI-BLOCK-START] - 生成工具: 控制器规范 v2.0 */
+@RestController
+@RequestMapping("/api/v1/users")
+@Validated
+@Slf4j
+@Tag(name = "User Management", description = "用户管理API")
+public class UserController {
+    
+    private final UserService userService;
+    
+    /**
+     * 构造函数注入依赖
+     */
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+    
+    /**
+     * 创建用户
+     * POST /api/v1/users
+     */
+    @PostMapping
+    @Operation(summary = "创建用户", description = "创建新的用户账户")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "用户创建成功"),
+        @ApiResponse(responseCode = "400", description = "请求参数错误"),
+        @ApiResponse(responseCode = "409", description = "用户名已存在")
+    })
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER_MANAGER')")
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Valid @RequestBody CreateUserRequest request,
+            HttpServletRequest httpRequest) {
+        
+        log.info("Creating user: username={}, IP={}", 
+            request.getUsername(), getClientIP(httpRequest));
+        
+        UserResponse user = userService.createUser(request);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(user, "用户创建成功"));
+    }
+    
+    /**
+     * 获取用户详情
+     * GET /api/v1/users/{id}
+     */
+    @GetMapping("/{id}")
+    @Operation(summary = "获取用户详情", description = "根据用户ID获取用户详细信息")
+    @PreAuthorize("hasRole('ADMIN') or @userService.isOwnerOrManager(#id, authentication.name)")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(
+            @PathVariable("id") @Min(value = 1, message = "用户ID必须大于0") Long id) {
+        
+        UserResponse user = userService.findUserById(id);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+    
+    /**
+     * 分页查询用户列表
+     * GET /api/v1/users?page=0&size=20&sort=createTime,desc
+     */
+    @GetMapping
+    @Operation(summary = "分页查询用户", description = "根据条件分页查询用户列表")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER_MANAGER')")
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getUsers(
+            @RequestParam(value = "page", defaultValue = "0") 
+            @Min(value = 0, message = "页码不能小于0") Integer page,
+            
+            @RequestParam(value = "size", defaultValue = "20") 
+            @Range(min = 1, max = 100, message = "每页大小必须在1-100之间") Integer size,
+            
+            @RequestParam(value = "sort", defaultValue = "createTime") String sort,
+            @RequestParam(value = "direction", defaultValue = "desc") String direction,
+            
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "status", required = false) UserStatus status) {
+        
+        // 构建查询条件
+        UserSearchCriteria criteria = UserSearchCriteria.builder()
+            .username(username)
+            .email(email)
+            .status(status)
+            .build();
+        
+        // 构建分页参数
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        
+        PageResponse<UserResponse> users = userService.findUsers(pageable, criteria);
+        
+        return ResponseEntity.ok(ApiResponse.success(users));
+    }
+    
+    /**
+     * 更新用户信息
+     * PUT /api/v1/users/{id}
+     */
+    @PutMapping("/{id}")
+    @Operation(summary = "更新用户", description = "更新用户基本信息")
+    @PreAuthorize("hasRole('ADMIN') or @userService.isOwner(#id, authentication.name)")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUser(
+            @PathVariable("id") @Min(value = 1, message = "用户ID必须大于0") Long id,
+            @Valid @RequestBody UpdateUserRequest request,
+            HttpServletRequest httpRequest) {
+        
+        log.info("Updating user: id={}, IP={}", id, getClientIP(httpRequest));
+        
+        UserResponse user = userService.updateUser(id, request);
+        
+        return ResponseEntity.ok(ApiResponse.success(user, "用户更新成功"));
+    }
+    
+    /**
+     * 删除用户（软删除）
+     * DELETE /api/v1/users/{id}
+     */
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除用户", description = "软删除指定用户")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(
+            @PathVariable("id") @Min(value = 1, message = "用户ID必须大于0") Long id,
+            HttpServletRequest httpRequest) {
+        
+        log.warn("Deleting user: id={}, operator={}, IP={}", 
+            id, getCurrentUsername(), getClientIP(httpRequest));
+        
+        userService.deleteUser(id);
+        
+        return ResponseEntity.ok(ApiResponse.success(null, "用户删除成功"));
+    }
+    
+    /**
+     * 激活用户账户
+     * POST /api/v1/users/{id}/activate
+     */
+    @PostMapping("/{id}/activate")
+    @Operation(summary = "激活用户", description = "激活指定用户账户")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('USER_MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> activateUser(
+            @PathVariable("id") @Min(value = 1, message = "用户ID必须大于0") Long id) {
+        
+        userService.activateUser(id);
+        
+        log.info("User activated: id={}, operator={}", id, getCurrentUsername());
+        
+        return ResponseEntity.ok(ApiResponse.success(null, "用户激活成功"));
+    }
+    
+    /**
+     * 批量操作
+     * POST /api/v1/users/batch
+     */
+    @PostMapping("/batch")
+    @Operation(summary = "批量操作用户", description = "批量激活、禁用或删除用户")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<BatchOperationResult>> batchOperation(
+            @Valid @RequestBody BatchUserOperationRequest request) {
+        
+        log.info("Batch operation: action={}, userCount={}, operator={}", 
+            request.getAction(), request.getUserIds().size(), getCurrentUsername());
+        
+        BatchOperationResult result = userService.batchOperation(request);
+        
+        return ResponseEntity.ok(ApiResponse.success(result, "批量操作完成"));
+    }
+    
+    /**
+     * 获取客户端IP地址
+     */
+    private String getClientIP(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (StringUtils.isNotBlank(xForwardedFor)) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        
+        String xRealIP = request.getHeader("X-Real-IP");
+        if (StringUtils.isNotBlank(xRealIP)) {
+            return xRealIP;
+        }
+        
+        return request.getRemoteAddr();
+    }
+    
+    /**
+     * 获取当前用户名
+     */
+    private String getCurrentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "anonymous";
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 统一响应格式
+```java
+/* [AI-BLOCK-START] - 生成工具: 控制器规范 v2.0 */
+/**
+ * 统一API响应格式
+ * 
+ * @param <T> 响应数据类型
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+    
+    /**
+     * 响应状态码
+     * 200: 成功
+     * 400: 客户端错误
+     * 500: 服务器错误
+     */
+    @Schema(description = "响应状态码", example = "200")
+    private Integer code;
+    
+    /**
+     * 响应消息
+     */
+    @Schema(description = "响应消息", example = "操作成功")
+    private String message;
+    
+    /**
+     * 响应数据
+     */
+    @Schema(description = "响应数据")
+    private T data;
+    
+    /**
+     * 时间戳
+     */
+    @Schema(description = "响应时间戳", example = "1640995200000")
+    private Long timestamp;
+    
+    /**
+     * 请求追踪ID
+     */
+    @Schema(description = "请求追踪ID", example = "550e8400-e29b-41d4-a716-446655440000")
+    private String traceId;
+    
+    /**
+     * 成功响应
+     */
+    public static <T> ApiResponse<T> success(T data) {
+        return success(data, "操作成功");
+    }
+    
+    /**
+     * 成功响应带消息
+     */
+    public static <T> ApiResponse<T> success(T data, String message) {
+        return ApiResponse.<T>builder()
+            .code(200)
+            .message(message)
+            .data(data)
+            .timestamp(System.currentTimeMillis())
+            .traceId(getCurrentTraceId())
+            .build();
+    }
+    
+    /**
+     * 错误响应
+     */
+    public static <T> ApiResponse<T> error(Integer code, String message) {
+        return ApiResponse.<T>builder()
+            .code(code)
+            .message(message)
+            .timestamp(System.currentTimeMillis())
+            .traceId(getCurrentTraceId())
+            .build();
+    }
+    
+    /**
+     * 业务错误响应
+     */
+    public static <T> ApiResponse<T> businessError(String message) {
+        return error(400, message);
+    }
+    
+    /**
+     * 系统错误响应
+     */
+    public static <T> ApiResponse<T> systemError(String message) {
+        return error(500, message);
+    }
+    
+    /**
+     * 获取当前追踪ID
+     */
+    private static String getCurrentTraceId() {
+        try {
+            return MDC.get("traceId");
+        } catch (Exception e) {
+            return UUID.randomUUID().toString();
+        }
+    }
+}
+
+/**
+ * 分页响应格式
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PageResponse<T> {
+    
+    /**
+     * 数据列表
+     */
+    @Schema(description = "数据列表")
+    private List<T> content;
+    
+    /**
+     * 分页信息
+     */
+    @Schema(description = "分页信息")
+    private PageInfo pageInfo;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PageInfo {
+        
+        /**
+         * 当前页码（从0开始）
+         */
+        @Schema(description = "当前页码", example = "0")
+        private Integer page;
+        
+        /**
+         * 每页大小
+         */
+        @Schema(description = "每页大小", example = "20")
+        private Integer size;
+        
+        /**
+         * 总元素数
+         */
+        @Schema(description = "总元素数", example = "100")
+        private Long total;
+        
+        /**
+         * 总页数
+         */
+        @Schema(description = "总页数", example = "5")
+        private Integer totalPages;
+        
+        /**
+         * 是否为第一页
+         */
+        @Schema(description = "是否为第一页", example = "true")
+        private Boolean first;
+        
+        /**
+         * 是否为最后一页
+         */
+        @Schema(description = "是否为最后一页", example = "false")
+        private Boolean last;
+        
+        /**
+         * 是否有下一页
+         */
+        @Schema(description = "是否有下一页", example = "true")
+        private Boolean hasNext;
+        
+        /**
+         * 是否有上一页
+         */
+        @Schema(description = "是否有上一页", example = "false")
+        private Boolean hasPrevious;
+    }
+    
+    /**
+     * 从Spring Data Page创建PageResponse
+     */
+    public static <T> PageResponse<T> from(Page<T> page) {
+        PageInfo pageInfo = PageInfo.builder()
+            .page(page.getNumber())
+            .size(page.getSize())
+            .total(page.getTotalElements())
+            .totalPages(page.getTotalPages())
+            .first(page.isFirst())
+            .last(page.isLast())
+            .hasNext(page.hasNext())
+            .hasPrevious(page.hasPrevious())
+            .build();
+            
+        return PageResponse.<T>builder()
+            .content(page.getContent())
+            .pageInfo(pageInfo)
+            .build();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 全局异常处理器
+```java
+/* [AI-BLOCK-START] - 生成工具: 控制器规范 v2.0 */
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+    
+    /**
+     * 参数验证异常
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationException(
+            MethodArgumentNotValidException e) {
+        
+        Map<String, String> errors = new HashMap<>();
+        e.getBindingResult().getFieldErrors().forEach(error -> {
+            errors.put(error.getField(), error.getDefaultMessage());
+        });
+        
+        log.warn("Validation error: {}", errors);
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(400, "参数验证失败").toBuilder()
+                .data(errors)
+                .build());
+    }
+    
+    /**
+     * 单个参数验证异常
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<List<String>>> handleConstraintViolationException(
+            ConstraintViolationException e) {
+        
+        List<String> errors = e.getConstraintViolations().stream()
+            .map(ConstraintViolation::getMessage)
+            .collect(Collectors.toList());
+            
+        log.warn("Constraint violation: {}", errors);
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(400, "参数验证失败").toBuilder()
+                .data(errors)
+                .build());
+    }
+    
+    /**
+     * 业务异常
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
+        log.warn("Business error: {} - {}", e.getErrorCode(), e.getMessage());
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
+    }
+    
+    /**
+     * 资源不存在异常
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(
+            ResourceNotFoundException e) {
+        
+        log.warn("Resource not found: {}", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .body(ApiResponse.error(404, e.getMessage()));
+    }
+    
+    /**
+     * 权限不足异常
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(
+            AccessDeniedException e) {
+        
+        log.warn("Access denied: {}", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error(403, "权限不足"));
+    }
+    
+    /**
+     * 认证失败异常
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(
+            AuthenticationException e) {
+        
+        log.warn("Authentication failed: {}", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(ApiResponse.error(401, "认证失败"));
+    }
+    
+    /**
+     * HTTP请求方法不支持
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException e) {
+        
+        log.warn("Method not supported: {}", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+            .body(ApiResponse.error(405, "HTTP方法不支持"));
+    }
+    
+    /**
+     * 媒体类型不支持
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupportedException(
+            HttpMediaTypeNotSupportedException e) {
+        
+        log.warn("Media type not supported: {}", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+            .body(ApiResponse.error(415, "媒体类型不支持"));
+    }
+    
+    /**
+     * 系统异常
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleSystemException(Exception e) {
+        String traceId = MDC.get("traceId");
+        log.error("System error, traceId: {}", traceId, e);
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(ApiResponse.error(500, "系统内部错误，请联系管理员。追踪ID: " + traceId));
+    }
+    
+    /**
+     * 数据库约束违反异常
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(
+            DataIntegrityViolationException e) {
+        
+        log.warn("Data integrity violation: {}", e.getMessage());
+        
+        String message = "数据操作失败";
+        if (e.getMessage().contains("Duplicate entry")) {
+            message = "数据已存在，不能重复";
+        } else if (e.getMessage().contains("foreign key constraint")) {
+            message = "数据被其他记录引用，不能删除";
+        }
+        
+        return ResponseEntity.badRequest()
+            .body(ApiResponse.error(409, message));
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此控制器层规范确保API接口的标准化设计、统一的响应格式和完善的异常处理机制*
+description:
+globs:
+alwaysApply: false
+---

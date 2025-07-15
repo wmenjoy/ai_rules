@@ -1,0 +1,1011 @@
+# Redis使用规范
+
+## 🎯 规范目标
+- 建立Redis使用的统一标准和最佳实践
+- 优化Redis性能和内存使用效率
+- 确保Redis数据的一致性和可靠性
+- 提供高可用性和故障恢复方案
+
+## 📋 键值设计规范
+
+### 键命名规范
+
+#### MUST - 必须遵守
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Redis键命名工具类
+ */
+@Component
+public class RedisKeyBuilder {
+    
+    // ✅ 标准键命名格式：{业务模块}:{实体}:{标识符}:{属性}
+    public static final String USER_INFO_KEY = "user:info:%s";
+    public static final String USER_SESSION_KEY = "user:session:%s";
+    public static final String PRODUCT_STOCK_KEY = "product:stock:%s";
+    public static final String ORDER_LOCK_KEY = "order:lock:%s";
+    public static final String CACHE_LIST_KEY = "cache:list:%s:%s";
+    
+    /**
+     * 构建用户信息缓存键
+     */
+    public static String buildUserInfoKey(Long userId) {
+        return String.format(USER_INFO_KEY, userId);
+    }
+    
+    /**
+     * 构建用户会话键
+     */
+    public static String buildUserSessionKey(String sessionId) {
+        return String.format(USER_SESSION_KEY, sessionId);
+    }
+    
+    /**
+     * 构建产品库存键
+     */
+    public static String buildProductStockKey(Long productId) {
+        return String.format(PRODUCT_STOCK_KEY, productId);
+    }
+    
+    /**
+     * 构建分布式锁键
+     */
+    public static String buildOrderLockKey(Long orderId) {
+        return String.format(ORDER_LOCK_KEY, orderId);
+    }
+    
+    /**
+     * 构建分页缓存键
+     */
+    public static String buildCacheListKey(String module, String queryHash) {
+        return String.format(CACHE_LIST_KEY, module, queryHash);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+#### 键命名原则
+```text
+✅ 正确示例：
+user:info:123456                    # 用户信息
+user:session:abc123def456           # 用户会话
+product:stock:789                   # 产品库存
+order:lock:order_123               # 订单锁
+cache:user:list:page_1_size_20     # 用户列表缓存
+config:system:mail_server          # 系统配置
+
+❌ 错误示例：
+userInfo123                        # 缺少分隔符和结构
+User:Session:ABC123               # 大小写不一致
+product-stock-789                 # 使用连字符而非冒号
+cache_user_list                   # 使用下划线而非冒号
+```
+
+### 键过期策略
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Redis过期时间常量
+ */
+public class RedisExpireTime {
+    
+    // 短期缓存 (1-10分钟)
+    public static final Duration VERY_SHORT = Duration.ofMinutes(1);    // 验证码
+    public static final Duration SHORT = Duration.ofMinutes(5);         // 热点数据
+    public static final Duration MEDIUM_SHORT = Duration.ofMinutes(10); // 搜索结果
+    
+    // 中期缓存 (30分钟-2小时)
+    public static final Duration MEDIUM = Duration.ofMinutes(30);       // 用户信息
+    public static final Duration MEDIUM_LONG = Duration.ofHours(1);     // 配置信息
+    public static final Duration LONG = Duration.ofHours(2);            // 商品信息
+    
+    // 长期缓存 (6-24小时)
+    public static final Duration VERY_LONG = Duration.ofHours(6);       // 字典数据
+    public static final Duration DAY = Duration.ofHours(24);            // 统计数据
+    
+    // 会话相关
+    public static final Duration SESSION = Duration.ofMinutes(30);      // 用户会话
+    public static final Duration TOKEN = Duration.ofHours(2);           // 访问令牌
+    public static final Duration REFRESH_TOKEN = Duration.ofDays(7);    // 刷新令牌
+}
+
+/**
+ * Redis缓存管理服务
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisCacheManager {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * 设置缓存值，带过期时间
+     */
+    public void setWithExpire(String key, Object value, Duration expire) {
+        try {
+            redisTemplate.opsForValue().set(key, value, expire);
+            log.debug("缓存设置成功: key={}, expire={}", key, expire);
+        } catch (Exception e) {
+            log.error("缓存设置失败: key={}", key, e);
+        }
+    }
+    
+    /**
+     * 设置缓存值，如果不存在
+     */
+    public boolean setIfAbsent(String key, Object value, Duration expire) {
+        try {
+            Boolean result = redisTemplate.opsForValue().setIfAbsent(key, value, expire);
+            log.debug("缓存条件设置: key={}, success={}", key, result);
+            return Boolean.TRUE.equals(result);
+        } catch (Exception e) {
+            log.error("缓存条件设置失败: key={}", key, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 延长键的过期时间
+     */
+    public boolean extendExpire(String key, Duration expire) {
+        try {
+            Boolean result = redisTemplate.expire(key, expire);
+            log.debug("过期时间延长: key={}, expire={}, success={}", key, expire, result);
+            return Boolean.TRUE.equals(result);
+        } catch (Exception e) {
+            log.error("过期时间延长失败: key={}", key, e);
+            return false;
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 数据结构使用规范
+
+### String类型使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * String类型使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisStringService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 简单值缓存
+     */
+    public void cacheUserToken(String userId, String token) {
+        String key = "user:token:" + userId;
+        redisTemplate.opsForValue().set(key, token, RedisExpireTime.TOKEN);
+    }
+    
+    /**
+     * ✅ 计数器实现
+     */
+    public Long incrementCounter(String counterName) {
+        String key = "counter:" + counterName;
+        return redisTemplate.opsForValue().increment(key);
+    }
+    
+    /**
+     * ✅ 分布式ID生成
+     */
+    public String generateOrderId() {
+        String key = "id:generator:order";
+        Long sequence = redisTemplate.opsForValue().increment(key);
+        return "ORD" + System.currentTimeMillis() + String.format("%04d", sequence % 10000);
+    }
+    
+    /**
+     * ✅ 限流实现
+     */
+    public boolean isAllowed(String userId, int limit, Duration window) {
+        String key = "rate_limit:" + userId + ":" + (System.currentTimeMillis() / window.toMillis());
+        
+        String countStr = (String) redisTemplate.opsForValue().get(key);
+        int currentCount = countStr != null ? Integer.parseInt(countStr) : 0;
+        
+        if (currentCount >= limit) {
+            return false;
+        }
+        
+        // 使用管道操作保证原子性
+        redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            connection.incr(key.getBytes());
+            connection.expire(key.getBytes(), window.getSeconds());
+            return null;
+        });
+        
+        return true;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### Hash类型使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Hash类型使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisHashService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 用户信息缓存 (推荐用Hash存储对象字段)
+     */
+    public void cacheUserInfo(User user) {
+        String key = RedisKeyBuilder.buildUserInfoKey(user.getId());
+        
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", user.getId());
+        userMap.put("username", user.getUsername());
+        userMap.put("email", user.getEmail());
+        userMap.put("status", user.getStatus());
+        userMap.put("lastLoginTime", user.getLastLoginTime());
+        
+        redisTemplate.opsForHash().putAll(key, userMap);
+        redisTemplate.expire(key, RedisExpireTime.MEDIUM);
+        
+        log.debug("用户信息已缓存: userId={}", user.getId());
+    }
+    
+    /**
+     * ✅ 获取用户特定字段
+     */
+    public String getUserEmail(Long userId) {
+        String key = RedisKeyBuilder.buildUserInfoKey(userId);
+        return (String) redisTemplate.opsForHash().get(key, "email");
+    }
+    
+    /**
+     * ✅ 批量获取用户信息
+     */
+    public Map<Object, Object> getUserInfo(Long userId) {
+        String key = RedisKeyBuilder.buildUserInfoKey(userId);
+        return redisTemplate.opsForHash().entries(key);
+    }
+    
+    /**
+     * ✅ 更新用户特定字段
+     */
+    public void updateUserStatus(Long userId, Integer status) {
+        String key = RedisKeyBuilder.buildUserInfoKey(userId);
+        redisTemplate.opsForHash().put(key, "status", status);
+        
+        // 重新设置过期时间
+        redisTemplate.expire(key, RedisExpireTime.MEDIUM);
+    }
+    
+    /**
+     * ✅ 产品库存管理
+     */
+    public void updateProductStock(Long productId, int quantity) {
+        String key = "product:stock:info";
+        redisTemplate.opsForHash().put(key, productId.toString(), quantity);
+    }
+    
+    public Integer getProductStock(Long productId) {
+        String key = "product:stock:info";
+        Object stock = redisTemplate.opsForHash().get(key, productId.toString());
+        return stock != null ? (Integer) stock : 0;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### List类型使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * List类型使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisListService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 消息队列实现
+     */
+    public void pushMessage(String queueName, Object message) {
+        String key = "queue:" + queueName;
+        redisTemplate.opsForList().leftPush(key, message);
+        log.debug("消息已入队: queue={}", queueName);
+    }
+    
+    public Object popMessage(String queueName, Duration timeout) {
+        String key = "queue:" + queueName;
+        return redisTemplate.opsForList().rightPop(key, timeout);
+    }
+    
+    /**
+     * ✅ 最近访问记录
+     */
+    public void addRecentView(String userId, Long productId) {
+        String key = "user:recent_view:" + userId;
+        
+        // 移除重复项
+        redisTemplate.opsForList().remove(key, 0, productId);
+        
+        // 添加到列表头部
+        redisTemplate.opsForList().leftPush(key, productId);
+        
+        // 保持列表长度不超过10
+        redisTemplate.opsForList().trim(key, 0, 9);
+        
+        // 设置过期时间
+        redisTemplate.expire(key, RedisExpireTime.DAY);
+    }
+    
+    public List<Object> getRecentViews(String userId) {
+        String key = "user:recent_view:" + userId;
+        return redisTemplate.opsForList().range(key, 0, -1);
+    }
+    
+    /**
+     * ✅ 日志收集
+     */
+    public void collectLog(String logType, String logContent) {
+        String key = "log:collect:" + logType + ":" + LocalDate.now();
+        
+        redisTemplate.opsForList().leftPush(key, logContent);
+        
+        // 单个日志列表不超过10000条
+        Long size = redisTemplate.opsForList().size(key);
+        if (size != null && size > 10000) {
+            redisTemplate.opsForList().trim(key, 0, 9999);
+        }
+        
+        redisTemplate.expire(key, RedisExpireTime.DAY);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### Set类型使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Set类型使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisSetService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 用户关注关系
+     */
+    public void addFollowing(String userId, String targetUserId) {
+        String followingKey = "user:following:" + userId;
+        String followersKey = "user:followers:" + targetUserId;
+        
+        redisTemplate.opsForSet().add(followingKey, targetUserId);
+        redisTemplate.opsForSet().add(followersKey, userId);
+        
+        redisTemplate.expire(followingKey, RedisExpireTime.VERY_LONG);
+        redisTemplate.expire(followersKey, RedisExpireTime.VERY_LONG);
+    }
+    
+    public void removeFollowing(String userId, String targetUserId) {
+        String followingKey = "user:following:" + userId;
+        String followersKey = "user:followers:" + targetUserId;
+        
+        redisTemplate.opsForSet().remove(followingKey, targetUserId);
+        redisTemplate.opsForSet().remove(followersKey, userId);
+    }
+    
+    /**
+     * ✅ 获取共同关注
+     */
+    public Set<Object> getCommonFollowing(String userId1, String userId2) {
+        String key1 = "user:following:" + userId1;
+        String key2 = "user:following:" + userId2;
+        
+        return redisTemplate.opsForSet().intersect(key1, key2);
+    }
+    
+    /**
+     * ✅ 标签管理
+     */
+    public void addProductTags(Long productId, String... tags) {
+        String key = "product:tags:" + productId;
+        redisTemplate.opsForSet().add(key, (Object[]) tags);
+        redisTemplate.expire(key, RedisExpireTime.LONG);
+    }
+    
+    public Set<Object> getProductTags(Long productId) {
+        String key = "product:tags:" + productId;
+        return redisTemplate.opsForSet().members(key);
+    }
+    
+    /**
+     * ✅ 在线用户统计
+     */
+    public void userOnline(String userId) {
+        String key = "online:users:" + LocalDate.now();
+        redisTemplate.opsForSet().add(key, userId);
+        redisTemplate.expire(key, RedisExpireTime.DAY);
+    }
+    
+    public void userOffline(String userId) {
+        String key = "online:users:" + LocalDate.now();
+        redisTemplate.opsForSet().remove(key, userId);
+    }
+    
+    public Long getOnlineUserCount() {
+        String key = "online:users:" + LocalDate.now();
+        return redisTemplate.opsForSet().size(key);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### ZSet类型使用
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * ZSet类型使用示例
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisZSetService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 排行榜实现
+     */
+    public void updateUserScore(String userId, double score) {
+        String key = "leaderboard:user_score";
+        redisTemplate.opsForZSet().add(key, userId, score);
+        redisTemplate.expire(key, RedisExpireTime.DAY);
+    }
+    
+    /**
+     * ✅ 获取排行榜Top N
+     */
+    public Set<ZSetOperations.TypedTuple<Object>> getTopUsers(int count) {
+        String key = "leaderboard:user_score";
+        return redisTemplate.opsForZSet().reverseRangeWithScores(key, 0, count - 1);
+    }
+    
+    /**
+     * ✅ 获取用户排名
+     */
+    public Long getUserRank(String userId) {
+        String key = "leaderboard:user_score";
+        return redisTemplate.opsForZSet().reverseRank(key, userId);
+    }
+    
+    /**
+     * ✅ 延时队列实现
+     */
+    public void addDelayedTask(String taskId, Object taskData, long executeTime) {
+        String key = "delayed:tasks";
+        
+        // 使用执行时间作为分数
+        redisTemplate.opsForZSet().add(key, taskId, executeTime);
+        
+        // 单独存储任务数据
+        String dataKey = "task:data:" + taskId;
+        redisTemplate.opsForValue().set(dataKey, taskData, Duration.ofDays(1));
+    }
+    
+    public Set<Object> getReadyTasks() {
+        String key = "delayed:tasks";
+        long currentTime = System.currentTimeMillis();
+        
+        // 获取当前时间之前的所有任务
+        return redisTemplate.opsForZSet().rangeByScore(key, 0, currentTime);
+    }
+    
+    /**
+     * ✅ 热门商品统计
+     */
+    public void incrementProductView(Long productId) {
+        String key = "hot:products:" + LocalDate.now();
+        redisTemplate.opsForZSet().incrementScore(key, productId.toString(), 1);
+        redisTemplate.expire(key, RedisExpireTime.DAY);
+    }
+    
+    public List<Object> getHotProducts(int count) {
+        String key = "hot:products:" + LocalDate.now();
+        Set<Object> products = redisTemplate.opsForZSet().reverseRange(key, 0, count - 1);
+        return new ArrayList<>(products);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 分布式锁实现
+
+### 基于Redis的分布式锁
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 分布式锁实现
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class RedisDistributedLock {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    private static final String LOCK_PREFIX = "lock:";
+    private static final String UNLOCK_SCRIPT = 
+        "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+        "    return redis.call('del', KEYS[1]) " +
+        "else " +
+        "    return 0 " +
+        "end";
+    
+    /**
+     * 尝试获取锁
+     */
+    public boolean tryLock(String lockKey, String lockValue, Duration expireTime) {
+        try {
+            String key = LOCK_PREFIX + lockKey;
+            Boolean result = redisTemplate.opsForValue().setIfAbsent(key, lockValue, expireTime);
+            
+            if (Boolean.TRUE.equals(result)) {
+                log.debug("分布式锁获取成功: key={}, value={}", key, lockValue);
+                return true;
+            } else {
+                log.debug("分布式锁获取失败: key={}, value={}", key, lockValue);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("分布式锁获取异常: key={}", lockKey, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 释放锁
+     */
+    public boolean releaseLock(String lockKey, String lockValue) {
+        try {
+            String key = LOCK_PREFIX + lockKey;
+            
+            // 使用Lua脚本保证原子性
+            DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+            script.setScriptText(UNLOCK_SCRIPT);
+            script.setResultType(Long.class);
+            
+            Long result = redisTemplate.execute(script, Collections.singletonList(key), lockValue);
+            
+            if (result != null && result == 1L) {
+                log.debug("分布式锁释放成功: key={}, value={}", key, lockValue);
+                return true;
+            } else {
+                log.warn("分布式锁释放失败: key={}, value={}", key, lockValue);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("分布式锁释放异常: key={}", lockKey, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 带重试的锁获取
+     */
+    public boolean tryLockWithRetry(String lockKey, String lockValue, 
+                                   Duration expireTime, Duration retryInterval, int maxRetries) {
+        
+        for (int i = 0; i < maxRetries; i++) {
+            if (tryLock(lockKey, lockValue, expireTime)) {
+                return true;
+            }
+            
+            try {
+                Thread.sleep(retryInterval.toMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        
+        log.warn("分布式锁获取失败，重试次数已达上限: key={}, maxRetries={}", lockKey, maxRetries);
+        return false;
+    }
+}
+
+/**
+ * 分布式锁注解
+ */
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface DistributedLock {
+    /**
+     * 锁的key，支持SpEL表达式
+     */
+    String key();
+    
+    /**
+     * 锁的过期时间，默认30秒
+     */
+    long expireTime() default 30;
+    
+    /**
+     * 时间单位，默认秒
+     */
+    TimeUnit timeUnit() default TimeUnit.SECONDS;
+    
+    /**
+     * 获取锁失败时是否抛出异常
+     */
+    boolean throwException() default true;
+}
+
+/**
+ * 分布式锁切面
+ */
+@Aspect
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class DistributedLockAspect {
+    
+    private final RedisDistributedLock distributedLock;
+    private final SpelExpressionParser parser = new SpelExpressionParser();
+    
+    @Around("@annotation(distributedLockAnnotation)")
+    public Object around(ProceedingJoinPoint joinPoint, DistributedLock distributedLockAnnotation) throws Throwable {
+        
+        // 解析锁的key
+        String lockKey = parseKey(distributedLockAnnotation.key(), joinPoint);
+        String lockValue = UUID.randomUUID().toString();
+        Duration expireTime = Duration.of(distributedLockAnnotation.expireTime(), 
+            distributedLockAnnotation.timeUnit().toChronoUnit());
+        
+        boolean lockAcquired = distributedLock.tryLock(lockKey, lockValue, expireTime);
+        
+        if (!lockAcquired) {
+            if (distributedLockAnnotation.throwException()) {
+                throw new BusinessException(ErrorCode.LOCK_ACQUIRE_FAILED);
+            } else {
+                log.warn("获取分布式锁失败，方法执行跳过: key={}", lockKey);
+                return null;
+            }
+        }
+        
+        try {
+            return joinPoint.proceed();
+        } finally {
+            distributedLock.releaseLock(lockKey, lockValue);
+        }
+    }
+    
+    private String parseKey(String keyExpression, ProceedingJoinPoint joinPoint) {
+        if (!keyExpression.contains("#")) {
+            return keyExpression;
+        }
+        
+        // 构建SpEL上下文
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        
+        // 获取方法参数
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        String[] paramNames = signature.getParameterNames();
+        Object[] args = joinPoint.getArgs();
+        
+        for (int i = 0; i < paramNames.length; i++) {
+            context.setVariable(paramNames[i], args[i]);
+        }
+        
+        Expression expression = parser.parseExpression(keyExpression);
+        return expression.getValue(context, String.class);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 📋 性能优化规范
+
+### 连接池配置
+```yaml
+# ✅ Redis连接池配置
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 5000ms
+    
+    # Lettuce连接池配置 (推荐)
+    lettuce:
+      pool:
+        max-active: 200      # 最大连接数
+        max-idle: 20         # 最大空闲连接数
+        min-idle: 5          # 最小空闲连接数
+        max-wait: 1000ms     # 获取连接最大等待时间
+        time-between-eviction-runs: 30000ms  # 空闲连接检测间隔
+      shutdown-timeout: 100ms
+      
+    # 集群配置
+    cluster:
+      nodes:
+        - 192.168.1.1:7001
+        - 192.168.1.1:7002
+        - 192.168.1.1:7003
+        - 192.168.1.2:7001
+        - 192.168.1.2:7002
+        - 192.168.1.2:7003
+      max-redirects: 3
+```
+
+### 批量操作优化
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 批量操作优化
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisBatchService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 使用Pipeline批量操作
+     */
+    public void batchSetUserInfo(Map<Long, User> userMap) {
+        List<Object> results = redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            userMap.forEach((userId, user) -> {
+                String key = RedisKeyBuilder.buildUserInfoKey(userId);
+                
+                // 序列化用户对象
+                Map<String, Object> userFields = convertUserToMap(user);
+                userFields.forEach((field, value) -> {
+                    connection.hSet(key.getBytes(), field.getBytes(), 
+                        redisTemplate.getValueSerializer().serialize(value));
+                });
+                
+                // 设置过期时间
+                connection.expire(key.getBytes(), RedisExpireTime.MEDIUM.getSeconds());
+            });
+            return null;
+        });
+        
+        log.info("批量缓存用户信息完成: count={}", userMap.size());
+    }
+    
+    /**
+     * ✅ 批量获取缓存
+     */
+    public Map<String, Object> batchGetCache(List<String> keys) {
+        List<Object> values = redisTemplate.opsForValue().multiGet(keys);
+        
+        Map<String, Object> result = new HashMap<>();
+        for (int i = 0; i < keys.size(); i++) {
+            if (values.get(i) != null) {
+                result.put(keys.get(i), values.get(i));
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * ✅ 批量删除缓存
+     */
+    public void batchDeleteCache(Collection<String> keys) {
+        if (keys.isEmpty()) {
+            return;
+        }
+        
+        // 分批删除，避免单次操作过多key
+        List<String> keyList = new ArrayList<>(keys);
+        int batchSize = 100;
+        
+        for (int i = 0; i < keyList.size(); i += batchSize) {
+            int endIndex = Math.min(i + batchSize, keyList.size());
+            List<String> batch = keyList.subList(i, endIndex);
+            
+            redisTemplate.delete(batch);
+            log.debug("批量删除缓存: batch={}-{}, count={}", i, endIndex - 1, batch.size());
+        }
+    }
+    
+    private Map<String, Object> convertUserToMap(User user) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", user.getId());
+        map.put("username", user.getUsername());
+        map.put("email", user.getEmail());
+        map.put("status", user.getStatus());
+        return map;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 内存优化策略
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * Redis内存优化服务
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class RedisMemoryOptimizer {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    
+    /**
+     * ✅ 大对象压缩存储
+     */
+    public void setCompressedValue(String key, Object value, Duration expire) {
+        try {
+            // 序列化对象
+            byte[] serialized = serialize(value);
+            
+            // 如果数据大于1KB，则进行压缩
+            if (serialized.length > 1024) {
+                byte[] compressed = compress(serialized);
+                redisTemplate.opsForValue().set(key + ":compressed", compressed, expire);
+                log.debug("大对象压缩存储: key={}, original={} bytes, compressed={} bytes", 
+                    key, serialized.length, compressed.length);
+            } else {
+                redisTemplate.opsForValue().set(key, value, expire);
+            }
+        } catch (Exception e) {
+            log.error("压缩存储失败: key={}", key, e);
+        }
+    }
+    
+    public Object getCompressedValue(String key) {
+        try {
+            // 先尝试获取压缩版本
+            byte[] compressed = (byte[]) redisTemplate.opsForValue().get(key + ":compressed");
+            if (compressed != null) {
+                byte[] decompressed = decompress(compressed);
+                return deserialize(decompressed);
+            }
+            
+            // 获取普通版本
+            return redisTemplate.opsForValue().get(key);
+        } catch (Exception e) {
+            log.error("压缩数据读取失败: key={}", key, e);
+            return null;
+        }
+    }
+    
+    /**
+     * ✅ 内存使用监控
+     */
+    @Scheduled(fixedRate = 300000) // 每5分钟执行一次
+    public void monitorMemoryUsage() {
+        try {
+            Properties info = redisTemplate.getConnectionFactory()
+                .getConnection().info("memory");
+            
+            String usedMemory = info.getProperty("used_memory_human");
+            String maxMemory = info.getProperty("maxmemory_human");
+            String memoryUsageRatio = info.getProperty("used_memory_rss_ratio");
+            
+            log.info("Redis内存使用情况: used={}, max={}, ratio={}", 
+                usedMemory, maxMemory, memoryUsageRatio);
+            
+            // 如果内存使用率超过80%，记录警告
+            if (memoryUsageRatio != null && Double.parseDouble(memoryUsageRatio) > 0.8) {
+                log.warn("Redis内存使用率过高: {}", memoryUsageRatio);
+            }
+        } catch (Exception e) {
+            log.error("内存监控失败", e);
+        }
+    }
+    
+    /**
+     * ✅ 清理过期键
+     */
+    public void cleanupExpiredKeys() {
+        try {
+            // 获取所有键的数量
+            Set<String> keys = redisTemplate.keys("*");
+            if (keys == null) return;
+            
+            int totalKeys = keys.size();
+            int expiredKeys = 0;
+            
+            for (String key : keys) {
+                Long ttl = redisTemplate.getExpire(key);
+                if (ttl != null && ttl == -1) { // 没有设置过期时间的键
+                    log.warn("发现未设置过期时间的键: {}", key);
+                }
+            }
+            
+            log.info("键清理检查完成: total={}, expired={}", totalKeys, expiredKeys);
+        } catch (Exception e) {
+            log.error("键清理检查失败", e);
+        }
+    }
+    
+    private byte[] compress(byte[] data) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzos = new GZIPOutputStream(baos)) {
+            gzos.write(data);
+        }
+        return baos.toByteArray();
+    }
+    
+    private byte[] decompress(byte[] compressedData) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (GZIPInputStream gzis = new GZIPInputStream(new ByteArrayInputStream(compressedData))) {
+            byte[] buffer = new byte[1024];
+            int length;
+            while ((length = gzis.read(buffer)) != -1) {
+                baos.write(buffer, 0, length);
+            }
+        }
+        return baos.toByteArray();
+    }
+    
+    private byte[] serialize(Object obj) {
+        // 使用Java序列化或其他序列化方式
+        return redisTemplate.getValueSerializer().serialize(obj);
+    }
+    
+    private Object deserialize(byte[] data) {
+        return redisTemplate.getValueSerializer().deserialize(data);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## ✅ 检查清单
+
+### 键设计检查
+- [ ] 键命名遵循统一格式：{模块}:{实体}:{标识符}
+- [ ] 所有键都设置了合理的过期时间
+- [ ] 键名长度控制在合理范围内
+- [ ] 避免使用过深的嵌套结构
+
+### 数据结构选择
+- [ ] String用于简单值、计数器、令牌
+- [ ] Hash用于对象存储和字段更新
+- [ ] List用于队列和时间序列数据
+- [ ] Set用于去重和集合运算
+- [ ] ZSet用于排序和评分系统
+
+### 性能优化检查
+- [ ] 批量操作使用Pipeline或事务
+- [ ] 大对象考虑压缩存储
+- [ ] 连接池配置合理
+- [ ] 避免使用KEYS命令扫描
+- [ ] 监控内存使用情况
+
+### 安全检查
+- [ ] 生产环境配置密码认证
+- [ ] 禁用危险命令（FLUSHDB、CONFIG等）
+- [ ] 网络访问控制配置
+- [ ] 敏感数据加密存储
+- [ ] 定期备份重要数据
+
+---
+*遵循以上Redis规范，确保缓存系统的高性能、高可用和可维护性*
+description:
+globs:
+alwaysApply: false
+---

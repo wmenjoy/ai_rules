@@ -1,0 +1,976 @@
+# 文档规范 (基础层规则)
+> 代码注释、API文档和项目文档的标准化规范
+
+## 基础规范
+
+### 文档层次分类
+- **代码注释**: 类、方法、字段的JavaDoc注释
+- **API文档**: OpenAPI/Swagger规范的接口文档
+- **项目文档**: README、架构设计、部署指南等
+- **开发文档**: 编码规范、开发环境搭建、调试指南
+- **用户文档**: 使用手册、配置说明、FAQ等
+
+### JavaDoc注释标准
+- **类注释**: 描述类的用途、职责、使用方式和注意事项
+- **方法注释**: 描述方法功能、参数、返回值、异常和示例
+- **字段注释**: 描述字段的用途、约束条件和默认值
+- **包注释**: 在package-info.java中描述包的功能和设计
+- **标签使用**: 合理使用@param、@return、@throws、@since等标签
+
+### API文档规范
+- **OpenAPI规范**: 使用OpenAPI 3.0标准描述RESTful API
+- **接口描述**: 详细描述接口功能、业务场景和使用限制
+- **参数说明**: 明确参数类型、必填性、格式要求和示例
+- **响应格式**: 统一的响应格式和错误码定义
+- **示例数据**: 提供真实有效的请求和响应示例
+
+### 项目文档结构
+- **README.md**: 项目简介、快速开始、基本使用方法
+- **架构文档**: 系统架构、技术选型、设计决策
+- **部署文档**: 环境要求、部署步骤、配置说明
+- **API文档**: 接口列表、调用示例、错误处理
+- **变更日志**: 版本历史、功能变更、Bug修复记录
+
+## 强制行为
+
+### 代码注释要求
+- **公共API注释**: 所有public类和方法必须有完整的JavaDoc注释
+- **复杂逻辑注释**: 复杂的算法和业务逻辑必须有详细注释
+- **注释同步更新**: 代码修改时必须同步更新相关注释
+- **中英文规范**: 注释使用中文，代码标识符使用英文
+- **格式规范**: 遵循标准的JavaDoc格式和标签使用
+
+### API文档维护
+- **接口注解**: 使用@Operation、@Parameter等注解描述接口
+- **模型注解**: 使用@Schema注解描述数据模型
+- **示例提供**: 为复杂的请求和响应提供示例
+- **版本管理**: API版本变更时更新文档版本
+- **在线文档**: 集成Swagger UI提供在线文档访问
+
+### 项目文档管理
+- **文档目录**: 在docs/目录下组织项目文档
+- **Markdown格式**: 使用Markdown编写文档，便于版本控制
+- **图表支持**: 使用Mermaid等工具创建流程图和架构图
+- **文档版本**: 重要文档进行版本管理和变更追踪
+- **定期更新**: 定期检查和更新过时的文档内容
+
+### 代码可读性要求
+- **自解释代码**: 代码本身要有良好的可读性
+- **有意义命名**: 使用清晰表达意图的变量和方法名
+- **适度注释**: 注释代码的"为什么"而不是"是什么"
+- **结构清晰**: 代码结构层次清晰，逻辑分组明确
+- **示例代码**: 复杂功能提供使用示例
+
+## 禁止行为
+
+### 注释质量禁令
+- **禁止无用注释**: 不写显而易见的注释，如"设置name字段"
+- **禁止过时注释**: 及时删除过时的、错误的注释
+- **禁止注释代码**: 删除被注释掉的废弃代码
+- **禁止TODO长存**: TODO注释必须及时处理或添加deadline
+- **禁止复制粘贴注释**: 避免复制产生的错误注释
+
+### 文档维护禁令
+- **禁止文档与代码不同步**: 代码变更必须同步更新文档
+- **禁止重复文档**: 避免在多处重复相同信息
+- **禁止过时文档**: 及时更新或删除过时的文档
+- **禁止无版本文档**: 重要文档必须有版本标识
+- **禁止文档孤岛**: 文档之间要有合理的链接关系
+
+### API文档禁令
+- **禁止缺失描述**: API接口不能缺少功能描述
+- **禁止错误示例**: 示例数据必须真实有效
+- **禁止遗漏错误码**: 必须文档化所有可能的错误情况
+- **禁止参数缺失**: 所有参数都必须有说明
+- **禁止响应格式不一致**: API响应格式必须统一
+
+### 内容质量禁令
+- **禁止语法错误**: 文档中不能有明显的语法和拼写错误
+- **禁止内容冗余**: 避免不必要的重复和冗长描述
+- **禁止链接失效**: 确保文档中的链接有效可访问
+- **禁止格式混乱**: 保持文档格式的一致性
+- **禁止信息不准确**: 确保文档信息的准确性和时效性
+
+## 示例代码
+
+### 标准的JavaDoc注释示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 文档规范 v2.0 */
+/**
+ * 用户管理服务接口
+ * 
+ * 提供用户相关的业务操作，包括用户的创建、查询、更新和删除功能。
+ * 该接口定义了用户管理的核心业务方法，所有涉及用户数据的操作都通过此接口进行。
+ * 
+ * <p>使用示例：</p>
+ * <pre>{@code
+ * UserService userService = applicationContext.getBean(UserService.class);
+ * User user = userService.createUser(createRequest);
+ * }</pre>
+ * 
+ * <p>注意事项：</p>
+ * <ul>
+ *   <li>所有方法都会验证输入参数的有效性</li>
+ *   <li>查询方法返回的用户对象不包含敏感信息</li>
+ *   <li>删除操作是软删除，不会物理删除数据</li>
+ * </ul>
+ * 
+ * @author 开发团队
+ * @version 1.2.0
+ * @since 1.0.0
+ * @see User
+ * @see UserRepository
+ */
+public interface UserService {
+    
+    /**
+     * 创建新用户
+     * 
+     * 根据提供的用户信息创建新的用户账户。该方法会执行以下操作：
+     * <ol>
+     *   <li>验证用户名和邮箱的唯一性</li>
+     *   <li>对密码进行安全哈希处理</li>
+     *   <li>设置用户初始状态为待激活</li>
+     *   <li>发送激活邮件到用户邮箱</li>
+     * </ol>
+     * 
+     * <p>业务规则：</p>
+     * <ul>
+     *   <li>用户名必须在3-50个字符之间，只能包含字母、数字和下划线</li>
+     *   <li>邮箱必须是有效的邮箱格式</li>
+     *   <li>密码长度必须在8-128个字符之间</li>
+     *   <li>同一个邮箱只能注册一个账户</li>
+     * </ul>
+     * 
+     * @param request 用户创建请求对象，包含用户名、邮箱、密码等信息
+     * @return 创建成功的用户对象，不包含敏感信息如密码哈希
+     * @throws IllegalArgumentException 当请求参数为null或包含无效数据时抛出
+     * @throws DuplicateUserException 当用户名或邮箱已存在时抛出
+     * @throws EmailSendException 当激活邮件发送失败时抛出
+     * @since 1.0.0
+     * 
+     * @see CreateUserRequest
+     * @see User
+     * @see #validateUserRequest(CreateUserRequest)
+     */
+    User createUser(CreateUserRequest request);
+    
+    /**
+     * 根据用户ID查询用户信息
+     * 
+     * 通过用户的唯一标识符查询用户详细信息。该方法只返回未被删除的用户数据。
+     * 
+     * <p>性能说明：该方法使用了缓存机制，频繁查询同一用户时性能较好。</p>
+     * 
+     * @param id 用户的唯一标识符，必须为正数
+     * @return 用户信息的Optional包装，如果用户不存在或已被删除则返回空Optional
+     * @throws IllegalArgumentException 当id为null或小于等于0时抛出
+     * @since 1.0.0
+     * 
+     * @see Optional
+     * @see User
+     */
+    Optional<User> findUserById(Long id);
+    
+    /**
+     * 分页查询用户列表
+     * 
+     * 根据指定的查询条件和分页参数查询用户列表。支持按用户名、邮箱、状态等条件进行过滤。
+     * 
+     * <p>查询性能：</p>
+     * <ul>
+     *   <li>支持数据库索引优化的查询条件</li>
+     *   <li>默认按创建时间倒序排列</li>
+     *   <li>最大分页大小限制为100条</li>
+     * </ul>
+     * 
+     * @param pageable 分页参数，包含页码、每页大小、排序方式等
+     * @param criteria 查询条件，可以为null表示查询所有用户
+     * @return 分页的用户列表，包含分页元数据
+     * @throws IllegalArgumentException 当分页参数无效时抛出
+     * @since 1.1.0
+     * 
+     * @see Pageable
+     * @see UserSearchCriteria
+     * @see PageResponse
+     */
+    PageResponse<User> findUsers(Pageable pageable, UserSearchCriteria criteria);
+    
+    /**
+     * 更新用户信息
+     * 
+     * 根据用户ID更新用户的基本信息。该方法只允许更新非敏感信息，
+     * 如姓名、电话等，不允许直接更新用户名、邮箱和密码。
+     * 
+     * <p>安全说明：</p>
+     * <ul>
+     *   <li>该操作需要管理员权限或用户本人权限</li>
+     *   <li>敏感信息变更需要通过专门的方法进行</li>
+     *   <li>更新操作会记录审计日志</li>
+     * </ul>
+     * 
+     * @param id 要更新的用户ID
+     * @param request 更新请求对象，包含要更新的字段信息
+     * @return 更新后的用户对象
+     * @throws IllegalArgumentException 当参数无效时抛出
+     * @throws ResourceNotFoundException 当用户不存在时抛出
+     * @throws AccessDeniedException 当没有权限更新该用户时抛出
+     * @since 1.0.0
+     * 
+     * @see UpdateUserRequest
+     * @see #changePassword(Long, ChangePasswordRequest)
+     * @see #changeEmail(Long, ChangeEmailRequest)
+     */
+    User updateUser(Long id, UpdateUserRequest request);
+    
+    /**
+     * 软删除用户
+     * 
+     * 将指定用户标记为已删除状态，但不从数据库中物理删除。
+     * 已删除的用户不能登录系统，也不会在正常查询中返回。
+     * 
+     * <p>删除规则：</p>
+     * <ul>
+     *   <li>只有管理员可以删除用户</li>
+     *   <li>不能删除自己的账户</li>
+     *   <li>删除操作可以通过恢复功能撤销</li>
+     *   <li>删除会同时注销用户的所有会话</li>
+     * </ul>
+     * 
+     * @param id 要删除的用户ID
+     * @throws IllegalArgumentException 当id无效时抛出
+     * @throws ResourceNotFoundException 当用户不存在时抛出
+     * @throws AccessDeniedException 当没有删除权限时抛出
+     * @throws BusinessException 当尝试删除自己的账户时抛出
+     * @since 1.0.0
+     * 
+     * @see #restoreUser(Long)
+     */
+    void deleteUser(Long id);
+}
+
+/**
+ * 用户实体类
+ * 
+ * 表示系统中的用户信息，对应数据库中的users表。
+ * 该类包含用户的基本信息和系统相关的元数据。
+ * 
+ * <p>设计说明：</p>
+ * <ul>
+ *   <li>继承自BaseEntity，包含审计字段</li>
+ *   <li>使用JPA注解进行ORM映射</li>
+ *   <li>实现了软删除功能</li>
+ *   <li>支持乐观锁并发控制</li>
+ * </ul>
+ * 
+ * @author 开发团队
+ * @version 1.2.0
+ * @since 1.0.0
+ */
+@Entity
+@Table(name = "users", indexes = {
+    @Index(name = "idx_username", columnList = "username"),
+    @Index(name = "idx_email", columnList = "email")
+})
+public class User extends BaseEntity {
+    
+    /**
+     * 用户唯一标识符
+     * 
+     * 系统自动生成的主键，用于唯一标识一个用户。
+     * 在所有涉及用户的关联关系中都使用此字段作为外键。
+     */
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    /**
+     * 用户名
+     * 
+     * 用户登录系统时使用的唯一标识符。
+     * 
+     * <p>约束条件：</p>
+     * <ul>
+     *   <li>长度：3-50个字符</li>
+     *   <li>格式：只能包含字母、数字和下划线</li>
+     *   <li>唯一性：在系统中必须唯一</li>
+     *   <li>不可变：一旦创建不允许修改</li>
+     * </ul>
+     */
+    @Column(name = "username", length = 50, nullable = false, unique = true)
+    private String username;
+    
+    /**
+     * 用户邮箱地址
+     * 
+     * 用于接收系统通知、密码重置等重要信息的邮箱地址。
+     * 也可以作为登录凭据的替代方式。
+     * 
+     * <p>业务规则：</p>
+     * <ul>
+     *   <li>必须是有效的邮箱格式</li>
+     *   <li>在系统中必须唯一</li>
+     *   <li>修改邮箱需要验证新邮箱的有效性</li>
+     * </ul>
+     */
+    @Column(name = "email", length = 100, nullable = false, unique = true)
+    private String email;
+    
+    /**
+     * 密码哈希值
+     * 
+     * 使用BCrypt算法加密后的密码哈希值，不存储明文密码。
+     * 
+     * <p>安全说明：</p>
+     * <ul>
+     *   <li>使用BCrypt算法，成本因子为12</li>
+     *   <li>每次加密都会生成不同的哈希值</li>
+     *   <li>该字段在序列化时会被忽略</li>
+     * </ul>
+     * 
+     * @see BCryptPasswordEncoder
+     */
+    @Column(name = "password_hash", length = 255, nullable = false)
+    @JsonIgnore
+    private String passwordHash;
+    
+    /**
+     * 用户当前状态
+     * 
+     * 表示用户账户的当前状态，影响用户的登录和系统访问权限。
+     * 
+     * <p>状态说明：</p>
+     * <ul>
+     *   <li>PENDING：待激活，新注册用户的初始状态</li>
+     *   <li>ACTIVE：正常状态，可以正常使用系统</li>
+     *   <li>LOCKED：已锁定，通常因为安全原因被临时禁用</li>
+     *   <li>DELETED：已删除，软删除状态</li>
+     * </ul>
+     * 
+     * @see UserStatus
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20, nullable = false)
+    private UserStatus status = UserStatus.PENDING;
+    
+    // 省略其他字段和方法...
+    
+    /**
+     * 检查用户是否处于激活状态
+     * 
+     * 判断用户是否可以正常使用系统功能。只有状态为ACTIVE且未被删除的用户
+     * 才被认为是激活状态。
+     * 
+     * @return 如果用户处于激活状态返回true，否则返回false
+     * @since 1.0.0
+     */
+    public boolean isActive() {
+        return UserStatus.ACTIVE.equals(this.status) && !this.isDeleted();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### OpenAPI/Swagger文档注解示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 文档规范 v2.0 */
+/**
+ * 用户管理API控制器
+ * 
+ * 提供用户相关的RESTful API接口，包括用户的CRUD操作和用户状态管理。
+ */
+@RestController
+@RequestMapping("/api/v1/users")
+@Tag(name = "用户管理", description = "用户相关的API接口")
+@Validated
+public class UserController {
+    
+    private final UserService userService;
+    
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+    
+    /**
+     * 创建新用户
+     */
+    @PostMapping
+    @Operation(
+        summary = "创建用户", 
+        description = "创建新的用户账户，包括用户名、邮箱和密码验证",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201", 
+            description = "用户创建成功",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = UserResponse.class),
+                examples = @ExampleObject(
+                    name = "创建成功示例",
+                    value = """
+                    {
+                        "code": 201,
+                        "message": "用户创建成功",
+                        "data": {
+                            "id": 1,
+                            "username": "testuser",
+                            "email": "test@example.com",
+                            "status": "PENDING",
+                            "createTime": "2024-01-01T10:00:00"
+                        },
+                        "timestamp": 1704096000000
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400", 
+            description = "请求参数错误",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "参数错误示例",
+                    value = """
+                    {
+                        "code": 400,
+                        "message": "参数验证失败",
+                        "data": {
+                            "username": "用户名不能为空",
+                            "email": "邮箱格式不正确"
+                        },
+                        "timestamp": 1704096000000
+                    }
+                    """
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "409", 
+            description = "用户名或邮箱已存在",
+            content = @Content(
+                mediaType = "application/json",
+                examples = @ExampleObject(
+                    name = "冲突错误示例",
+                    value = """
+                    {
+                        "code": 409,
+                        "message": "用户名已存在: testuser",
+                        "timestamp": 1704096000000
+                    }
+                    """
+                )
+            )
+        )
+    })
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(
+            @Parameter(description = "用户创建请求", required = true)
+            @Valid @RequestBody CreateUserRequest request) {
+        
+        User user = userService.createUser(request);
+        UserResponse response = convertToResponse(user);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(response, "用户创建成功"));
+    }
+    
+    /**
+     * 根据ID获取用户信息
+     */
+    @GetMapping("/{id}")
+    @Operation(
+        summary = "获取用户详情", 
+        description = "根据用户ID获取用户的详细信息，不包含敏感数据",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200", 
+            description = "查询成功",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = UserResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "404", description = "用户不存在"),
+        @ApiResponse(responseCode = "403", description = "权限不足")
+    })
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(
+            @Parameter(
+                description = "用户ID", 
+                required = true, 
+                example = "1",
+                schema = @Schema(type = "integer", format = "int64", minimum = "1")
+            )
+            @PathVariable Long id) {
+        
+        return userService.findUserById(id)
+            .map(this::convertToResponse)
+            .map(response -> ResponseEntity.ok(ApiResponse.success(response)))
+            .orElse(ResponseEntity.notFound().build());
+    }
+    
+    /**
+     * 分页查询用户列表
+     */
+    @GetMapping
+    @Operation(
+        summary = "分页查询用户", 
+        description = "根据查询条件分页获取用户列表，支持多种过滤条件",
+        tags = {"用户管理"}
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200", 
+            description = "查询成功",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = PageResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "查询参数错误")
+    })
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getUsers(
+            @Parameter(description = "页码（从0开始）", example = "0")
+            @RequestParam(value = "page", defaultValue = "0") 
+            @Min(value = 0, message = "页码不能小于0") Integer page,
+            
+            @Parameter(description = "每页大小", example = "20")
+            @RequestParam(value = "size", defaultValue = "20") 
+            @Range(min = 1, max = 100, message = "每页大小必须在1-100之间") Integer size,
+            
+            @Parameter(description = "排序字段", example = "createTime")
+            @RequestParam(value = "sort", defaultValue = "createTime") String sort,
+            
+            @Parameter(description = "排序方向", example = "desc", schema = @Schema(allowableValues = {"asc", "desc"}))
+            @RequestParam(value = "direction", defaultValue = "desc") String direction,
+            
+            @Parameter(description = "用户名关键词", example = "test")
+            @RequestParam(value = "username", required = false) String username,
+            
+            @Parameter(description = "邮箱关键词", example = "example.com")
+            @RequestParam(value = "email", required = false) String email,
+            
+            @Parameter(description = "用户状态", example = "ACTIVE")
+            @RequestParam(value = "status", required = false) UserStatus status) {
+        
+        // 构建查询条件
+        UserSearchCriteria criteria = UserSearchCriteria.builder()
+            .username(username)
+            .email(email)
+            .status(status)
+            .build();
+        
+        // 构建分页参数
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sort));
+        
+        PageResponse<UserResponse> users = userService.findUsers(pageable, criteria)
+            .map(this::convertToResponse);
+        
+        return ResponseEntity.ok(ApiResponse.success(users));
+    }
+    
+    private UserResponse convertToResponse(User user) {
+        return UserResponse.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .status(user.getStatus())
+            .createTime(user.getCreateTime())
+            .build();
+    }
+}
+
+/**
+ * 用户创建请求DTO
+ */
+@Schema(description = "用户创建请求")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CreateUserRequest {
+    
+    @Schema(
+        description = "用户名", 
+        example = "testuser",
+        minLength = 3,
+        maxLength = 50,
+        pattern = "^[a-zA-Z0-9_]+$"
+    )
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
+    private String username;
+    
+    @Schema(
+        description = "邮箱地址", 
+        example = "test@example.com",
+        format = "email"
+    )
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    @Size(max = 100, message = "邮箱长度不能超过100个字符")
+    private String email;
+    
+    @Schema(
+        description = "登录密码", 
+        example = "SecurePass123!",
+        minLength = 8,
+        maxLength = 128,
+        format = "password"
+    )
+    @NotBlank(message = "密码不能为空")
+    @Size(min = 8, max = 128, message = "密码长度必须在8-128个字符之间")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+        message = "密码必须包含大小写字母、数字和特殊字符"
+    )
+    private String password;
+    
+    @Schema(description = "真实姓名", example = "张三")
+    @Size(max = 50, message = "姓名长度不能超过50个字符")
+    private String name;
+    
+    @Schema(description = "手机号码", example = "13812345678")
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+}
+
+/**
+ * 用户响应DTO
+ */
+@Schema(description = "用户信息响应")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserResponse {
+    
+    @Schema(description = "用户ID", example = "1")
+    private Long id;
+    
+    @Schema(description = "用户名", example = "testuser")
+    private String username;
+    
+    @Schema(description = "邮箱地址", example = "test@example.com")
+    private String email;
+    
+    @Schema(description = "真实姓名", example = "张三")
+    private String name;
+    
+    @Schema(description = "手机号码", example = "138****5678")
+    private String phone;
+    
+    @Schema(description = "用户状态", example = "ACTIVE")
+    private UserStatus status;
+    
+    @Schema(description = "创建时间", example = "2024-01-01T10:00:00")
+    private LocalDateTime createTime;
+    
+    @Schema(description = "最后登录时间", example = "2024-01-01T10:00:00")
+    private LocalDateTime lastLoginTime;
+}
+/* [AI-BLOCK-END] */
+```
+
+### 项目文档模板示例
+```markdown
+<!-- [AI-BLOCK-START] - 生成工具: 文档规范 v2.0 -->
+# 用户管理系统
+
+[![Build Status](https://github.com/company/user-management/workflows/CI/badge.svg)](https://github.com/company/user-management/actions)
+[![Code Coverage](https://codecov.io/gh/company/user-management/branch/main/graph/badge.svg)](https://codecov.io/gh/company/user-management)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## 项目简介
+
+用户管理系统是一个基于Spring Boot的企业级用户管理解决方案，提供完整的用户生命周期管理功能，包括用户注册、认证、授权、信息管理等核心功能。
+
+### 主要特性
+
+- 🚀 **现代化架构**: 基于Spring Boot 2.7 + Spring Security 5.7
+- 🔐 **安全可靠**: JWT认证、BCrypt密码加密、RBAC权限控制
+- 📊 **完整监控**: 集成Actuator + Prometheus + Grafana监控体系
+- 🗄️ **数据库支持**: 支持MySQL、PostgreSQL等主流数据库
+- 📝 **API文档**: 集成Swagger/OpenAPI 3.0自动生成API文档
+- 🧪 **测试覆盖**: 单元测试 + 集成测试，覆盖率 > 80%
+
+## 快速开始
+
+### 环境要求
+
+- Java 8+ (推荐Java 11或17)
+- Maven 3.6+
+- MySQL 8.0+ 或 PostgreSQL 12+
+- Redis 6.0+ (可选，用于缓存)
+
+### 安装步骤
+
+1. **克隆项目**
+   ```bash
+   git clone https://github.com/company/user-management.git
+   cd user-management
+   ```
+
+2. **配置数据库**
+   ```bash
+   # 创建数据库
+   mysql -u root -p
+   CREATE DATABASE user_management CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   
+   # 复制配置文件
+   cp src/main/resources/application-dev.yml.example src/main/resources/application-dev.yml
+   ```
+
+3. **配置文件修改**
+   ```yaml
+   # src/main/resources/application-dev.yml
+   spring:
+     datasource:
+       url: jdbc:mysql://localhost:3306/user_management
+       username: your_username
+       password: your_password
+   ```
+
+4. **启动应用**
+   ```bash
+   mvn spring-boot:run
+   ```
+
+5. **访问应用**
+   - 应用首页: http://localhost:8080
+   - API文档: http://localhost:8080/swagger-ui.html
+   - 健康检查: http://localhost:8080/actuator/health
+
+## API文档
+
+### 认证接口
+
+#### 用户注册
+```http
+POST /api/v1/auth/register
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "email": "test@example.com",
+  "password": "SecurePass123!"
+}
+```
+
+#### 用户登录
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "testuser",
+  "password": "SecurePass123!"
+}
+```
+
+### 用户管理接口
+
+#### 获取用户列表
+```http
+GET /api/v1/users?page=0&size=20&sort=createTime&direction=desc
+Authorization: Bearer {token}
+```
+
+#### 获取用户详情
+```http
+GET /api/v1/users/{id}
+Authorization: Bearer {token}
+```
+
+更多详细的API文档请访问: [Swagger UI](http://localhost:8080/swagger-ui.html)
+
+## 项目结构
+
+```
+src/
+├── main/
+│   ├── java/
+│   │   └── com/company/usermanagement/
+│   │       ├── UserManagementApplication.java    # 启动类
+│   │       ├── config/                           # 配置类
+│   │       ├── controller/                       # 控制器层
+│   │       ├── service/                          # 服务层
+│   │       ├── repository/                       # 数据访问层
+│   │       ├── entity/                           # 实体类
+│   │       ├── dto/                              # 数据传输对象
+│   │       ├── exception/                        # 异常处理
+│   │       ├── security/                         # 安全相关
+│   │       └── util/                             # 工具类
+│   └── resources/
+│       ├── application.yml                       # 主配置文件
+│       ├── db/migration/                         # 数据库迁移脚本
+│       └── static/                               # 静态资源
+└── test/                                         # 测试代码
+```
+
+## 开发指南
+
+### 代码规范
+
+项目遵循以下代码规范：
+- [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)
+- [Spring Boot Best Practices](https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html)
+
+### 提交规范
+
+使用[Conventional Commits](https://www.conventionalcommits.org/)规范：
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+示例：
+```
+feat(user): add user registration functionality
+fix(auth): resolve JWT token validation issue
+docs(readme): update installation instructions
+```
+
+### 分支管理
+
+- `main`: 主分支，生产环境代码
+- `develop`: 开发分支，集成最新功能
+- `feature/*`: 功能分支
+- `hotfix/*`: 热修复分支
+- `release/*`: 发布分支
+
+## 部署指南
+
+### Docker部署
+
+1. **构建镜像**
+   ```bash
+   docker build -t user-management:latest .
+   ```
+
+2. **运行容器**
+   ```bash
+   docker-compose up -d
+   ```
+
+### 生产环境部署
+
+详细的生产环境部署指南请参考: [部署文档](docs/deployment/production.md)
+
+## 监控和运维
+
+### 健康检查
+
+- 应用健康状态: `GET /actuator/health`
+- 应用信息: `GET /actuator/info`
+- 应用指标: `GET /actuator/metrics`
+
+### 日志管理
+
+日志配置文件: `src/main/resources/logback-spring.xml`
+
+- 开发环境: 控制台输出 + 文件输出
+- 生产环境: 文件输出 + 日志收集
+
+### 性能监控
+
+集成Micrometer + Prometheus监控:
+- 应用指标: JVM、HTTP请求、数据库连接池等
+- 业务指标: 用户注册、登录、API调用等
+- 告警规则: 错误率、响应时间、资源使用率等
+
+## 测试
+
+### 运行测试
+
+```bash
+# 运行所有测试
+mvn test
+
+# 运行单元测试
+mvn test -Dtest="*Test"
+
+# 运行集成测试
+mvn test -Dtest="*IntegrationTest"
+
+# 生成测试报告
+mvn jacoco:report
+```
+
+### 测试覆盖率
+
+当前测试覆盖率: **85%**
+
+查看详细报告: `target/site/jacoco/index.html`
+
+## 常见问题
+
+### Q: 启动时数据库连接失败怎么办？
+A: 请检查数据库配置和网络连接，确保数据库服务正在运行。
+
+### Q: JWT令牌过期时间如何配置？
+A: 在配置文件中修改 `app.security.jwt.expiration` 参数。
+
+### Q: 如何添加新的用户角色？
+A: 在数据库的roles表中添加新角色，并在代码中定义相应的权限。
+
+更多问题请查看: [FAQ文档](docs/faq.md)
+
+## 贡献指南
+
+我们欢迎所有形式的贡献！请阅读 [贡献指南](CONTRIBUTING.md) 了解如何参与项目开发。
+
+### 贡献流程
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'feat: add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建 Pull Request
+
+## 许可证
+
+本项目使用 MIT 许可证。详细信息请查看 [LICENSE](LICENSE) 文件。
+
+## 联系我们
+
+- 项目主页: https://github.com/company/user-management
+- 问题反馈: https://github.com/company/user-management/issues
+- 邮箱: dev-team@company.com
+
+## 更新日志
+
+### v1.2.0 (2024-01-15)
+- 新增用户批量操作功能
+- 优化登录性能
+- 修复邮件发送问题
+
+### v1.1.0 (2024-01-01)
+- 添加用户角色管理
+- 集成Redis缓存
+- 完善API文档
+
+### v1.0.0 (2023-12-01)
+- 初始版本发布
+- 基础用户管理功能
+- JWT认证机制
+
+完整的更新日志请查看: [CHANGELOG.md](CHANGELOG.md)
+<!-- [AI-BLOCK-END] -->
+```
+
+---
+
+*此文档规范确保项目具有完整、准确和易于维护的文档体系，提升团队协作效率和项目可维护性*
+description:
+globs:
+alwaysApply: false
+---

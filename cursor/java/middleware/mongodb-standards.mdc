@@ -1,0 +1,1352 @@
+# MongoDB 数据库规范 (中间件层规则)
+> MongoDB文档数据库的标准化使用规范和最佳实践
+
+## 基础规范
+
+### 技术栈版本要求
+- **MongoDB**: 5.0.x+
+- **Spring Data MongoDB**: 3.4.x+
+- **MongoDB Java Driver**: 4.7.x+
+- **MongoDB Reactive Streams**: 4.7.x+
+
+### 设计原则
+- **文档模型优化**: 合理设计文档结构和嵌套关系
+- **查询性能优先**: 优化查询语句和索引设计
+- **数据一致性**: 确保数据的一致性和完整性
+- **扩展性设计**: 支持水平扩展和分片
+- **安全防护**: 实现访问控制和数据安全
+
+## 强制行为
+
+### 1. 项目配置规范
+
+#### 依赖管理
+```xml
+<dependencies>
+    <!-- Spring Data MongoDB -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-mongodb</artifactId>
+    </dependency>
+    
+    <!-- MongoDB Reactive Streams -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-mongodb-reactive</artifactId>
+    </dependency>
+    
+    <!-- MongoDB Java Driver -->
+    <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>mongodb-driver-sync</artifactId>
+        <version>4.7.2</version>
+    </dependency>
+    
+    <!-- MongoDB Reactive Driver -->
+    <dependency>
+        <groupId>org.mongodb</groupId>
+        <artifactId>mongodb-driver-reactivestreams</artifactId>
+        <version>4.7.2</version>
+    </dependency>
+    
+    <!-- Validation支持 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+</dependencies>
+```
+
+#### 配置文件
+```yaml
+# application.yml
+spring:
+  data:
+    mongodb:
+      # 单机配置
+      host: ${MONGO_HOST:localhost}
+      port: ${MONGO_PORT:27017}
+      database: ${MONGO_DATABASE:test_db}
+      username: ${MONGO_USERNAME:admin}
+      password: ${MONGO_PASSWORD:password}
+      authentication-database: ${MONGO_AUTH_DB:admin}
+      
+      # 集群配置（副本集）
+      # uri: mongodb://username:password@host1:27017,host2:27017,host3:27017/database?replicaSet=rs0&authSource=admin
+      
+      # 连接池配置
+      options:
+        # 最大连接数
+        max-pool-size: 100
+        # 最小连接数
+        min-pool-size: 10
+        # 连接超时时间
+        connect-timeout: 30000
+        # 读取超时时间
+        socket-timeout: 30000
+        # 服务器选择超时时间
+        server-selection-timeout: 30000
+        # 最大等待时间
+        max-wait-time: 120000
+        # 连接最大空闲时间
+        max-connection-idle-time: 600000
+        # 连接最大生命周期
+        max-connection-life-time: 1800000
+        # 心跳频率
+        heartbeat-frequency: 10000
+        # 最小心跳频率
+        min-heartbeat-frequency: 500
+
+# MongoDB自定义配置
+mongodb:
+  # 集合配置
+  collections:
+    # 默认写关注
+    write-concern: MAJORITY
+    # 默认读偏好
+    read-preference: PRIMARY
+    # 默认读关注
+    read-concern: MAJORITY
+  # 索引配置
+  index:
+    # 自动创建索引
+    auto-create: true
+    # 索引创建超时时间
+    creation-timeout: 60000
+  # 事务配置
+  transaction:
+    # 事务超时时间
+    timeout: 30000
+    # 最大重试次数
+    max-retry: 3
+
+# 日志配置
+logging:
+  level:
+    org.springframework.data.mongodb: DEBUG
+    org.mongodb.driver: DEBUG
+```
+
+### 2. MongoDB配置类
+
+#### 数据库配置类
+```java
+@Configuration
+@EnableMongoRepositories(basePackages = "com.example.repository.mongo")
+@EnableConfigurationProperties(MongoProperties.class)
+@Slf4j
+public class MongoDBConfig {
+    
+    @Value("${spring.data.mongodb.uri:}")
+    private String mongoUri;
+    
+    @Value("${spring.data.mongodb.database}")
+    private String database;
+    
+    /**
+     * MongoDB客户端配置
+     */
+    @Bean
+    @Primary
+    public MongoClient mongoClient() {
+        if (StringUtils.isNotBlank(mongoUri)) {
+            // 使用URI配置（集群模式）
+            ConnectionString connectionString = new ConnectionString(mongoUri);
+            MongoClientSettings settings = MongoClientSettings.builder()
+                    .applyConnectionString(connectionString)
+                    .applyToConnectionPoolSettings(builder -> {
+                        builder.maxSize(100)
+                               .minSize(10)
+                               .maxWaitTime(120, TimeUnit.SECONDS)
+                               .maxConnectionIdleTime(600, TimeUnit.SECONDS)
+                               .maxConnectionLifeTime(1800, TimeUnit.SECONDS);
+                    })
+                    .applyToSocketSettings(builder -> {
+                        builder.connectTimeout(30, TimeUnit.SECONDS)
+                               .readTimeout(30, TimeUnit.SECONDS);
+                    })
+                    .applyToServerSettings(builder -> {
+                        builder.heartbeatFrequency(10, TimeUnit.SECONDS)
+                               .minHeartbeatFrequency(500, TimeUnit.MILLISECONDS);
+                    })
+                    .writeConcern(WriteConcern.MAJORITY)
+                    .readPreference(ReadPreference.primary())
+                    .readConcern(ReadConcern.MAJORITY)
+                    .build();
+            
+            return MongoClients.create(settings);
+        } else {
+            // 单机配置
+            return MongoClients.create();
+        }
+    }
+    
+    /**
+     * MongoDB模板配置
+     */
+    @Bean
+    @Primary
+    public MongoTemplate mongoTemplate(MongoClient mongoClient) {
+        MongoTemplate template = new MongoTemplate(mongoClient, database);
+        
+        // 设置写关注
+        template.setWriteConcern(WriteConcern.MAJORITY);
+        
+        // 设置读偏好
+        template.setReadPreference(ReadPreference.primary());
+        
+        return template;
+    }
+    
+    /**
+     * 响应式MongoDB模板配置
+     */
+    @Bean
+    public ReactiveMongoTemplate reactiveMongoTemplate(MongoClient mongoClient) {
+        return new ReactiveMongoTemplate(mongoClient, database);
+    }
+    
+    /**
+     * MongoDB事务管理器
+     */
+    @Bean
+    public MongoTransactionManager transactionManager(MongoDbFactory dbFactory) {
+        return new MongoTransactionManager(dbFactory);
+    }
+    
+    /**
+     * 自定义转换器配置
+     */
+    @Bean
+    public MongoCustomConversions customConversions() {
+        List<Converter<?, ?>> converters = new ArrayList<>();
+        
+        // 添加LocalDateTime转换器
+        converters.add(new LocalDateTimeToDateConverter());
+        converters.add(new DateToLocalDateTimeConverter());
+        
+        // 添加枚举转换器
+        converters.add(new EnumToStringConverter());
+        converters.add(new StringToEnumConverter());
+        
+        return new MongoCustomConversions(converters);
+    }
+    
+    /**
+     * 索引解析器
+     */
+    @Bean
+    public IndexResolver indexResolver(MongoMappingContext mappingContext, 
+                                     MongoCustomConversions customConversions) {
+        return new MongoPersistentEntityIndexResolver(mappingContext, customConversions);
+    }
+    
+    /**
+     * 自动索引创建
+     */
+    @EventListener
+    public void initIndicesAfterStartup(ContextRefreshedEvent event) {
+        MongoTemplate mongoTemplate = event.getApplicationContext().getBean(MongoTemplate.class);
+        IndexResolver indexResolver = event.getApplicationContext().getBean(IndexResolver.class);
+        
+        // 获取所有MongoDB实体类
+        MongoMappingContext mappingContext = (MongoMappingContext) mongoTemplate.getConverter().getMappingContext();
+        
+        for (BasicMongoPersistentEntity<?> persistentEntity : mappingContext.getPersistentEntities()) {
+            Class<?> clazz = persistentEntity.getType();
+            
+            // 确保索引存在
+            IndexOperations indexOps = mongoTemplate.indexOps(clazz);
+            IndexResolver.IndexDefinitionHolder indexDefinitionHolder = 
+                    new IndexResolver.IndexDefinitionHolder("", indexResolver.resolveIndexFor(clazz), clazz);
+            
+            indexDefinitionHolder.getIndexDefinitions().forEach(indexOps::ensureIndex);
+            
+            log.info("为集合 {} 创建索引完成", persistentEntity.getCollection());
+        }
+    }
+    
+    /**
+     * LocalDateTime转Date转换器
+     */
+    public static class LocalDateTimeToDateConverter implements Converter<LocalDateTime, Date> {
+        @Override
+        public Date convert(LocalDateTime source) {
+            return Date.from(source.atZone(ZoneId.systemDefault()).toInstant());
+        }
+    }
+    
+    /**
+     * Date转LocalDateTime转换器
+     */
+    public static class DateToLocalDateTimeConverter implements Converter<Date, LocalDateTime> {
+        @Override
+        public LocalDateTime convert(Date source) {
+            return source.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
+        }
+    }
+    
+    /**
+     * 枚举转字符串转换器
+     */
+    public static class EnumToStringConverter implements Converter<Enum<?>, String> {
+        @Override
+        public String convert(Enum<?> source) {
+            return source.name();
+        }
+    }
+    
+    /**
+     * 字符串转枚举转换器
+     */
+    public static class StringToEnumConverter implements Converter<String, Enum<?>> {
+        @Override
+        public Enum<?> convert(String source) {
+            // 这里需要根据具体枚举类型进行转换
+            return null;
+        }
+    }
+}
+```
+
+### 3. 文档实体设计
+
+#### 标准文档实体
+```java
+/**
+ * 基础文档实体
+ */
+@Data
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+public abstract class BaseDocument implements Serializable {
+    
+    private static final long serialVersionUID = 1L;
+    
+    /**
+     * 文档ID
+     */
+    @Id
+    private String id;
+    
+    /**
+     * 创建时间
+     */
+    @Field("createTime")
+    @Indexed
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createTime;
+    
+    /**
+     * 更新时间
+     */
+    @Field("updateTime")
+    @Indexed
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updateTime;
+    
+    /**
+     * 创建人
+     */
+    @Field("createBy")
+    @Indexed
+    private String createBy;
+    
+    /**
+     * 更新人
+     */
+    @Field("updateBy")
+    private String updateBy;
+    
+    /**
+     * 逻辑删除标记
+     */
+    @Field("deleted")
+    @Indexed
+    private Boolean deleted = false;
+    
+    /**
+     * 版本号
+     */
+    @Field("version")
+    private Long version = 0L;
+}
+
+/**
+ * 用户文档实体
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@Document(collection = "users")
+@CompoundIndex(def = "{'username': 1, 'deleted': 1}", unique = true)
+@CompoundIndex(def = "{'email': 1, 'deleted': 1}", unique = true)
+@CompoundIndex(def = "{'phone': 1, 'deleted': 1}")
+@CompoundIndex(def = "{'status': 1, 'createTime': -1}")
+public class UserDocument extends BaseDocument {
+    
+    /**
+     * 用户名
+     */
+    @Field("username")
+    @Indexed(unique = true)
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50个字符之间")
+    private String username;
+    
+    /**
+     * 邮箱
+     */
+    @Field("email")
+    @Indexed(unique = true)
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+    
+    /**
+     * 手机号
+     */
+    @Field("phone")
+    @Indexed
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    /**
+     * 密码
+     */
+    @Field("password")
+    @JsonIgnore
+    private String password;
+    
+    /**
+     * 用户状态：1-正常，0-禁用
+     */
+    @Field("status")
+    @Indexed
+    @Builder.Default
+    private Integer status = 1;
+    
+    /**
+     * 用户角色
+     */
+    @Field("roles")
+    private List<String> roles;
+    
+    /**
+     * 用户资料
+     */
+    @Field("profile")
+    private UserProfile profile;
+    
+    /**
+     * 用户设置
+     */
+    @Field("settings")
+    private Map<String, Object> settings;
+    
+    /**
+     * 标签
+     */
+    @Field("tags")
+    @Indexed
+    private Set<String> tags;
+    
+    /**
+     * 最后登录时间
+     */
+    @Field("lastLoginTime")
+    @Indexed
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime lastLoginTime;
+    
+    /**
+     * 登录次数
+     */
+    @Field("loginCount")
+    private Long loginCount = 0L;
+}
+
+/**
+ * 用户资料嵌套文档
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserProfile {
+    
+    /**
+     * 真实姓名
+     */
+    @Field("realName")
+    private String realName;
+    
+    /**
+     * 昵称
+     */
+    @Field("nickname")
+    private String nickname;
+    
+    /**
+     * 头像URL
+     */
+    @Field("avatar")
+    private String avatar;
+    
+    /**
+     * 性别：1-男，2-女，0-未知
+     */
+    @Field("gender")
+    private Integer gender;
+    
+    /**
+     * 生日
+     */
+    @Field("birthday")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthday;
+    
+    /**
+     * 地址信息
+     */
+    @Field("address")
+    private Address address;
+    
+    /**
+     * 个人简介
+     */
+    @Field("bio")
+    private String bio;
+}
+
+/**
+ * 地址信息嵌套文档
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Address {
+    
+    /**
+     * 国家
+     */
+    @Field("country")
+    private String country;
+    
+    /**
+     * 省份
+     */
+    @Field("province")
+    private String province;
+    
+    /**
+     * 城市
+     */
+    @Field("city")
+    private String city;
+    
+    /**
+     * 区域
+     */
+    @Field("district")
+    private String district;
+    
+    /**
+     * 详细地址
+     */
+    @Field("detail")
+    private String detail;
+    
+    /**
+     * 邮政编码
+     */
+    @Field("zipCode")
+    private String zipCode;
+    
+    /**
+     * 经纬度
+     */
+    @Field("location")
+    private GeoJsonPoint location;
+}
+
+/**
+ * 订单文档实体
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+@Document(collection = "orders")
+@CompoundIndex(def = "{'userId': 1, 'status': 1, 'createTime': -1}")
+@CompoundIndex(def = "{'orderNo': 1}", unique = true)
+@CompoundIndex(def = "{'status': 1, 'createTime': -1}")
+public class OrderDocument extends BaseDocument {
+    
+    /**
+     * 订单号
+     */
+    @Field("orderNo")
+    @Indexed(unique = true)
+    @NotBlank(message = "订单号不能为空")
+    private String orderNo;
+    
+    /**
+     * 用户ID
+     */
+    @Field("userId")
+    @Indexed
+    @NotBlank(message = "用户ID不能为空")
+    private String userId;
+    
+    /**
+     * 订单状态
+     */
+    @Field("status")
+    @Indexed
+    private OrderStatus status;
+    
+    /**
+     * 订单金额
+     */
+    @Field("amount")
+    private BigDecimal amount;
+    
+    /**
+     * 订单项目
+     */
+    @Field("items")
+    private List<OrderItem> items;
+    
+    /**
+     * 收货地址
+     */
+    @Field("deliveryAddress")
+    private Address deliveryAddress;
+    
+    /**
+     * 支付信息
+     */
+    @Field("payment")
+    private PaymentInfo payment;
+    
+    /**
+     * 备注
+     */
+    @Field("remark")
+    private String remark;
+    
+    /**
+     * 订单时间戳
+     */
+    @Field("timestamps")
+    private OrderTimestamps timestamps;
+}
+
+/**
+ * 订单项目嵌套文档
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderItem {
+    
+    /**
+     * 商品ID
+     */
+    @Field("productId")
+    private String productId;
+    
+    /**
+     * 商品名称
+     */
+    @Field("productName")
+    private String productName;
+    
+    /**
+     * 商品价格
+     */
+    @Field("price")
+    private BigDecimal price;
+    
+    /**
+     * 购买数量
+     */
+    @Field("quantity")
+    private Integer quantity;
+    
+    /**
+     * 小计金额
+     */
+    @Field("subtotal")
+    private BigDecimal subtotal;
+}
+
+/**
+ * 支付信息嵌套文档
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PaymentInfo {
+    
+    /**
+     * 支付方式
+     */
+    @Field("method")
+    private String method;
+    
+    /**
+     * 支付状态
+     */
+    @Field("status")
+    private String status;
+    
+    /**
+     * 支付时间
+     */
+    @Field("paidTime")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime paidTime;
+    
+    /**
+     * 交易号
+     */
+    @Field("transactionId")
+    private String transactionId;
+}
+
+/**
+ * 订单时间戳嵌套文档
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class OrderTimestamps {
+    
+    /**
+     * 下单时间
+     */
+    @Field("orderTime")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime orderTime;
+    
+    /**
+     * 支付时间
+     */
+    @Field("payTime")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime payTime;
+    
+    /**
+     * 发货时间
+     */
+    @Field("shipTime")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime shipTime;
+    
+    /**
+     * 收货时间
+     */
+    @Field("receiveTime")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime receiveTime;
+    
+    /**
+     * 完成时间
+     */
+    @Field("completeTime")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime completeTime;
+}
+
+/**
+ * 订单状态枚举
+ */
+public enum OrderStatus {
+    PENDING,     // 待支付
+    PAID,        // 已支付
+    SHIPPED,     // 已发货
+    DELIVERED,   // 已送达
+    COMPLETED,   // 已完成
+    CANCELLED    // 已取消
+}
+```
+
+### 4. Repository接口设计
+
+#### 标准Repository接口
+```java
+/**
+ * 用户MongoDB Repository
+ */
+@Repository
+public interface UserMongoRepository extends MongoRepository<UserDocument, String> {
+    
+    /**
+     * 根据用户名查询用户
+     * @param username 用户名
+     * @return 用户信息
+     */
+    Optional<UserDocument> findByUsernameAndDeletedFalse(String username);
+    
+    /**
+     * 根据邮箱查询用户
+     * @param email 邮箱
+     * @return 用户信息
+     */
+    Optional<UserDocument> findByEmailAndDeletedFalse(String email);
+    
+    /**
+     * 根据手机号查询用户
+     * @param phone 手机号
+     * @return 用户信息
+     */
+    Optional<UserDocument> findByPhoneAndDeletedFalse(String phone);
+    
+    /**
+     * 根据状态查询用户列表
+     * @param status 用户状态
+     * @param pageable 分页参数
+     * @return 用户列表
+     */
+    Page<UserDocument> findByStatusAndDeletedFalse(Integer status, Pageable pageable);
+    
+    /**
+     * 根据角色查询用户列表
+     * @param role 角色
+     * @param pageable 分页参数
+     * @return 用户列表
+     */
+    Page<UserDocument> findByRolesContainingAndDeletedFalse(String role, Pageable pageable);
+    
+    /**
+     * 根据标签查询用户列表
+     * @param tag 标签
+     * @param pageable 分页参数
+     * @return 用户列表
+     */
+    Page<UserDocument> findByTagsContainingAndDeletedFalse(String tag, Pageable pageable);
+    
+    /**
+     * 根据创建时间范围查询用户
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @param pageable 分页参数
+     * @return 用户列表
+     */
+    Page<UserDocument> findByCreateTimeBetweenAndDeletedFalse(
+            LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
+    
+    /**
+     * 根据最后登录时间查询活跃用户
+     * @param lastLoginTime 最后登录时间
+     * @param pageable 分页参数
+     * @return 用户列表
+     */
+    Page<UserDocument> findByLastLoginTimeAfterAndDeletedFalse(
+            LocalDateTime lastLoginTime, Pageable pageable);
+    
+    /**
+     * 统计用户数量
+     * @param status 用户状态
+     * @return 用户数量
+     */
+    long countByStatusAndDeletedFalse(Integer status);
+    
+    /**
+     * 检查用户名是否存在
+     * @param username 用户名
+     * @return 是否存在
+     */
+    boolean existsByUsernameAndDeletedFalse(String username);
+    
+    /**
+     * 检查邮箱是否存在
+     * @param email 邮箱
+     * @return 是否存在
+     */
+    boolean existsByEmailAndDeletedFalse(String email);
+}
+
+/**
+ * 订单MongoDB Repository
+ */
+@Repository
+public interface OrderMongoRepository extends MongoRepository<OrderDocument, String> {
+    
+    /**
+     * 根据订单号查询订单
+     * @param orderNo 订单号
+     * @return 订单信息
+     */
+    Optional<OrderDocument> findByOrderNoAndDeletedFalse(String orderNo);
+    
+    /**
+     * 根据用户ID查询订单列表
+     * @param userId 用户ID
+     * @param pageable 分页参数
+     * @return 订单列表
+     */
+    Page<OrderDocument> findByUserIdAndDeletedFalse(String userId, Pageable pageable);
+    
+    /**
+     * 根据用户ID和状态查询订单列表
+     * @param userId 用户ID
+     * @param status 订单状态
+     * @param pageable 分页参数
+     * @return 订单列表
+     */
+    Page<OrderDocument> findByUserIdAndStatusAndDeletedFalse(
+            String userId, OrderStatus status, Pageable pageable);
+    
+    /**
+     * 根据状态查询订单列表
+     * @param status 订单状态
+     * @param pageable 分页参数
+     * @return 订单列表
+     */
+    Page<OrderDocument> findByStatusAndDeletedFalse(OrderStatus status, Pageable pageable);
+    
+    /**
+     * 根据创建时间范围查询订单
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @param pageable 分页参数
+     * @return 订单列表
+     */
+    Page<OrderDocument> findByCreateTimeBetweenAndDeletedFalse(
+            LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
+    
+    /**
+     * 根据金额范围查询订单
+     * @param minAmount 最小金额
+     * @param maxAmount 最大金额
+     * @param pageable 分页参数
+     * @return 订单列表
+     */
+    Page<OrderDocument> findByAmountBetweenAndDeletedFalse(
+            BigDecimal minAmount, BigDecimal maxAmount, Pageable pageable);
+    
+    /**
+     * 统计用户订单数量
+     * @param userId 用户ID
+     * @param status 订单状态
+     * @return 订单数量
+     */
+    long countByUserIdAndStatusAndDeletedFalse(String userId, OrderStatus status);
+    
+    /**
+     * 统计订单总金额
+     * @param userId 用户ID
+     * @param status 订单状态
+     * @return 订单总金额
+     */
+    @Aggregation(pipeline = {
+        "{ $match: { userId: ?0, status: ?1, deleted: false } }",
+        "{ $group: { _id: null, totalAmount: { $sum: '$amount' } } }"
+    })
+    Optional<BigDecimal> sumAmountByUserIdAndStatus(String userId, OrderStatus status);
+}
+```
+
+### 5. 服务层实现
+
+#### MongoDB服务实现
+```java
+@Service
+@Transactional
+@Slf4j
+public class UserMongoService {
+    
+    private final UserMongoRepository userMongoRepository;
+    private final MongoTemplate mongoTemplate;
+    private final ReactiveMongoTemplate reactiveMongoTemplate;
+    
+    public UserMongoService(UserMongoRepository userMongoRepository,
+                           MongoTemplate mongoTemplate,
+                           ReactiveMongoTemplate reactiveMongoTemplate) {
+        this.userMongoRepository = userMongoRepository;
+        this.mongoTemplate = mongoTemplate;
+        this.reactiveMongoTemplate = reactiveMongoTemplate;
+    }
+    
+    /**
+     * 创建用户
+     */
+    public UserDocument createUser(UserCreateDTO createDTO) {
+        // 1. 参数验证
+        validateCreateParam(createDTO);
+        
+        // 2. 业务验证
+        validateUserUniqueness(createDTO);
+        
+        // 3. 构建用户文档
+        UserDocument user = UserDocument.builder()
+                .username(createDTO.getUsername())
+                .email(createDTO.getEmail())
+                .phone(createDTO.getPhone())
+                .password(encryptPassword(createDTO.getPassword()))
+                .status(1)
+                .roles(createDTO.getRoles())
+                .profile(buildUserProfile(createDTO))
+                .settings(new HashMap<>())
+                .tags(new HashSet<>())
+                .loginCount(0L)
+                .createTime(LocalDateTime.now())
+                .updateTime(LocalDateTime.now())
+                .createBy(getCurrentUserId())
+                .updateBy(getCurrentUserId())
+                .deleted(false)
+                .version(0L)
+                .build();
+        
+        // 4. 保存用户
+        return userMongoRepository.save(user);
+    }
+    
+    /**
+     * 更新用户信息
+     */
+    public UserDocument updateUser(String userId, UserUpdateDTO updateDTO) {
+        // 1. 查询用户
+        UserDocument user = getUserById(userId);
+        
+        // 2. 构建更新操作
+        Update update = new Update();
+        
+        if (StringUtils.isNotBlank(updateDTO.getEmail())) {
+            validateEmailUniqueness(updateDTO.getEmail(), userId);
+            update.set("email", updateDTO.getEmail());
+        }
+        
+        if (StringUtils.isNotBlank(updateDTO.getPhone())) {
+            update.set("phone", updateDTO.getPhone());
+        }
+        
+        if (updateDTO.getStatus() != null) {
+            update.set("status", updateDTO.getStatus());
+        }
+        
+        if (CollectionUtils.isNotEmpty(updateDTO.getRoles())) {
+            update.set("roles", updateDTO.getRoles());
+        }
+        
+        if (updateDTO.getProfile() != null) {
+            update.set("profile", updateDTO.getProfile());
+        }
+        
+        if (updateDTO.getSettings() != null) {
+            update.set("settings", updateDTO.getSettings());
+        }
+        
+        if (CollectionUtils.isNotEmpty(updateDTO.getTags())) {
+            update.set("tags", updateDTO.getTags());
+        }
+        
+        update.set("updateTime", LocalDateTime.now());
+        update.set("updateBy", getCurrentUserId());
+        update.inc("version", 1);
+        
+        // 3. 执行更新
+        Query query = Query.query(Criteria.where("id").is(userId)
+                .and("deleted").is(false));
+        
+        UpdateResult result = mongoTemplate.updateFirst(query, update, UserDocument.class);
+        
+        if (result.getMatchedCount() == 0) {
+            throw new BusinessException("用户不存在或已被删除");
+        }
+        
+        // 4. 返回更新后的用户
+        return getUserById(userId);
+    }
+    
+    /**
+     * 复杂查询示例
+     */
+    public Page<UserDocument> searchUsers(UserSearchDTO searchDTO, Pageable pageable) {
+        // 构建查询条件
+        Criteria criteria = Criteria.where("deleted").is(false);
+        
+        // 用户名模糊查询
+        if (StringUtils.isNotBlank(searchDTO.getUsername())) {
+            criteria.and("username").regex(searchDTO.getUsername(), "i");
+        }
+        
+        // 邮箱模糊查询
+        if (StringUtils.isNotBlank(searchDTO.getEmail())) {
+            criteria.and("email").regex(searchDTO.getEmail(), "i");
+        }
+        
+        // 状态查询
+        if (searchDTO.getStatus() != null) {
+            criteria.and("status").is(searchDTO.getStatus());
+        }
+        
+        // 角色查询
+        if (CollectionUtils.isNotEmpty(searchDTO.getRoles())) {
+            criteria.and("roles").in(searchDTO.getRoles());
+        }
+        
+        // 标签查询
+        if (CollectionUtils.isNotEmpty(searchDTO.getTags())) {
+            criteria.and("tags").in(searchDTO.getTags());
+        }
+        
+        // 创建时间范围查询
+        if (searchDTO.getStartTime() != null && searchDTO.getEndTime() != null) {
+            criteria.and("createTime").gte(searchDTO.getStartTime()).lte(searchDTO.getEndTime());
+        }
+        
+        // 地理位置查询
+        if (searchDTO.getLocation() != null && searchDTO.getDistance() != null) {
+            Point point = new Point(searchDTO.getLocation().getX(), searchDTO.getLocation().getY());
+            Distance distance = new Distance(searchDTO.getDistance(), Metrics.KILOMETERS);
+            criteria.and("profile.address.location").nearSphere(point).maxDistance(distance);
+        }
+        
+        // 构建查询
+        Query query = Query.query(criteria).with(pageable);
+        
+        // 执行查询
+        long total = mongoTemplate.count(Query.query(criteria), UserDocument.class);
+        List<UserDocument> users = mongoTemplate.find(query, UserDocument.class);
+        
+        return new PageImpl<>(users, pageable, total);
+    }
+    
+    /**
+     * 聚合查询示例
+     */
+    public UserStatisticsVO getUserStatistics() {
+        // 构建聚合管道
+        Aggregation aggregation = Aggregation.newAggregation(
+                // 匹配条件
+                Aggregation.match(Criteria.where("deleted").is(false)),
+                
+                // 分组统计
+                Aggregation.group()
+                        .count().as("totalUsers")
+                        .sum(ConditionalOperators.when(Criteria.where("status").is(1)).then(1).otherwise(0)).as("activeUsers")
+                        .sum(ConditionalOperators.when(Criteria.where("status").is(0)).then(1).otherwise(0)).as("inactiveUsers"),
+                
+                // 添加字段
+                Aggregation.addFields()
+                        .addField("activeRate").withValue(ArithmeticOperators.Divide.valueOf("$activeUsers").divideBy("$totalUsers"))
+                        .build(),
+                
+                // 投影
+                Aggregation.project()
+                        .and("totalUsers").as("totalUsers")
+                        .and("activeUsers").as("activeUsers")
+                        .and("inactiveUsers").as("inactiveUsers")
+                        .and("activeRate").as("activeRate")
+        );
+        
+        AggregationResults<UserStatisticsVO> results = mongoTemplate.aggregate(
+                aggregation, "users", UserStatisticsVO.class);
+        
+        return results.getUniqueMappedResult();
+    }
+    
+    /**
+     * 批量操作示例
+     */
+    public BulkWriteResult bulkUpdateUserStatus(List<String> userIds, Integer status) {
+        List<WriteModel<UserDocument>> writeModels = new ArrayList<>();
+        
+        for (String userId : userIds) {
+            UpdateOneModel<UserDocument> updateModel = new UpdateOneModel<>(
+                    Filters.and(
+                            Filters.eq("_id", new ObjectId(userId)),
+                            Filters.eq("deleted", false)
+                    ),
+                    Updates.combine(
+                            Updates.set("status", status),
+                            Updates.set("updateTime", LocalDateTime.now()),
+                            Updates.set("updateBy", getCurrentUserId()),
+                            Updates.inc("version", 1)
+                    )
+            );
+            writeModels.add(updateModel);
+        }
+        
+        MongoCollection<UserDocument> collection = mongoTemplate.getCollection("users", UserDocument.class);
+        return collection.bulkWrite(writeModels);
+    }
+    
+    /**
+     * 响应式查询示例
+     */
+    public Flux<UserDocument> findActiveUsersReactive() {
+        Query query = Query.query(
+                Criteria.where("status").is(1)
+                        .and("deleted").is(false)
+        );
+        
+        return reactiveMongoTemplate.find(query, UserDocument.class);
+    }
+    
+    /**
+     * 事务操作示例
+     */
+    @Transactional
+    public void transferUserData(String fromUserId, String toUserId) {
+        // 1. 查询源用户
+        UserDocument fromUser = getUserById(fromUserId);
+        UserDocument toUser = getUserById(toUserId);
+        
+        // 2. 更新源用户状态
+        Update fromUpdate = new Update()
+                .set("status", 0)
+                .set("updateTime", LocalDateTime.now())
+                .inc("version", 1);
+        
+        mongoTemplate.updateFirst(
+                Query.query(Criteria.where("id").is(fromUserId)), 
+                fromUpdate, 
+                UserDocument.class
+        );
+        
+        // 3. 合并用户数据到目标用户
+        Update toUpdate = new Update()
+                .addToSet("tags").each(fromUser.getTags().toArray())
+                .set("updateTime", LocalDateTime.now())
+                .inc("version", 1)
+                .inc("loginCount", fromUser.getLoginCount());
+        
+        mongoTemplate.updateFirst(
+                Query.query(Criteria.where("id").is(toUserId)), 
+                toUpdate, 
+                UserDocument.class
+        );
+        
+        // 4. 记录操作日志
+        log.info("用户数据转移完成: {} -> {}", fromUserId, toUserId);
+    }
+    
+    /**
+     * 获取用户信息
+     */
+    public UserDocument getUserById(String userId) {
+        return userMongoRepository.findById(userId)
+                .filter(user -> !user.getDeleted())
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+    }
+    
+    /**
+     * 软删除用户
+     */
+    public boolean deleteUser(String userId) {
+        Update update = new Update()
+                .set("deleted", true)
+                .set("updateTime", LocalDateTime.now())
+                .set("updateBy", getCurrentUserId())
+                .inc("version", 1);
+        
+        UpdateResult result = mongoTemplate.updateFirst(
+                Query.query(Criteria.where("id").is(userId).and("deleted").is(false)),
+                update,
+                UserDocument.class
+        );
+        
+        return result.getMatchedCount() > 0;
+    }
+    
+    // 私有方法
+    private void validateCreateParam(UserCreateDTO createDTO) {
+        if (createDTO == null) {
+            throw new BusinessException("用户信息不能为空");
+        }
+        // 其他验证逻辑
+    }
+    
+    private void validateUserUniqueness(UserCreateDTO createDTO) {
+        if (userMongoRepository.existsByUsernameAndDeletedFalse(createDTO.getUsername())) {
+            throw new BusinessException("用户名已存在");
+        }
+        if (userMongoRepository.existsByEmailAndDeletedFalse(createDTO.getEmail())) {
+            throw new BusinessException("邮箱已存在");
+        }
+    }
+    
+    private void validateEmailUniqueness(String email, String excludeUserId) {
+        Query query = Query.query(
+                Criteria.where("email").is(email)
+                        .and("id").ne(excludeUserId)
+                        .and("deleted").is(false)
+        );
+        
+        if (mongoTemplate.exists(query, UserDocument.class)) {
+            throw new BusinessException("邮箱已存在");
+        }
+    }
+    
+    private UserProfile buildUserProfile(UserCreateDTO createDTO) {
+        return UserProfile.builder()
+                .realName(createDTO.getRealName())
+                .nickname(createDTO.getNickname())
+                .gender(createDTO.getGender())
+                .build();
+    }
+    
+    private String encryptPassword(String password) {
+        // 密码加密逻辑
+        return password; // 实际应该使用BCrypt等加密
+    }
+    
+    private String getCurrentUserId() {
+        // 获取当前用户ID
+        return "system";
+    }
+}
+```
+
+## 禁止行为
+
+### 1. 配置相关禁令
+- **禁止不配置副本集**: 生产环境必须使用副本集确保高可用
+- **禁止硬编码连接信息**: 连接信息必须外部化配置
+- **禁止不设置认证**: 生产环境必须启用认证和授权
+- **禁止不配置连接池**: 必须合理配置连接池参数
+
+### 2. 文档设计禁令
+- **禁止过度嵌套**: 避免超过3层的文档嵌套
+- **禁止大文档**: 单个文档大小不应超过16MB
+- **禁止不设计索引**: 查询字段必须创建适当的索引
+- **禁止忽略数据类型**: 必须使用合适的BSON数据类型
+
+### 3. 查询性能禁令
+- **禁止不使用索引**: 查询条件必须使用索引字段
+- **禁止深度分页**: 避免使用skip进行深度分页
+- **禁止返回过多字段**: 使用投影只返回需要的字段
+- **禁止不设置查询限制**: 查询必须设置合理的limit
+
+### 4. 事务使用禁令
+- **禁止长事务**: 避免长时间持有事务
+- **禁止跨分片事务**: 避免复杂的分布式事务
+- **禁止事务中执行耗时操作**: 事务中避免网络调用等操作
+- **禁止忽略事务回滚**: 必须正确处理事务异常
+
+### 5. 安全相关禁令
+- **禁止不验证输入**: 所有输入必须进行安全验证
+- **禁止存储敏感信息**: 敏感数据必须加密存储
+- **禁止不限制查询权限**: 必须实现基于角色的查询权限
+- **禁止忽略审计日志**: 重要操作必须记录审计日志
+
+这个MongoDB规范提供了完整的文档数据库使用指南，包括配置、文档设计、查询优化、事务处理等各个方面的详细规范，确保开发团队能够正确、高效地使用MongoDB。
+description:
+globs:
+alwaysApply: false
+---

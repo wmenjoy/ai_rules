@@ -104,7 +104,7 @@ software-planning-tool/save_plan
 
 1. AI智能体 ：任务规划、结果融合、智能决策
 2. 本地模型服务 ：代码理解、漏洞检测、质量评估
-3. 多引擎集成 ：整合SonarQube、CodeQL、Semgrep等工具
+3. 多引擎集成 ：整合SonarQube等工具
 4. 微服务架构 ：Go+gRPC+Kubernetes的现代化架构
 技术栈 ：
 

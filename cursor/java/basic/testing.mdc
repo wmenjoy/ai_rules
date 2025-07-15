@@ -1,0 +1,429 @@
+# 测试规范 (基础层规则)
+> 单元测试、集成测试和端到端测试的标准化规范
+
+## 基础规范
+
+### 测试层次划分
+- **单元测试 (Unit Test)**：测试单个类或方法的功能，使用Mock隔离依赖
+- **集成测试 (Integration Test)**：测试多个组件协作，真实的数据库和外部服务
+- **端到端测试 (E2E Test)**：测试完整的业务流程，模拟真实用户场景
+- **性能测试 (Performance Test)**：测试系统在负载下的表现
+
+### 测试框架标准
+- **单元测试框架**：JUnit 5 + Mockito + AssertJ
+- **集成测试工具**：Spring Boot Test + TestContainers
+- **测试数据库**：H2 (单元测试) + TestContainers MySQL (集成测试)
+- **Mock框架**：Mockito + MockWebServer (HTTP服务)
+
+### 测试覆盖率要求
+- **整体覆盖率**：不低于80%
+- **核心业务逻辑**：不低于90%
+- **Service层**：不低于85%
+- **Controller层**：不低于75%
+- **Repository层**：不低于70%
+
+### 测试命名约定
+- **测试类命名**：被测试类名 + Test (如UserServiceTest)
+- **测试方法命名**：should_期望结果_when_测试条件 (驼峰命名)
+- **测试包结构**：与源码包结构保持一致
+- **测试资源**：放在src/test/resources目录下
+
+## 强制行为
+
+### 单元测试要求
+- **独立性**：每个测试方法必须独立，不依赖其他测试的执行顺序
+- **可重复性**：测试结果必须稳定，多次执行结果一致
+- **快速执行**：单个测试方法执行时间不超过100ms
+- **清晰断言**：使用AssertJ提供清晰的断言描述
+
+### 集成测试要求
+- **真实环境**：使用真实的数据库和消息队列
+- **数据隔离**：每个测试用例使用独立的数据集
+- **事务回滚**：测试结束后自动回滚数据变更
+- **容器化**：使用TestContainers提供一致的测试环境
+
+### 测试数据管理
+- **测试数据工厂**：使用Builder模式创建测试数据
+- **数据清理**：测试前后自动清理测试数据
+- **数据版本化**：测试数据文件进行版本控制
+- **敏感数据脱敏**：测试数据不包含真实的敏感信息
+
+### 异常场景测试
+- **边界值测试**：测试输入参数的边界情况
+- **异常路径测试**：验证异常处理逻辑的正确性
+- **空值测试**：测试null值和空集合的处理
+- **并发测试**：验证多线程场景下的安全性
+
+## 禁止行为
+
+### 测试设计禁令
+- **禁止测试间依赖**：测试方法不能依赖其他测试的执行结果
+- **禁止随机数据**：避免使用随机数据导致测试结果不稳定
+- **禁止忽略测试**：不使用@Ignore注解忽略失败的测试
+- **禁止空测试**：测试方法必须包含有意义的断言
+- **禁止过度Mock**：避免Mock过多导致测试失去意义
+
+### 测试数据禁令
+- **禁止硬编码数据**：避免在测试代码中硬编码业务数据
+- **禁止使用生产数据**：测试环境不使用生产环境的真实数据
+- **禁止数据污染**：测试数据不能影响其他测试的执行
+- **禁止大量数据**：避免创建过多测试数据影响执行速度
+
+### 测试执行禁令
+- **禁止跳过测试**：CI/CD流水线中不允许跳过测试执行
+- **禁止降低覆盖率**：新代码不能降低整体测试覆盖率
+- **禁止长时间运行**：单元测试套件执行时间不超过5分钟
+- **禁止外部依赖**：单元测试不依赖外部网络或服务
+
+## 示例代码
+
+### 单元测试示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 测试规范 v2.0 */
+@ExtendWith(MockitoExtension.class)
+class UserServiceTest {
+    
+    @Mock
+    private UserRepository userRepository;
+    
+    @Mock
+    private EmailService emailService;
+    
+    @InjectMocks
+    private UserServiceImpl userService;
+    
+    @Test
+    @DisplayName("应该成功创建用户当用户名和邮箱都有效时")
+    void should_createUserSuccessfully_when_usernameAndEmailAreValid() {
+        // Given
+        CreateUserRequest request = CreateUserRequest.builder()
+            .username("testuser")
+            .email("test@example.com")
+            .build();
+            
+        User expectedUser = User.builder()
+            .id(1L)
+            .username("testuser")
+            .email("test@example.com")
+            .status(UserStatus.ACTIVE)
+            .build();
+            
+        when(userRepository.existsByUsername("testuser")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenReturn(expectedUser);
+        
+        // When
+        User actualUser = userService.createUser(request);
+        
+        // Then
+        assertThat(actualUser)
+            .isNotNull()
+            .satisfies(user -> {
+                assertThat(user.getId()).isEqualTo(1L);
+                assertThat(user.getUsername()).isEqualTo("testuser");
+                assertThat(user.getEmail()).isEqualTo("test@example.com");
+                assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+            });
+            
+        verify(userRepository).existsByUsername("testuser");
+        verify(userRepository).save(any(User.class));
+        verifyNoMoreInteractions(userRepository);
+    }
+    
+    @Test
+    @DisplayName("应该抛出异常当用户名已存在时")
+    void should_throwDuplicateUserException_when_usernameAlreadyExists() {
+        // Given
+        CreateUserRequest request = CreateUserRequest.builder()
+            .username("existinguser")
+            .email("test@example.com")
+            .build();
+            
+        when(userRepository.existsByUsername("existinguser")).thenReturn(true);
+        
+        // When & Then
+        assertThatThrownBy(() -> userService.createUser(request))
+            .isInstanceOf(DuplicateUserException.class)
+            .hasMessage("用户名已存在: existinguser");
+            
+        verify(userRepository).existsByUsername("existinguser");
+        verify(userRepository, never()).save(any(User.class));
+    }
+    
+    @ParameterizedTest
+    @DisplayName("应该抛出异常当用户名无效时")
+    @ValueSource(strings = {"", " ", "a", "very_long_username_that_exceeds_the_maximum_length_limit"})
+    void should_throwIllegalArgumentException_when_usernameIsInvalid(String invalidUsername) {
+        // Given
+        CreateUserRequest request = CreateUserRequest.builder()
+            .username(invalidUsername)
+            .email("test@example.com")
+            .build();
+        
+        // When & Then
+        assertThatThrownBy(() -> userService.createUser(request))
+            .isInstanceOf(IllegalArgumentException.class);
+            
+        verifyNoInteractions(userRepository);
+    }
+    
+    @Test
+    @DisplayName("应该返回空Optional当用户ID无效时")
+    void should_returnEmptyOptional_when_userIdIsInvalid() {
+        // Given
+        Long invalidUserId = -1L;
+        
+        // When
+        Optional<User> result = userService.findUserById(invalidUserId);
+        
+        // Then
+        assertThat(result).isEmpty();
+        verifyNoInteractions(userRepository);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 集成测试示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 测试规范 v2.0 */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:h2:mem:testdb",
+    "spring.jpa.hibernate.ddl-auto=create-drop"
+})
+@Transactional
+@Rollback
+class UserServiceIntegrationTest {
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private TestEntityManager testEntityManager;
+    
+    @Test
+    @DisplayName("集成测试：应该成功创建用户并保存到数据库")
+    void should_createUserAndSaveToDatabase_when_validRequestProvided() {
+        // Given
+        CreateUserRequest request = CreateUserRequest.builder()
+            .username("integrationuser")
+            .email("integration@example.com")
+            .build();
+        
+        // When
+        User createdUser = userService.createUser(request);
+        testEntityManager.flush(); // 强制刷新到数据库
+        
+        // Then
+        assertThat(createdUser.getId()).isNotNull();
+        
+        // 验证数据库中的数据
+        Optional<User> savedUser = userRepository.findById(createdUser.getId());
+        assertThat(savedUser)
+            .isPresent()
+            .get()
+            .satisfies(user -> {
+                assertThat(user.getUsername()).isEqualTo("integrationuser");
+                assertThat(user.getEmail()).isEqualTo("integration@example.com");
+                assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+                assertThat(user.getCreateTime()).isNotNull();
+            });
+    }
+    
+    @Test
+    @DisplayName("集成测试：应该正确处理唯一约束违反")
+    void should_handleUniqueConstraintViolation_when_duplicateUsernameProvided() {
+        // Given - 先创建一个用户
+        User existingUser = User.builder()
+            .username("duplicateuser")
+            .email("existing@example.com")
+            .status(UserStatus.ACTIVE)
+            .createTime(LocalDateTime.now())
+            .build();
+        testEntityManager.persistAndFlush(existingUser);
+        
+        CreateUserRequest request = CreateUserRequest.builder()
+            .username("duplicateuser") // 相同的用户名
+            .email("new@example.com")
+            .build();
+        
+        // When & Then
+        assertThatThrownBy(() -> userService.createUser(request))
+            .isInstanceOf(DuplicateUserException.class);
+            
+        // 验证数据库中只有一个用户
+        List<User> users = userRepository.findAll();
+        assertThat(users).hasSize(1);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### TestContainers集成测试示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 测试规范 v2.0 */
+@SpringBootTest
+@Testcontainers
+@TestMethodOrder(OrderAnnotation.class)
+class UserRepositoryContainerTest {
+    
+    @Container
+    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test")
+            .withReuse(true);
+    
+    @Container
+    static RedisContainer redis = new RedisContainer("redis:6.2")
+            .withReuse(true);
+    
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", mysql::getJdbcUrl);
+        registry.add("spring.datasource.username", mysql::getUsername);
+        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.redis.host", redis::getHost);
+        registry.add("spring.redis.port", redis::getFirstMappedPort);
+    }
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Test
+    @Order(1)
+    @DisplayName("容器测试：应该连接到MySQL容器并执行数据库操作")
+    void should_connectToMySQLContainer_and_performDatabaseOperations() {
+        // Given
+        User user = User.builder()
+            .username("containeruser")
+            .email("container@example.com")
+            .status(UserStatus.ACTIVE)
+            .createTime(LocalDateTime.now())
+            .build();
+        
+        // When
+        User savedUser = userRepository.save(user);
+        
+        // Then
+        assertThat(savedUser.getId()).isNotNull();
+        assertThat(mysql.isRunning()).isTrue();
+        
+        // 验证数据确实保存到MySQL中
+        Optional<User> foundUser = userRepository.findById(savedUser.getId());
+        assertThat(foundUser).isPresent();
+    }
+    
+    @Test
+    @Order(2)
+    @DisplayName("容器测试：应该连接到Redis容器并执行缓存操作")
+    void should_connectToRedisContainer_and_performCacheOperations() {
+        // Given
+        String key = "test:user:1";
+        String value = "testuser";
+        
+        // When
+        redisTemplate.opsForValue().set(key, value);
+        String cachedValue = (String) redisTemplate.opsForValue().get(key);
+        
+        // Then
+        assertThat(cachedValue).isEqualTo(value);
+        assertThat(redis.isRunning()).isTrue();
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 性能测试示例
+```java
+/* [AI-BLOCK-START] - 生成工具: 测试规范 v2.0 */
+@ExtendWith(MockitoExtension.class)
+class UserServicePerformanceTest {
+    
+    @Mock
+    private UserRepository userRepository;
+    
+    @InjectMocks
+    private UserServiceImpl userService;
+    
+    @Test
+    @DisplayName("性能测试：批量创建用户应该在合理时间内完成")
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void should_createUsersInReasonableTime_when_batchCreating() {
+        // Given
+        int batchSize = 1000;
+        List<CreateUserRequest> requests = IntStream.range(0, batchSize)
+            .mapToObj(i -> CreateUserRequest.builder()
+                .username("user" + i)
+                .email("user" + i + "@example.com")
+                .build())
+            .collect(Collectors.toList());
+            
+        when(userRepository.existsByUsername(anyString())).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId((long) (Math.random() * 10000));
+            return user;
+        });
+        
+        // When
+        long startTime = System.currentTimeMillis();
+        
+        List<User> createdUsers = requests.stream()
+            .map(userService::createUser)
+            .collect(Collectors.toList());
+            
+        long endTime = System.currentTimeMillis();
+        long executionTime = endTime - startTime;
+        
+        // Then
+        assertThat(createdUsers).hasSize(batchSize);
+        assertThat(executionTime).isLessThan(5000); // 5秒内完成
+        
+        // 平均每个用户创建时间应该少于5ms
+        double averageTimePerUser = (double) executionTime / batchSize;
+        assertThat(averageTimePerUser).isLessThan(5.0);
+    }
+    
+    @RepeatedTest(10)
+    @DisplayName("重复测试：用户查询性能应该稳定")
+    void should_maintainStableQueryPerformance_when_repeatedTesting() {
+        // Given
+        Long userId = 1L;
+        User expectedUser = User.builder()
+            .id(userId)
+            .username("testuser")
+            .email("test@example.com")
+            .build();
+            
+        when(userRepository.findById(userId)).thenReturn(Optional.of(expectedUser));
+        
+        // When
+        long startTime = System.nanoTime();
+        Optional<User> result = userService.findUserById(userId);
+        long endTime = System.nanoTime();
+        
+        long executionTimeNanos = endTime - startTime;
+        double executionTimeMs = executionTimeNanos / 1_000_000.0;
+        
+        // Then
+        assertThat(result).isPresent();
+        assertThat(executionTimeMs).isLessThan(1.0); // 1毫秒内完成
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此测试规范确保代码质量通过完整的测试体系得到保障，提升系统的可靠性和稳定性*
+description:
+globs:
+alwaysApply: false
+---

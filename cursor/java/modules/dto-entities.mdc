@@ -1,0 +1,1115 @@
+# Java DTO和实体对象规范
+
+## 基础规范
+
+### 设计原则
+- **单一职责**: 每个DTO/Entity只负责一个特定的数据传输或持久化场景
+- **不可变性**: 优先使用不可变对象，减少副作用
+- **明确边界**: DTO用于数据传输，Entity用于数据持久化，严格区分职责
+- **简洁性**: 避免复杂的业务逻辑，保持数据结构的纯粹性
+
+### 命名规范
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// DTO命名规范
+public class UserCreateDTO {}      // 创建请求
+public class UserUpdateDTO {}      // 更新请求  
+public class UserQueryDTO {}       // 查询条件
+public class UserResponseDTO {}    // 响应数据
+public class UserListDTO {}        // 列表项
+
+// Entity命名规范
+@Entity
+@Table(name = "users")
+public class User {}               // 实体类
+
+// VO命名规范
+public class UserProfileVO {}      // 视图对象
+public class UserStatisticsVO {}  // 统计视图
+// [AI-BLOCK-END]
+```
+
+## 强制行为
+
+### DTO设计要求
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class UserCreateDTO {
+    
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
+    private String username;
+    
+    @NotBlank(message = "密码不能为空")
+    @Size(min = 8, max = 128, message = "密码长度必须在8-128字符之间")
+    private String password;
+    
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+    
+    @Size(max = 100, message = "姓名长度不能超过100字符")
+    private String realName;
+    
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    @Min(value = 18, message = "年龄不能小于18岁")
+    @Max(value = 120, message = "年龄不能大于120岁")
+    private Integer age;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthDate;
+    
+    // 嵌套对象验证
+    @Valid
+    private AddressDTO address;
+    
+    // 集合验证
+    @Valid
+    @Size(max = 5, message = "最多只能添加5个标签")
+    private List<TagDTO> tags;
+}
+// [AI-BLOCK-END]
+```
+
+### Entity设计要求
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Entity
+@Table(name = "users", indexes = {
+    @Index(name = "idx_username", columnList = "username", unique = true),
+    @Index(name = "idx_email", columnList = "email", unique = true),
+    @Index(name = "idx_created_at", columnList = "created_at")
+})
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+public class User extends BaseEntity {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(name = "username", nullable = false, unique = true, length = 50)
+    private String username;
+    
+    @Column(name = "password_hash", nullable = false, length = 255)
+    private String passwordHash;
+    
+    @Column(name = "email", nullable = false, unique = true, length = 100)
+    private String email;
+    
+    @Column(name = "real_name", length = 100)
+    private String realName;
+    
+    @Column(name = "phone", length = 20)
+    private String phone;
+    
+    @Column(name = "age")
+    private Integer age;
+    
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private UserStatus status = UserStatus.ACTIVE;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender")
+    private Gender gender;
+    
+    // 一对一关联
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private UserProfile profile;
+    
+    // 一对多关联
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<UserRole> roles = new ArrayList<>();
+    
+    // 多对多关联
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "user_groups",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "group_id")
+    )
+    private Set<Group> groups = new HashSet<>();
+    
+    // 审计字段继承自BaseEntity
+    // private LocalDateTime createdAt;
+    // private LocalDateTime updatedAt;
+    // private String createdBy;
+    // private String updatedBy;
+    // private Boolean deleted = false;
+    
+    // 业务方法
+    public void activate() {
+        this.status = UserStatus.ACTIVE;
+    }
+    
+    public void deactivate() {
+        this.status = UserStatus.INACTIVE;
+    }
+    
+    public boolean isActive() {
+        return UserStatus.ACTIVE.equals(this.status);
+    }
+    
+    public void addRole(UserRole role) {
+        roles.add(role);
+        role.setUser(this);
+    }
+    
+    public void removeRole(UserRole role) {
+        roles.remove(role);
+        role.setUser(null);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 基础实体类
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@MappedSuperclass
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
+public abstract class BaseEntity implements Serializable {
+    
+    private static final long serialVersionUID = 1L;
+    
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+    
+    @LastModifiedDate
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+    
+    @CreatedBy
+    @Column(name = "created_by", length = 50, updatable = false)
+    private String createdBy;
+    
+    @LastModifiedBy
+    @Column(name = "updated_by", length = 50)
+    private String updatedBy;
+    
+    @Column(name = "deleted", nullable = false)
+    private Boolean deleted = Boolean.FALSE;
+    
+    @Version
+    @Column(name = "version")
+    private Long version;
+    
+    // 软删除标记
+    public void markDeleted() {
+        this.deleted = Boolean.TRUE;
+    }
+    
+    public void unmarkDeleted() {
+        this.deleted = Boolean.FALSE;
+    }
+    
+    public boolean isDeleted() {
+        return Boolean.TRUE.equals(this.deleted);
+    }
+    
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+        if (updatedAt == null) {
+            updatedAt = LocalDateTime.now();
+        }
+        if (deleted == null) {
+            deleted = Boolean.FALSE;
+        }
+    }
+    
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 响应DTO设计
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UserResponseDTO {
+    
+    private Long id;
+    
+    private String username;
+    
+    private String email;
+    
+    private String realName;
+    
+    private String phone;
+    
+    private Integer age;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthDate;
+    
+    private String status;
+    
+    private String gender;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAt;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime updatedAt;
+    
+    // 嵌套对象
+    private UserProfileDTO profile;
+    
+    // 集合数据
+    private List<RoleDTO> roles;
+    
+    private List<String> permissions;
+    
+    // 统计信息
+    private Long loginCount;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime lastLoginTime;
+    
+    // 转换方法
+    public static UserResponseDTO fromEntity(User user) {
+        if (user == null) {
+            return null;
+        }
+        
+        return UserResponseDTO.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .realName(user.getRealName())
+            .phone(user.getPhone())
+            .age(user.getAge())
+            .birthDate(user.getBirthDate())
+            .status(user.getStatus() != null ? user.getStatus().name() : null)
+            .gender(user.getGender() != null ? user.getGender().name() : null)
+            .createdAt(user.getCreatedAt())
+            .updatedAt(user.getUpdatedAt())
+            .build();
+    }
+    
+    // 批量转换
+    public static List<UserResponseDTO> fromEntities(List<User> users) {
+        if (CollectionUtils.isEmpty(users)) {
+            return Collections.emptyList();
+        }
+        return users.stream()
+            .map(UserResponseDTO::fromEntity)
+            .collect(Collectors.toList());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 分页响应DTO
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class PageResponseDTO<T> {
+    
+    private List<T> content;
+    
+    private int page;
+    
+    private int size;
+    
+    private long totalElements;
+    
+    private int totalPages;
+    
+    private boolean first;
+    
+    private boolean last;
+    
+    private boolean hasNext;
+    
+    private boolean hasPrevious;
+    
+    private int numberOfElements;
+    
+    // 排序信息
+    private List<SortDTO> sort;
+    
+    public static <T> PageResponseDTO<T> of(Page<T> page) {
+        return PageResponseDTO.<T>builder()
+            .content(page.getContent())
+            .page(page.getNumber())
+            .size(page.getSize())
+            .totalElements(page.getTotalElements())
+            .totalPages(page.getTotalPages())
+            .first(page.isFirst())
+            .last(page.isLast())
+            .hasNext(page.hasNext())
+            .hasPrevious(page.hasPrevious())
+            .numberOfElements(page.getNumberOfElements())
+            .sort(page.getSort().stream()
+                .map(order -> SortDTO.builder()
+                    .property(order.getProperty())
+                    .direction(order.getDirection().name())
+                    .build())
+                .collect(Collectors.toList()))
+            .build();
+    }
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SortDTO {
+        private String property;
+        private String direction;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 查询DTO设计
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserQueryDTO {
+    
+    // 精确匹配
+    private String username;
+    
+    private String email;
+    
+    private UserStatus status;
+    
+    private Gender gender;
+    
+    // 模糊匹配
+    private String realNameLike;
+    
+    private String phoneLike;
+    
+    // 范围查询
+    private Integer ageMin;
+    
+    private Integer ageMax;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthDateStart;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthDateEnd;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAtStart;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAtEnd;
+    
+    // 集合查询
+    private List<Long> ids;
+    
+    private List<String> usernames;
+    
+    private List<UserStatus> statuses;
+    
+    // 关联查询
+    private List<String> roleNames;
+    
+    private List<String> groupNames;
+    
+    // 排除条件
+    private List<Long> excludeIds;
+    
+    // 分页参数
+    @Min(value = 0, message = "页码不能小于0")
+    private Integer page = 0;
+    
+    @Min(value = 1, message = "每页大小不能小于1")
+    @Max(value = 100, message = "每页大小不能大于100")
+    private Integer size = 20;
+    
+    // 排序参数
+    private String sortBy = "createdAt";
+    
+    private String sortDirection = "DESC";
+    
+    // 转换为Pageable
+    public Pageable toPageable() {
+        Sort.Direction direction = "ASC".equalsIgnoreCase(sortDirection) 
+            ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Sort sort = Sort.by(direction, sortBy);
+        return PageRequest.of(page, size, sort);
+    }
+    
+    // 转换为Specification
+    public Specification<User> toSpecification() {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            
+            // 精确匹配
+            if (StringUtils.hasText(username)) {
+                predicates.add(criteriaBuilder.equal(root.get("username"), username));
+            }
+            
+            if (StringUtils.hasText(email)) {
+                predicates.add(criteriaBuilder.equal(root.get("email"), email));
+            }
+            
+            if (status != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), status));
+            }
+            
+            if (gender != null) {
+                predicates.add(criteriaBuilder.equal(root.get("gender"), gender));
+            }
+            
+            // 模糊匹配
+            if (StringUtils.hasText(realNameLike)) {
+                predicates.add(criteriaBuilder.like(root.get("realName"), "%" + realNameLike + "%"));
+            }
+            
+            if (StringUtils.hasText(phoneLike)) {
+                predicates.add(criteriaBuilder.like(root.get("phone"), "%" + phoneLike + "%"));
+            }
+            
+            // 范围查询
+            if (ageMin != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("age"), ageMin));
+            }
+            
+            if (ageMax != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("age"), ageMax));
+            }
+            
+            if (birthDateStart != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("birthDate"), birthDateStart));
+            }
+            
+            if (birthDateEnd != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("birthDate"), birthDateEnd));
+            }
+            
+            if (createdAtStart != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), createdAtStart));
+            }
+            
+            if (createdAtEnd != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), createdAtEnd));
+            }
+            
+            // 集合查询
+            if (CollectionUtils.isNotEmpty(ids)) {
+                predicates.add(root.get("id").in(ids));
+            }
+            
+            if (CollectionUtils.isNotEmpty(usernames)) {
+                predicates.add(root.get("username").in(usernames));
+            }
+            
+            if (CollectionUtils.isNotEmpty(statuses)) {
+                predicates.add(root.get("status").in(statuses));
+            }
+            
+            // 排除条件
+            if (CollectionUtils.isNotEmpty(excludeIds)) {
+                predicates.add(criteriaBuilder.not(root.get("id").in(excludeIds)));
+            }
+            
+            // 关联查询
+            if (CollectionUtils.isNotEmpty(roleNames)) {
+                Join<User, UserRole> roleJoin = root.join("roles");
+                Join<UserRole, Role> roleNameJoin = roleJoin.join("role");
+                predicates.add(roleNameJoin.get("name").in(roleNames));
+            }
+            
+            // 软删除过滤
+            predicates.add(criteriaBuilder.equal(root.get("deleted"), false));
+            
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 不当设计模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：DTO中包含业务逻辑
+public class UserDTO {
+    private String username;
+    private String password;
+    
+    // 禁止在DTO中实现业务逻辑
+    public boolean validatePassword() {
+        return password.length() >= 8;
+    }
+    
+    // 禁止在DTO中访问数据库
+    public User findUserByUsername() {
+        // 数据库访问逻辑
+        return null;
+    }
+}
+
+// ❌ 禁止：Entity中包含表示层逻辑
+@Entity
+public class User {
+    // 禁止在Entity中包含JSON序列化配置
+    @JsonIgnore
+    private String password;
+    
+    // 禁止在Entity中包含视图渲染逻辑
+    public String getDisplayName() {
+        return String.format("%s (%s)", realName, username);
+    }
+}
+
+// ❌ 禁止：循环引用
+@Entity
+public class User {
+    @OneToMany(mappedBy = "user")
+    private List<Order> orders;
+}
+
+@Entity
+public class Order {
+    @ManyToOne
+    private User user;
+    
+    // 禁止：在toString中包含关联对象
+    @Override
+    public String toString() {
+        return "Order{user=" + user + "}"; // 会导致循环引用
+    }
+}
+
+// ❌ 禁止：不安全的数据暴露
+public class UserDTO {
+    private String password;        // 禁止：明文密码
+    private String passwordHash;    // 禁止：密码哈希值
+    private String secretKey;       // 禁止：敏感信息
+}
+
+// ❌ 禁止：过度使用继承
+public class UserCreateDTO extends UserUpdateDTO 
+    extends UserQueryDTO extends BaseDTO {
+    // 禁止：复杂的继承层次
+}
+// [AI-BLOCK-END]
+```
+
+### 性能反模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：N+1查询问题
+@Entity
+public class User {
+    @OneToMany(fetch = FetchType.EAGER) // 禁止：急加载大集合
+    private List<Order> orders;
+    
+    @ManyToOne(fetch = FetchType.EAGER) // 禁止：不必要的急加载
+    private Department department;
+}
+
+// ❌ 禁止：过大的DTO
+public class UserCompleteDTO {
+    // 禁止：包含所有可能的字段
+    private String field1;
+    private String field2;
+    // ... 100+ fields
+    private String field100;
+}
+
+// ❌ 禁止：不合理的索引设计
+@Entity
+@Table(indexes = {
+    @Index(columnList = "field1,field2,field3,field4,field5") // 禁止：过宽索引
+})
+public class User {
+    // ...
+}
+// [AI-BLOCK-END]
+```
+
+## 示例代码
+
+### 完整的用户管理DTO体系
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// 枚举定义
+public enum UserStatus {
+    ACTIVE("激活"),
+    INACTIVE("未激活"),
+    LOCKED("锁定"),
+    EXPIRED("过期");
+    
+    private final String description;
+    
+    UserStatus(String description) {
+        this.description = description;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+}
+
+public enum Gender {
+    MALE("男"),
+    FEMALE("女"),
+    OTHER("其他");
+    
+    private final String description;
+    
+    Gender(String description) {
+        this.description = description;
+    }
+    
+    public String getDescription() {
+        return description;
+    }
+}
+
+// 地址DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AddressDTO {
+    
+    @NotBlank(message = "省份不能为空")
+    private String province;
+    
+    @NotBlank(message = "城市不能为空")
+    private String city;
+    
+    @NotBlank(message = "区县不能为空")
+    private String district;
+    
+    @NotBlank(message = "详细地址不能为空")
+    @Size(max = 200, message = "详细地址不能超过200字符")
+    private String detail;
+    
+    @Pattern(regexp = "^\\d{6}$", message = "邮政编码格式不正确")
+    private String postalCode;
+    
+    private Boolean isDefault = false;
+}
+
+// 标签DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class TagDTO {
+    
+    @NotBlank(message = "标签名称不能为空")
+    @Size(max = 20, message = "标签名称不能超过20字符")
+    private String name;
+    
+    @Size(max = 100, message = "标签描述不能超过100字符")
+    private String description;
+    
+    private String color;
+}
+
+// 用户资料DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserProfileDTO {
+    
+    private String avatar;
+    
+    @Size(max = 500, message = "个人简介不能超过500字符")
+    private String bio;
+    
+    private String website;
+    
+    private String company;
+    
+    private String position;
+    
+    private String location;
+    
+    @Valid
+    private List<AddressDTO> addresses;
+    
+    private Map<String, String> socialLinks;
+    
+    private Map<String, Object> preferences;
+}
+
+// 角色DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class RoleDTO {
+    
+    private Long id;
+    
+    private String name;
+    
+    private String description;
+    
+    private List<String> permissions;
+    
+    private Boolean enabled;
+}
+
+// 更新DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserUpdateDTO {
+    
+    @Size(max = 100, message = "姓名长度不能超过100字符")
+    private String realName;
+    
+    @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
+    private String phone;
+    
+    @Min(value = 18, message = "年龄不能小于18岁")
+    @Max(value = 120, message = "年龄不能大于120岁")
+    private Integer age;
+    
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthDate;
+    
+    private Gender gender;
+    
+    @Valid
+    private UserProfileDTO profile;
+}
+
+// 密码修改DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PasswordChangeDTO {
+    
+    @NotBlank(message = "原密码不能为空")
+    private String oldPassword;
+    
+    @NotBlank(message = "新密码不能为空")
+    @Size(min = 8, max = 128, message = "密码长度必须在8-128字符之间")
+    @Pattern(
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]",
+        message = "密码必须包含大小写字母、数字和特殊字符"
+    )
+    private String newPassword;
+    
+    @NotBlank(message = "确认密码不能为空")
+    private String confirmPassword;
+    
+    @AssertTrue(message = "两次输入的密码不一致")
+    public boolean isPasswordMatching() {
+        return Objects.equals(newPassword, confirmPassword);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 转换器工具类
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+public class UserConverter {
+    
+    public User convertToEntity(UserCreateDTO dto) {
+        if (dto == null) {
+            return null;
+        }
+        
+        return User.builder()
+            .username(dto.getUsername())
+            .email(dto.getEmail())
+            .realName(dto.getRealName())
+            .phone(dto.getPhone())
+            .age(dto.getAge())
+            .birthDate(dto.getBirthDate())
+            .status(UserStatus.INACTIVE) // 默认未激活
+            .build();
+    }
+    
+    public void updateEntityFromDto(User user, UserUpdateDTO dto) {
+        if (user == null || dto == null) {
+            return;
+        }
+        
+        if (dto.getRealName() != null) {
+            user.setRealName(dto.getRealName());
+        }
+        if (dto.getPhone() != null) {
+            user.setPhone(dto.getPhone());
+        }
+        if (dto.getAge() != null) {
+            user.setAge(dto.getAge());
+        }
+        if (dto.getBirthDate() != null) {
+            user.setBirthDate(dto.getBirthDate());
+        }
+        if (dto.getGender() != null) {
+            user.setGender(dto.getGender());
+        }
+    }
+    
+    public UserResponseDTO convertToResponseDto(User user) {
+        if (user == null) {
+            return null;
+        }
+        
+        UserResponseDTO.UserResponseDTOBuilder builder = UserResponseDTO.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .realName(user.getRealName())
+            .phone(user.getPhone())
+            .age(user.getAge())
+            .birthDate(user.getBirthDate())
+            .status(user.getStatus() != null ? user.getStatus().name() : null)
+            .gender(user.getGender() != null ? user.getGender().name() : null)
+            .createdAt(user.getCreatedAt())
+            .updatedAt(user.getUpdatedAt());
+        
+        // 转换关联对象
+        if (user.getProfile() != null) {
+            builder.profile(convertProfileToDto(user.getProfile()));
+        }
+        
+        if (CollectionUtils.isNotEmpty(user.getRoles())) {
+            List<RoleDTO> roleDtos = user.getRoles().stream()
+                .map(this::convertRoleToDto)
+                .collect(Collectors.toList());
+            builder.roles(roleDtos);
+        }
+        
+        return builder.build();
+    }
+    
+    private UserProfileDTO convertProfileToDto(UserProfile profile) {
+        if (profile == null) {
+            return null;
+        }
+        
+        return UserProfileDTO.builder()
+            .avatar(profile.getAvatar())
+            .bio(profile.getBio())
+            .website(profile.getWebsite())
+            .company(profile.getCompany())
+            .position(profile.getPosition())
+            .location(profile.getLocation())
+            .build();
+    }
+    
+    private RoleDTO convertRoleToDto(UserRole userRole) {
+        if (userRole == null || userRole.getRole() == null) {
+            return null;
+        }
+        
+        Role role = userRole.getRole();
+        return RoleDTO.builder()
+            .id(role.getId())
+            .name(role.getName())
+            .description(role.getDescription())
+            .enabled(role.getEnabled())
+            .build();
+    }
+    
+    public List<UserResponseDTO> convertToResponseDtos(List<User> users) {
+        if (CollectionUtils.isEmpty(users)) {
+            return Collections.emptyList();
+        }
+        
+        return users.stream()
+            .map(this::convertToResponseDto)
+            .collect(Collectors.toList());
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 验证组和自定义验证器
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// 验证组
+public interface CreateValidation {}
+public interface UpdateValidation {}
+public interface AdminValidation {}
+
+// 分组验证的DTO
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class UserManageDTO {
+    
+    @NotNull(groups = UpdateValidation.class, message = "ID不能为空")
+    private Long id;
+    
+    @NotBlank(groups = CreateValidation.class, message = "用户名不能为空")
+    @Size(min = 3, max = 50, message = "用户名长度必须在3-50字符之间")
+    private String username;
+    
+    @NotBlank(groups = CreateValidation.class, message = "密码不能为空")
+    @Size(min = 8, max = 128, groups = CreateValidation.class, 
+          message = "密码长度必须在8-128字符之间")
+    private String password;
+    
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+    
+    @NotNull(groups = AdminValidation.class, message = "状态不能为空")
+    private UserStatus status;
+    
+    @Valid
+    private List<Long> roleIds;
+}
+
+// 自定义验证注解
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = UniqueUsernameValidator.class)
+public @interface UniqueUsername {
+    String message() default "用户名已存在";
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+// 自定义验证器
+@Component
+public class UniqueUsernameValidator implements ConstraintValidator<UniqueUsername, UserCreateDTO> {
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Override
+    public boolean isValid(UserCreateDTO dto, ConstraintValidatorContext context) {
+        if (dto == null || !StringUtils.hasText(dto.getUsername())) {
+            return true; // 由@NotBlank验证
+        }
+        
+        return !userRepository.existsByUsername(dto.getUsername());
+    }
+}
+
+// 条件验证注解
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = ConditionalValidator.class)
+public @interface ConditionalValidation {
+    String message() default "条件验证失败";
+    String conditionalProperty();
+    String[] requiredProperties();
+    Class<?>[] groups() default {};
+    Class<? extends Payload>[] payload() default {};
+}
+
+// 使用条件验证
+@ConditionalValidation(
+    conditionalProperty = "needsApproval",
+    requiredProperties = {"approverComment", "approverId"},
+    message = "需要审批时必须填写审批意见和审批人"
+)
+public class UserApprovalDTO {
+    private Boolean needsApproval;
+    private String approverComment;
+    private Long approverId;
+}
+// [AI-BLOCK-END]
+```
+
+### MapStruct映射器
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Mapper(componentModel = "spring", 
+        unmappedTargetPolicy = ReportingPolicy.IGNORE,
+        nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+public interface UserMapper {
+    
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "status", constant = "INACTIVE")
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "deleted", constant = "false")
+    User toEntity(UserCreateDTO dto);
+    
+    @Mapping(target = "password", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    UserResponseDTO toResponseDto(User entity);
+    
+    List<UserResponseDTO> toResponseDtos(List<User> entities);
+    
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "username", ignore = true)
+    @Mapping(target = "email", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    void updateEntityFromDto(@MappingTarget User entity, UserUpdateDTO dto);
+    
+    // 自定义映射方法
+    @Named("statusToString")
+    default String statusToString(UserStatus status) {
+        return status != null ? status.name() : null;
+    }
+    
+    @Named("stringToStatus")
+    default UserStatus stringToStatus(String status) {
+        return StringUtils.hasText(status) ? UserStatus.valueOf(status) : null;
+    }
+    
+    // 嵌套对象映射
+    @Mapping(target = "userId", source = "user.id")
+    UserProfileDTO toProfileDto(UserProfile profile);
+    
+    @Mapping(target = "user", ignore = true)
+    UserProfile toProfileEntity(UserProfileDTO dto);
+}
+// [AI-BLOCK-END]
+```
+description:
+globs:
+alwaysApply: false
+---

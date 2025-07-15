@@ -1,0 +1,1095 @@
+# Java异常处理规范
+
+## 基础规范
+
+### 异常分类体系
+- **系统异常**: 系统级别的错误，如数据库连接失败、网络异常等
+- **业务异常**: 业务逻辑相关的错误，如数据验证失败、权限不足等
+- **第三方异常**: 外部服务调用异常，如API调用失败、支付异常等
+- **运行时异常**: 程序运行时的错误，如空指针、数组越界等
+
+### 设计原则
+- **早发现早处理**: 在异常发生的最近位置进行处理
+- **异常链保持**: 保留原始异常信息，避免异常信息丢失
+- **统一响应格式**: 所有异常都应该返回统一的响应格式
+- **日志记录**: 合理记录异常日志，便于问题排查
+
+## 强制行为
+
+### 自定义异常基类
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// 业务异常基类
+public abstract class BusinessException extends RuntimeException {
+    
+    private final String errorCode;
+    private final Object[] args;
+    private final Map<String, Object> details;
+    
+    protected BusinessException(String errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
+        this.args = null;
+        this.details = new HashMap<>();
+    }
+    
+    protected BusinessException(String errorCode, String message, Object... args) {
+        super(message);
+        this.errorCode = errorCode;
+        this.args = args;
+        this.details = new HashMap<>();
+    }
+    
+    protected BusinessException(String errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+        this.args = null;
+        this.details = new HashMap<>();
+    }
+    
+    protected BusinessException(String errorCode, String message, Throwable cause, Object... args) {
+        super(message, cause);
+        this.errorCode = errorCode;
+        this.args = args;
+        this.details = new HashMap<>();
+    }
+    
+    public String getErrorCode() {
+        return errorCode;
+    }
+    
+    public Object[] getArgs() {
+        return args != null ? args.clone() : null;
+    }
+    
+    public Map<String, Object> getDetails() {
+        return new HashMap<>(details);
+    }
+    
+    public BusinessException addDetail(String key, Object value) {
+        this.details.put(key, value);
+        return this;
+    }
+    
+    public BusinessException addDetails(Map<String, Object> details) {
+        if (details != null) {
+            this.details.putAll(details);
+        }
+        return this;
+    }
+    
+    // 获取国际化消息
+    public String getLocalizedMessage(MessageSource messageSource, Locale locale) {
+        try {
+            return messageSource.getMessage(errorCode, args, getMessage(), locale);
+        } catch (Exception e) {
+            return getMessage();
+        }
+    }
+}
+
+// 系统异常基类
+public abstract class SystemException extends RuntimeException {
+    
+    private final String errorCode;
+    private final String component;
+    
+    protected SystemException(String errorCode, String component, String message) {
+        super(message);
+        this.errorCode = errorCode;
+        this.component = component;
+    }
+    
+    protected SystemException(String errorCode, String component, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+        this.component = component;
+    }
+    
+    public String getErrorCode() {
+        return errorCode;
+    }
+    
+    public String getComponent() {
+        return component;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 具体异常类定义
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// 验证异常
+public class ValidationException extends BusinessException {
+    
+    public ValidationException(String message) {
+        super("VALIDATION_ERROR", message);
+    }
+    
+    public ValidationException(String message, Object... args) {
+        super("VALIDATION_ERROR", message, args);
+    }
+    
+    public ValidationException(String field, String message) {
+        super("FIELD_VALIDATION_ERROR", message);
+        addDetail("field", field);
+    }
+    
+    // 静态工厂方法
+    public static ValidationException fieldError(String field, String message) {
+        return new ValidationException("FIELD_VALIDATION_ERROR", message)
+            .addDetail("field", field);
+    }
+    
+    public static ValidationException multipleErrors(Map<String, String> fieldErrors) {
+        ValidationException exception = new ValidationException("MULTIPLE_VALIDATION_ERRORS", 
+            "存在多个验证错误");
+        exception.addDetail("fieldErrors", fieldErrors);
+        return exception;
+    }
+}
+
+// 资源未找到异常
+public class ResourceNotFoundException extends BusinessException {
+    
+    public ResourceNotFoundException(String resourceType, Object id) {
+        super("RESOURCE_NOT_FOUND", "资源未找到: {0} [ID: {1}]", resourceType, id);
+        addDetail("resourceType", resourceType);
+        addDetail("resourceId", id);
+    }
+    
+    public ResourceNotFoundException(String resourceType, String field, Object value) {
+        super("RESOURCE_NOT_FOUND_BY_FIELD", "资源未找到: {0} [{1}: {2}]", 
+              resourceType, field, value);
+        addDetail("resourceType", resourceType);
+        addDetail("field", field);
+        addDetail("value", value);
+    }
+    
+    // 静态工厂方法
+    public static ResourceNotFoundException user(Long userId) {
+        return new ResourceNotFoundException("User", userId);
+    }
+    
+    public static ResourceNotFoundException userByUsername(String username) {
+        return new ResourceNotFoundException("User", "username", username);
+    }
+    
+    public static ResourceNotFoundException order(Long orderId) {
+        return new ResourceNotFoundException("Order", orderId);
+    }
+}
+
+// 权限异常
+public class AccessDeniedException extends BusinessException {
+    
+    public AccessDeniedException(String message) {
+        super("ACCESS_DENIED", message);
+    }
+    
+    public AccessDeniedException(String resource, String action) {
+        super("ACCESS_DENIED_RESOURCE", "无权限访问资源: {0}, 操作: {1}", resource, action);
+        addDetail("resource", resource);
+        addDetail("action", action);
+    }
+    
+    public AccessDeniedException(String resource, String action, String reason) {
+        super("ACCESS_DENIED_REASON", "无权限访问资源: {0}, 操作: {1}, 原因: {2}", 
+              resource, action, reason);
+        addDetail("resource", resource);
+        addDetail("action", action);
+        addDetail("reason", reason);
+    }
+}
+
+// 业务规则异常
+public class BusinessRuleException extends BusinessException {
+    
+    public BusinessRuleException(String ruleCode, String message) {
+        super(ruleCode, message);
+    }
+    
+    public BusinessRuleException(String ruleCode, String message, Object... args) {
+        super(ruleCode, message, args);
+    }
+    
+    // 静态工厂方法
+    public static BusinessRuleException duplicateUsername(String username) {
+        return new BusinessRuleException("DUPLICATE_USERNAME", 
+            "用户名已存在: {0}", username)
+            .addDetail("username", username);
+    }
+    
+    public static BusinessRuleException insufficientBalance(BigDecimal balance, BigDecimal required) {
+        return new BusinessRuleException("INSUFFICIENT_BALANCE", 
+            "余额不足，当前余额: {0}, 需要: {1}", balance, required)
+            .addDetail("currentBalance", balance)
+            .addDetail("requiredAmount", required);
+    }
+    
+    public static BusinessRuleException orderStatusInvalid(String currentStatus, String expectedStatus) {
+        return new BusinessRuleException("INVALID_ORDER_STATUS", 
+            "订单状态无效，当前状态: {0}, 期望状态: {1}", currentStatus, expectedStatus)
+            .addDetail("currentStatus", currentStatus)
+            .addDetail("expectedStatus", expectedStatus);
+    }
+}
+
+// 外部服务异常
+public class ExternalServiceException extends BusinessException {
+    
+    private final String serviceName;
+    private final String operation;
+    
+    public ExternalServiceException(String serviceName, String operation, String message) {
+        super("EXTERNAL_SERVICE_ERROR", "外部服务调用失败: {0}.{1} - {2}", 
+              serviceName, operation, message);
+        this.serviceName = serviceName;
+        this.operation = operation;
+        addDetail("serviceName", serviceName);
+        addDetail("operation", operation);
+    }
+    
+    public ExternalServiceException(String serviceName, String operation, String message, Throwable cause) {
+        super("EXTERNAL_SERVICE_ERROR", "外部服务调用失败: {0}.{1} - {2}", 
+              cause, serviceName, operation, message);
+        this.serviceName = serviceName;
+        this.operation = operation;
+        addDetail("serviceName", serviceName);
+        addDetail("operation", operation);
+    }
+    
+    public String getServiceName() {
+        return serviceName;
+    }
+    
+    public String getOperation() {
+        return operation;
+    }
+}
+
+// 数据库异常
+public class DatabaseException extends SystemException {
+    
+    public DatabaseException(String message) {
+        super("DATABASE_ERROR", "database", message);
+    }
+    
+    public DatabaseException(String message, Throwable cause) {
+        super("DATABASE_ERROR", "database", message, cause);
+    }
+    
+    public static DatabaseException connectionFailed(Throwable cause) {
+        return new DatabaseException("数据库连接失败", cause);
+    }
+    
+    public static DatabaseException queryTimeout(String sql) {
+        DatabaseException exception = new DatabaseException("查询超时");
+        exception.addDetail("sql", sql);
+        return exception;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 全局异常处理器
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@RestControllerAdvice
+@Slf4j
+public class GlobalExceptionHandler {
+    
+    @Autowired
+    private MessageSource messageSource;
+    
+    // 业务异常处理
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ErrorResponse> handleBusinessException(
+            BusinessException ex, HttpServletRequest request) {
+        
+        log.warn("业务异常: {} - {}", ex.getErrorCode(), ex.getMessage(), ex);
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .error("Business Error")
+            .message(getLocalizedMessage(ex, request))
+            .code(ex.getErrorCode())
+            .path(request.getRequestURI())
+            .details(ex.getDetails())
+            .build();
+            
+        return ResponseEntity.badRequest().body(response);
+    }
+    
+    // 资源未找到异常
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFoundException(
+            ResourceNotFoundException ex, HttpServletRequest request) {
+        
+        log.warn("资源未找到: {} - {}", ex.getErrorCode(), ex.getMessage());
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.NOT_FOUND.value())
+            .error("Not Found")
+            .message(getLocalizedMessage(ex, request))
+            .code(ex.getErrorCode())
+            .path(request.getRequestURI())
+            .details(ex.getDetails())
+            .build();
+            
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+    
+    // 权限异常处理
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+            AccessDeniedException ex, HttpServletRequest request) {
+        
+        log.warn("权限不足: {} - {}", ex.getErrorCode(), ex.getMessage());
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.FORBIDDEN.value())
+            .error("Access Denied")
+            .message(getLocalizedMessage(ex, request))
+            .code(ex.getErrorCode())
+            .path(request.getRequestURI())
+            .details(ex.getDetails())
+            .build();
+            
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+    
+    // 系统异常处理
+    @ExceptionHandler(SystemException.class)
+    public ResponseEntity<ErrorResponse> handleSystemException(
+            SystemException ex, HttpServletRequest request) {
+        
+        log.error("系统异常: {} - {}", ex.getErrorCode(), ex.getMessage(), ex);
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+            .error("Internal Server Error")
+            .message("系统内部错误，请联系管理员")
+            .code(ex.getErrorCode())
+            .path(request.getRequestURI())
+            .component(ex.getComponent())
+            .build();
+            
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+    
+    // 验证异常处理
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationException(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
+        
+        log.warn("参数验证失败: {}", ex.getMessage());
+        
+        Map<String, String> fieldErrors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(error -> {
+            fieldErrors.put(error.getField(), error.getDefaultMessage());
+        });
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .error("Validation Failed")
+            .message("参数验证失败")
+            .code("VALIDATION_ERROR")
+            .path(request.getRequestURI())
+            .details(Map.of("fieldErrors", fieldErrors))
+            .build();
+            
+        return ResponseEntity.badRequest().body(response);
+    }
+    
+    // 约束违反异常
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolationException(
+            ConstraintViolationException ex, HttpServletRequest request) {
+        
+        log.warn("约束验证失败: {}", ex.getMessage());
+        
+        Map<String, String> violations = new HashMap<>();
+        ex.getConstraintViolations().forEach(violation -> {
+            String propertyPath = violation.getPropertyPath().toString();
+            violations.put(propertyPath, violation.getMessage());
+        });
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .error("Constraint Violation")
+            .message("约束验证失败")
+            .code("CONSTRAINT_VIOLATION")
+            .path(request.getRequestURI())
+            .details(Map.of("violations", violations))
+            .build();
+            
+        return ResponseEntity.badRequest().body(response);
+    }
+    
+    // 数据库异常处理
+    @ExceptionHandler({DataAccessException.class, DatabaseException.class})
+    public ResponseEntity<ErrorResponse> handleDatabaseException(
+            Exception ex, HttpServletRequest request) {
+        
+        log.error("数据库异常: {}", ex.getMessage(), ex);
+        
+        String code = ex instanceof DatabaseException ? 
+            ((DatabaseException) ex).getErrorCode() : "DATABASE_ERROR";
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+            .error("Database Error")
+            .message("数据库操作失败")
+            .code(code)
+            .path(request.getRequestURI())
+            .build();
+            
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+    
+    // HTTP消息不可读异常
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        
+        log.warn("HTTP消息格式错误: {}", ex.getMessage());
+        
+        String message = "请求格式错误";
+        if (ex.getCause() instanceof JsonParseException) {
+            message = "JSON格式错误";
+        } else if (ex.getCause() instanceof JsonMappingException) {
+            message = "JSON映射错误";
+        }
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.BAD_REQUEST.value())
+            .error("Bad Request")
+            .message(message)
+            .code("INVALID_REQUEST_FORMAT")
+            .path(request.getRequestURI())
+            .build();
+            
+        return ResponseEntity.badRequest().body(response);
+    }
+    
+    // 方法不支持异常
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        
+        log.warn("HTTP方法不支持: {}", ex.getMessage());
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.METHOD_NOT_ALLOWED.value())
+            .error("Method Not Allowed")
+            .message(String.format("不支持的HTTP方法: %s", ex.getMethod()))
+            .code("METHOD_NOT_ALLOWED")
+            .path(request.getRequestURI())
+            .details(Map.of("supportedMethods", Arrays.toString(ex.getSupportedMethods())))
+            .build();
+            
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(response);
+    }
+    
+    // 通用异常处理
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(
+            Exception ex, HttpServletRequest request) {
+        
+        log.error("未知异常: {}", ex.getMessage(), ex);
+        
+        ErrorResponse response = ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
+            .error("Internal Server Error")
+            .message("系统内部错误")
+            .code("UNKNOWN_ERROR")
+            .path(request.getRequestURI())
+            .build();
+            
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+    
+    // 获取国际化消息
+    private String getLocalizedMessage(BusinessException ex, HttpServletRequest request) {
+        Locale locale = getLocale(request);
+        return ex.getLocalizedMessage(messageSource, locale);
+    }
+    
+    private Locale getLocale(HttpServletRequest request) {
+        String lang = request.getHeader("Accept-Language");
+        if (StringUtils.hasText(lang)) {
+            return Locale.forLanguageTag(lang);
+        }
+        return Locale.getDefault();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 错误响应模型
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ErrorResponse {
+    
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime timestamp;
+    
+    private Integer status;
+    
+    private String error;
+    
+    private String message;
+    
+    private String code;
+    
+    private String path;
+    
+    private String component;
+    
+    private Map<String, Object> details;
+    
+    private String traceId;
+    
+    // 静态工厂方法
+    public static ErrorResponse of(HttpStatus status, String code, String message) {
+        return ErrorResponse.builder()
+            .timestamp(LocalDateTime.now())
+            .status(status.value())
+            .error(status.getReasonPhrase())
+            .message(message)
+            .code(code)
+            .build();
+    }
+    
+    public static ErrorResponse badRequest(String code, String message) {
+        return of(HttpStatus.BAD_REQUEST, code, message);
+    }
+    
+    public static ErrorResponse notFound(String code, String message) {
+        return of(HttpStatus.NOT_FOUND, code, message);
+    }
+    
+    public static ErrorResponse forbidden(String code, String message) {
+        return of(HttpStatus.FORBIDDEN, code, message);
+    }
+    
+    public static ErrorResponse internalError(String code, String message) {
+        return of(HttpStatus.INTERNAL_SERVER_ERROR, code, message);
+    }
+    
+    // 添加详细信息
+    public ErrorResponse addDetail(String key, Object value) {
+        if (details == null) {
+            details = new HashMap<>();
+        }
+        details.put(key, value);
+        return this;
+    }
+    
+    public ErrorResponse addDetails(Map<String, Object> additionalDetails) {
+        if (details == null) {
+            details = new HashMap<>();
+        }
+        if (additionalDetails != null) {
+            details.putAll(additionalDetails);
+        }
+        return this;
+    }
+    
+    public ErrorResponse withPath(String path) {
+        this.path = path;
+        return this;
+    }
+    
+    public ErrorResponse withTraceId(String traceId) {
+        this.traceId = traceId;
+        return this;
+    }
+}
+
+// 字段错误模型
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class FieldError {
+    
+    private String field;
+    
+    private Object rejectedValue;
+    
+    private String message;
+    
+    private String code;
+    
+    public static FieldError of(String field, Object rejectedValue, String message) {
+        return FieldError.builder()
+            .field(field)
+            .rejectedValue(rejectedValue)
+            .message(message)
+            .build();
+    }
+    
+    public static FieldError of(String field, Object rejectedValue, String code, String message) {
+        return FieldError.builder()
+            .field(field)
+            .rejectedValue(rejectedValue)
+            .code(code)
+            .message(message)
+            .build();
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 异常处理反模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：吞掉异常
+try {
+    riskyOperation();
+} catch (Exception e) {
+    // 禁止：静默忽略异常
+    return null;
+}
+
+// ❌ 禁止：异常转换丢失信息
+try {
+    databaseOperation();
+} catch (SQLException e) {
+    // 禁止：丢失原始异常信息
+    throw new BusinessException("DATABASE_ERROR", "数据库错误");
+}
+
+// ❌ 禁止：过度捕获异常
+try {
+    businessLogic();
+} catch (Exception e) {  // 禁止：捕获过于宽泛的异常
+    throw new BusinessException("UNKNOWN_ERROR", e.getMessage());
+}
+
+// ❌ 禁止：在finally中抛出异常
+try {
+    operation();
+} finally {
+    // 禁止：finally块中抛出异常会覆盖原异常
+    throw new RuntimeException("清理失败");
+}
+
+// ❌ 禁止：异常用于控制流程
+public User findUser(Long id) {
+    try {
+        return userRepository.findById(id).get();
+    } catch (NoSuchElementException e) {
+        // 禁止：用异常处理正常的业务逻辑
+        return createDefaultUser();
+    }
+}
+
+// ❌ 禁止：返回null而不是抛出异常
+public User getUser(Long id) {
+    if (id == null) {
+        return null;  // 禁止：应该抛出异常
+    }
+    // ...
+}
+
+// ❌ 禁止：不当的异常链
+public void processOrder(Order order) {
+    try {
+        validateOrder(order);
+    } catch (ValidationException e) {
+        // 禁止：重新包装异常但丢失异常链
+        throw new BusinessException("ORDER_PROCESS_FAILED", "订单处理失败");
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 日志记录反模式
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+// ❌ 禁止：重复记录异常日志
+@Service
+public class UserService {
+    
+    public void updateUser(Long id, UserUpdateDTO dto) {
+        try {
+            User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
+            updateUserFromDto(user, dto);
+            userRepository.save(user);
+        } catch (ResourceNotFoundException e) {
+            log.error("用户不存在: {}", id, e);  // 禁止：在service层记录
+            throw e;  // 异常会在全局处理器中再次记录
+        }
+    }
+}
+
+// ❌ 禁止：日志级别使用不当
+public void handleBusinessLogic() {
+    try {
+        // 业务逻辑
+    } catch (BusinessException e) {
+        log.error("业务异常", e);  // 禁止：业务异常不应该用ERROR级别
+        throw e;
+    }
+}
+
+// ❌ 禁止：敏感信息泄露
+public void authenticate(String username, String password) {
+    try {
+        authService.authenticate(username, password);
+    } catch (AuthenticationException e) {
+        // 禁止：记录敏感信息
+        log.error("认证失败: username={}, password={}", username, password);
+        throw e;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+## 示例代码
+
+### 完整的异常处理示例
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+@Transactional
+public class OrderService {
+    
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    @Autowired
+    private UserService userService;
+    
+    @Autowired
+    private PaymentService paymentService;
+    
+    @Autowired
+    private InventoryService inventoryService;
+    
+    public OrderResponseDTO createOrder(OrderCreateDTO createDto) {
+        try {
+            // 1. 验证用户
+            User user = userService.getUserById(createDto.getUserId());
+            if (!user.isActive()) {
+                throw BusinessRuleException.userInactive(user.getId());
+            }
+            
+            // 2. 验证库存
+            validateInventory(createDto.getItems());
+            
+            // 3. 计算金额
+            BigDecimal totalAmount = calculateTotalAmount(createDto.getItems());
+            
+            // 4. 创建订单
+            Order order = createOrderFromDto(createDto, user, totalAmount);
+            order = orderRepository.save(order);
+            
+            // 5. 扣减库存
+            try {
+                inventoryService.reserveItems(createDto.getItems());
+            } catch (InventoryException e) {
+                // 库存扣减失败，包装为业务异常
+                throw new BusinessRuleException("INVENTORY_RESERVE_FAILED", 
+                    "库存预留失败: {0}", e.getMessage(), e)
+                    .addDetail("orderId", order.getId())
+                    .addDetail("items", createDto.getItems());
+            }
+            
+            // 6. 发起支付
+            try {
+                PaymentResult paymentResult = paymentService.createPayment(
+                    order.getId(), totalAmount);
+                order.setPaymentId(paymentResult.getPaymentId());
+                order.setStatus(OrderStatus.PENDING_PAYMENT);
+            } catch (PaymentServiceException e) {
+                // 支付服务异常，回滚库存
+                inventoryService.releaseReservation(createDto.getItems());
+                throw new ExternalServiceException("PaymentService", "createPayment", 
+                    "支付服务调用失败", e)
+                    .addDetail("orderId", order.getId())
+                    .addDetail("amount", totalAmount);
+            }
+            
+            order = orderRepository.save(order);
+            
+            log.info("订单创建成功: orderId={}, userId={}, amount={}", 
+                order.getId(), user.getId(), totalAmount);
+            
+            return OrderResponseDTO.fromEntity(order);
+            
+        } catch (BusinessException | SystemException e) {
+            // 业务异常和系统异常直接重新抛出
+            throw e;
+        } catch (Exception e) {
+            // 未知异常包装为系统异常
+            log.error("创建订单时发生未知异常: userId={}", createDto.getUserId(), e);
+            throw new SystemException("ORDER_CREATE_FAILED", "order-service", 
+                "创建订单失败", e);
+        }
+    }
+    
+    public void cancelOrder(Long orderId, String reason) {
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+        
+        // 验证订单状态
+        if (!order.canCancel()) {
+            throw BusinessRuleException.orderStatusInvalid(
+                order.getStatus().name(), "PENDING_PAYMENT,PAID");
+        }
+        
+        try {
+            // 取消支付
+            if (order.getPaymentId() != null) {
+                paymentService.cancelPayment(order.getPaymentId());
+            }
+            
+            // 释放库存
+            inventoryService.releaseReservation(order.getItems());
+            
+            // 更新订单状态
+            order.cancel(reason);
+            orderRepository.save(order);
+            
+            log.info("订单取消成功: orderId={}, reason={}", orderId, reason);
+            
+        } catch (PaymentServiceException e) {
+            throw new ExternalServiceException("PaymentService", "cancelPayment", 
+                "取消支付失败", e)
+                .addDetail("orderId", orderId)
+                .addDetail("paymentId", order.getPaymentId());
+        } catch (InventoryException e) {
+            throw new ExternalServiceException("InventoryService", "releaseReservation", 
+                "释放库存失败", e)
+                .addDetail("orderId", orderId);
+        }
+    }
+    
+    private void validateInventory(List<OrderItemDTO> items) {
+        for (OrderItemDTO item : items) {
+            if (!inventoryService.isAvailable(item.getProductId(), item.getQuantity())) {
+                throw BusinessRuleException.insufficientStock(
+                    item.getProductId(), item.getQuantity());
+            }
+        }
+    }
+    
+    private BigDecimal calculateTotalAmount(List<OrderItemDTO> items) {
+        return items.stream()
+            .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+    
+    private Order createOrderFromDto(OrderCreateDTO dto, User user, BigDecimal totalAmount) {
+        Order order = Order.builder()
+            .user(user)
+            .totalAmount(totalAmount)
+            .status(OrderStatus.CREATED)
+            .build();
+        
+        List<OrderItem> orderItems = dto.getItems().stream()
+            .map(itemDto -> OrderItem.builder()
+                .order(order)
+                .productId(itemDto.getProductId())
+                .quantity(itemDto.getQuantity())
+                .price(itemDto.getPrice())
+                .build())
+            .collect(Collectors.toList());
+        
+        order.setItems(orderItems);
+        return order;
+    }
+}
+
+// 业务规则异常扩展
+public class BusinessRuleException extends BusinessException {
+    
+    public static BusinessRuleException userInactive(Long userId) {
+        return new BusinessRuleException("USER_INACTIVE", 
+            "用户状态异常，无法操作: {0}", userId)
+            .addDetail("userId", userId);
+    }
+    
+    public static BusinessRuleException insufficientStock(Long productId, Integer required) {
+        return new BusinessRuleException("INSUFFICIENT_STOCK", 
+            "库存不足: 商品ID={0}, 需要数量={1}", productId, required)
+            .addDetail("productId", productId)
+            .addDetail("requiredQuantity", required);
+    }
+    
+    public static BusinessRuleException orderStatusInvalid(String current, String expected) {
+        return new BusinessRuleException("INVALID_ORDER_STATUS", 
+            "订单状态无效: 当前状态={0}, 期望状态={1}", current, expected)
+            .addDetail("currentStatus", current)
+            .addDetail("expectedStatus", expected);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 异步处理中的异常处理
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Service
+@Slf4j
+public class AsyncOrderProcessor {
+    
+    @Autowired
+    private OrderService orderService;
+    
+    @Autowired
+    private NotificationService notificationService;
+    
+    @Async("orderProcessExecutor")
+    @Retryable(value = {ExternalServiceException.class}, 
+               maxAttempts = 3, 
+               backoff = @Backoff(delay = 1000, multiplier = 2))
+    public CompletableFuture<Void> processOrderAsync(Long orderId) {
+        try {
+            log.info("开始异步处理订单: orderId={}", orderId);
+            
+            // 处理订单
+            orderService.processOrder(orderId);
+            
+            // 发送通知
+            notificationService.sendOrderConfirmation(orderId);
+            
+            log.info("订单处理完成: orderId={}", orderId);
+            return CompletableFuture.completedFuture(null);
+            
+        } catch (BusinessException e) {
+            log.warn("订单处理业务异常: orderId={}, error={}", orderId, e.getMessage());
+            handleBusinessException(orderId, e);
+            return CompletableFuture.failedFuture(e);
+        } catch (ExternalServiceException e) {
+            log.error("外部服务异常: orderId={}, service={}, error={}", 
+                orderId, e.getServiceName(), e.getMessage());
+            // 重试机制会自动处理
+            throw e;
+        } catch (Exception e) {
+            log.error("订单处理未知异常: orderId={}", orderId, e);
+            handleUnknownException(orderId, e);
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    @Recover
+    public CompletableFuture<Void> recoverFromExternalServiceException(
+            ExternalServiceException ex, Long orderId) {
+        log.error("外部服务重试失败，进入恢复处理: orderId={}, service={}", 
+            orderId, ex.getServiceName());
+        
+        try {
+            // 标记订单为处理失败
+            orderService.markOrderFailed(orderId, "外部服务调用失败: " + ex.getMessage());
+            
+            // 发送失败通知
+            notificationService.sendOrderFailedNotification(orderId, ex.getMessage());
+            
+        } catch (Exception e) {
+            log.error("恢复处理失败: orderId={}", orderId, e);
+        }
+        
+        return CompletableFuture.completedFuture(null);
+    }
+    
+    private void handleBusinessException(Long orderId, BusinessException e) {
+        try {
+            // 根据异常类型进行不同处理
+            if (e instanceof ValidationException) {
+                orderService.markOrderInvalid(orderId, e.getMessage());
+            } else if (e instanceof BusinessRuleException) {
+                orderService.markOrderRejected(orderId, e.getMessage());
+            }
+            
+            // 发送异常通知
+            notificationService.sendOrderExceptionNotification(orderId, e);
+            
+        } catch (Exception ex) {
+            log.error("处理业务异常时发生错误: orderId={}", orderId, ex);
+        }
+    }
+    
+    private void handleUnknownException(Long orderId, Exception e) {
+        try {
+            // 标记订单为系统错误
+            orderService.markOrderSystemError(orderId, "系统处理异常");
+            
+            // 发送系统异常通知
+            notificationService.sendSystemErrorNotification(orderId, e);
+            
+        } catch (Exception ex) {
+            log.error("处理未知异常时发生错误: orderId={}", orderId, ex);
+        }
+    }
+}
+
+// 异步异常处理配置
+@Configuration
+@EnableAsync
+public class AsyncConfig implements AsyncConfigurer {
+    
+    @Override
+    public Executor getAsyncExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(5);
+        executor.setMaxPoolSize(10);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("async-order-");
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        
+        // 设置异常处理器
+        executor.setTaskDecorator(runnable -> () -> {
+            try {
+                runnable.run();
+            } catch (Exception e) {
+                log.error("异步任务执行异常", e);
+                throw e;
+            }
+        });
+        
+        executor.initialize();
+        return executor;
+    }
+    
+    @Override
+    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+        return (ex, method, params) -> {
+            log.error("异步方法执行异常: method={}, params={}", 
+                method.getName(), Arrays.toString(params), ex);
+            
+            // 可以在这里添加异常通知逻辑
+            // notificationService.sendAsyncExceptionAlert(method, params, ex);
+        };
+    }
+}
+// [AI-BLOCK-END]
+```
+description:
+globs:
+alwaysApply: false
+---

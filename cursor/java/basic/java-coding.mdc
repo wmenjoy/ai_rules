@@ -1,0 +1,400 @@
+# Java编码规范 (基础层规则)
+> Java语言编码格式、命名约定和注释标准
+
+## 基础规范
+
+### 代码格式化标准
+- **缩进方式**：使用4个空格，禁止使用Tab字符
+- **行长度限制**：每行代码不超过120个字符
+- **大括号风格**：K&R风格，左大括号不换行
+- **空行规则**：方法间1个空行，逻辑块间1个空行，类间2个空行
+- **空格规则**：操作符前后、逗号后、关键字后需要空格
+
+### 命名约定标准
+- **类名**：PascalCase（首字母大写驼峰），名词性，意义明确
+- **方法名**：camelCase（小写驼峰），动词开头，表达动作
+- **变量名**：camelCase，名词性，避免缩写
+- **常量名**：UPPER_SNAKE_CASE（全大写下划线分隔）
+- **包名**：全小写，使用反向域名约定
+
+### 注释规范标准
+- **类注释**：使用JavaDoc格式，包含功能描述、作者、版本
+- **方法注释**：描述功能、参数、返回值、异常
+- **字段注释**：简洁描述字段用途和约束
+- **行内注释**：解释复杂逻辑，不描述显而易见的代码
+
+### 导入语句规范
+- **静态导入**：仅用于常量和工具方法
+- **导入顺序**：java包 → javax包 → 第三方包 → 本项目包
+- **通配符导入**：避免使用*导入，明确指定类名
+- **未使用导入**：及时清理未使用的import语句
+
+## 强制行为
+
+### 代码格式化要求
+- **使用IDE格式化**：配置并使用统一的代码格式化模板
+- **保存时自动格式化**：开启保存时自动格式化功能
+- **提交前格式化检查**：Git提交前必须通过格式化检查
+- **团队配置同步**：使用统一的IDE配置文件
+
+### 命名规则执行
+- **见名知意**：变量名、方法名必须清晰表达其用途
+- **避免误导性命名**：不使用容易混淆的名称
+- **使用标准词汇**：优先使用业界标准的术语和缩写
+- **保持一致性**：同一概念在整个项目中使用相同命名
+
+### 注释维护要求
+- **同步更新**：代码修改时必须同步更新相关注释
+- **删除无效注释**：及时删除过时或错误的注释
+- **避免显而易见的注释**：不对自解释的代码添加注释
+- **重要逻辑说明**：复杂算法和业务逻辑必须有详细注释
+
+### 代码组织要求
+- **单一职责**：每个类、方法只负责一个明确的功能
+- **适度长度**：方法不超过50行，类不超过500行
+- **逻辑分组**：相关的方法和字段放在一起
+- **访问控制**：严格控制类成员的访问权限
+
+## 禁止行为
+
+### 格式化禁令
+- **禁止混用缩进**：不允许空格和Tab混用
+- **禁止超长行**：单行代码不得超过120字符
+- **禁止无意义空行**：避免连续多个空行
+- **禁止行尾空格**：行末不允许有多余的空格字符
+- **禁止不一致的大括号风格**：必须统一使用K&R风格
+
+### 命名禁令
+- **禁止使用拼音**：变量名、方法名不使用拼音
+- **禁止单字母变量名**：除循环变量外不使用单字母命名
+- **禁止数字结尾命名**：避免使用data1、data2这样的命名
+- **禁止误导性缩写**：不使用容易产生歧义的缩写
+- **禁止使用保留字**：不使用Java关键字作为标识符
+
+### 注释禁令
+- **禁止注释掉的代码**：删除被注释的无用代码
+- **禁止TODO长期存在**：TODO注释必须及时处理
+- **禁止无意义注释**：如"设置name字段"这样的废话注释
+- **禁止错误注释**：与代码实际功能不符的注释
+- **禁止复制粘贴注释**：避免复制产生的错误注释
+
+### 代码组织禁令
+- **禁止巨型类**：单个类不超过500行
+- **禁止巨型方法**：单个方法不超过50行
+- **禁止深层嵌套**：嵌套层次不超过4层
+- **禁止魔法数字**：数字常量必须定义为常量
+- **禁止重复代码**：相同逻辑必须抽取为公共方法
+
+## 示例代码
+
+### 正确的类定义格式
+```java
+/* [AI-BLOCK-START] - 生成工具: Java编码规范 v2.0 */
+package com.company.project.service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.company.project.entity.User;
+import com.company.project.repository.UserRepository;
+
+/**
+ * 用户服务实现类
+ * 
+ * 提供用户相关的业务逻辑处理，包括用户的创建、查询、更新和删除操作。
+ * 所有涉及数据库操作的方法都使用事务管理。
+ * 
+ * @author 开发者姓名
+ * @version 1.0
+ * @since 2024-01-01
+ */
+@Service
+@Transactional(readOnly = true)
+public class UserServiceImpl implements UserService {
+    
+    // 用户数据访问对象
+    private final UserRepository userRepository;
+    
+    // 默认分页大小
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    
+    // 用户名最大长度
+    private static final int MAX_USERNAME_LENGTH = 50;
+    
+    /**
+     * 构造函数
+     * 
+     * @param userRepository 用户数据访问对象
+     */
+    public UserServiceImpl(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+    
+    /**
+     * 创建新用户
+     * 
+     * @param createRequest 用户创建请求对象
+     * @return 创建成功的用户信息
+     * @throws IllegalArgumentException 当用户名为空或超长时抛出
+     * @throws DuplicateUserException 当用户名已存在时抛出
+     */
+    @Override
+    @Transactional
+    public User createUser(CreateUserRequest createRequest) {
+        // 参数验证
+        validateCreateUserRequest(createRequest);
+        
+        // 检查用户名是否已存在
+        if (userRepository.existsByUsername(createRequest.getUsername())) {
+            throw new DuplicateUserException("用户名已存在: " + createRequest.getUsername());
+        }
+        
+        // 创建用户实体
+        User user = User.builder()
+            .username(createRequest.getUsername())
+            .email(createRequest.getEmail())
+            .status(UserStatus.ACTIVE)
+            .createTime(LocalDateTime.now())
+            .build();
+            
+        return userRepository.save(user);
+    }
+    
+    /**
+     * 根据ID查询用户
+     * 
+     * @param userId 用户ID
+     * @return 用户信息的Optional包装
+     */
+    @Override
+    public Optional<User> findUserById(Long userId) {
+        if (userId == null || userId <= 0) {
+            return Optional.empty();
+        }
+        
+        return userRepository.findById(userId)
+            .filter(user -> !user.isDeleted());
+    }
+    
+    /**
+     * 验证用户创建请求
+     * 
+     * @param request 用户创建请求
+     * @throws IllegalArgumentException 验证失败时抛出
+     */
+    private void validateCreateUserRequest(CreateUserRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("用户创建请求不能为空");
+        }
+        
+        String username = request.getUsername();
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("用户名不能为空");
+        }
+        
+        if (username.length() > MAX_USERNAME_LENGTH) {
+            throw new IllegalArgumentException("用户名长度不能超过" + MAX_USERNAME_LENGTH + "个字符");
+        }
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 正确的方法命名和注释
+```java
+/* [AI-BLOCK-START] - 生成工具: Java编码规范 v2.0 */
+public class OrderProcessor {
+    
+    /**
+     * 处理订单支付
+     * 
+     * 执行订单支付流程，包括库存检查、金额计算、支付处理和状态更新。
+     * 整个流程在事务中执行，确保数据一致性。
+     * 
+     * @param orderId 订单ID，不能为null
+     * @param paymentMethod 支付方式，支持的值见PaymentMethod枚举
+     * @return 支付结果，包含支付状态和交易号
+     * @throws OrderNotFoundException 当订单不存在时抛出
+     * @throws InsufficientStockException 当库存不足时抛出
+     * @throws PaymentFailedException 当支付失败时抛出
+     */
+    @Transactional
+    public PaymentResult processOrderPayment(Long orderId, PaymentMethod paymentMethod) {
+        // 查询订单信息
+        Order order = findOrderById(orderId);
+        
+        // 检查订单状态
+        validateOrderStatus(order);
+        
+        // 检查库存
+        checkInventoryAvailability(order);
+        
+        // 计算订单金额
+        BigDecimal totalAmount = calculateOrderAmount(order);
+        
+        // 执行支付
+        PaymentResult paymentResult = executePayment(order, totalAmount, paymentMethod);
+        
+        // 更新订单状态
+        updateOrderStatus(order, paymentResult);
+        
+        return paymentResult;
+    }
+    
+    /**
+     * 验证订单状态是否可以支付
+     * 
+     * @param order 订单对象
+     * @throws IllegalOrderStatusException 当订单状态不允许支付时抛出
+     */
+    private void validateOrderStatus(Order order) {
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalOrderStatusException(
+                String.format("订单状态[%s]不允许支付，订单ID: %d", 
+                    order.getStatus().getDescription(), order.getId())
+            );
+        }
+    }
+    
+    /**
+     * 计算订单总金额
+     * 
+     * 包含商品金额、运费、税费等，并应用优惠券折扣。
+     * 
+     * @param order 订单对象
+     * @return 计算后的总金额
+     */
+    private BigDecimal calculateOrderAmount(Order order) {
+        BigDecimal itemAmount = order.getOrderItems().stream()
+            .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+        BigDecimal shippingFee = calculateShippingFee(order);
+        BigDecimal discount = calculateDiscount(order);
+        
+        return itemAmount.add(shippingFee).subtract(discount);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 正确的常量和枚举定义
+```java
+/* [AI-BLOCK-START] - 生成工具: Java编码规范 v2.0 */
+/**
+ * 系统常量定义
+ * 
+ * 定义系统中使用的各种常量值，包括配置参数、限制值等。
+ * 所有常量都使用public static final修饰，并按功能分组。
+ */
+public final class SystemConstants {
+    
+    // 私有构造函数，防止实例化
+    private SystemConstants() {
+        throw new UnsupportedOperationException("工具类不允许实例化");
+    }
+    
+    // 用户相关常量
+    public static final int MAX_USERNAME_LENGTH = 50;
+    public static final int MIN_PASSWORD_LENGTH = 8;
+    public static final int MAX_LOGIN_ATTEMPTS = 3;
+    
+    // 订单相关常量
+    public static final int ORDER_TIMEOUT_MINUTES = 30;
+    public static final BigDecimal MIN_ORDER_AMOUNT = new BigDecimal("0.01");
+    public static final BigDecimal MAX_ORDER_AMOUNT = new BigDecimal("99999.99");
+    
+    // 分页相关常量
+    public static final int DEFAULT_PAGE_SIZE = 20;
+    public static final int MAX_PAGE_SIZE = 100;
+    
+    // 缓存相关常量
+    public static final String USER_CACHE_PREFIX = "user:";
+    public static final int CACHE_EXPIRE_HOURS = 24;
+    
+    // 日期格式常量
+    public static final String DATE_FORMAT = "yyyy-MM-dd";
+    public static final String DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+}
+
+/**
+ * 用户状态枚举
+ * 
+ * 定义用户在系统中的各种状态。
+ */
+public enum UserStatus {
+    
+    /** 正常激活状态 */
+    ACTIVE("ACTIVE", "正常"),
+    
+    /** 未激活状态 */
+    INACTIVE("INACTIVE", "未激活"),
+    
+    /** 已锁定状态 */
+    LOCKED("LOCKED", "已锁定"),
+    
+    /** 已删除状态 */
+    DELETED("DELETED", "已删除");
+    
+    private final String code;
+    private final String description;
+    
+    /**
+     * 构造函数
+     * 
+     * @param code 状态代码
+     * @param description 状态描述
+     */
+    UserStatus(String code, String description) {
+        this.code = code;
+        this.description = description;
+    }
+    
+    /**
+     * 获取状态代码
+     * 
+     * @return 状态代码
+     */
+    public String getCode() {
+        return code;
+    }
+    
+    /**
+     * 获取状态描述
+     * 
+     * @return 状态描述
+     */
+    public String getDescription() {
+        return description;
+    }
+    
+    /**
+     * 根据代码查找状态枚举
+     * 
+     * @param code 状态代码
+     * @return 对应的状态枚举
+     * @throws IllegalArgumentException 当代码无效时抛出
+     */
+    public static UserStatus fromCode(String code) {
+        for (UserStatus status : values()) {
+            if (status.code.equals(code)) {
+                return status;
+            }
+        }
+        throw new IllegalArgumentException("无效的用户状态代码: " + code);
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此Java编码规范确保代码具有良好的可读性、可维护性和一致性*
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,454 @@
+# SQL编程规范
+
+## 🎯 规范目标
+- 确保SQL代码的可读性、可维护性和高性能
+- 防止SQL注入和其他安全风险
+- 建立统一的SQL编写标准
+- 优化数据库操作性能
+
+## 📋 DDL规范 (数据定义语言)
+
+### 表设计规范
+
+#### MUST - 必须遵守
+```sql
+-- ✅ 正确示例：标准表结构
+CREATE TABLE `user_info` (
+    `id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    `username` VARCHAR(50) NOT NULL COMMENT '用户名',
+    `email` VARCHAR(100) NOT NULL COMMENT '邮箱',
+    `phone` VARCHAR(20) COMMENT '手机号',
+    `status` TINYINT DEFAULT 1 COMMENT '状态：1-正常，0-禁用',
+    `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `create_by` VARCHAR(50) COMMENT '创建人',
+    `update_by` VARCHAR(50) COMMENT '更新人',
+    `is_deleted` TINYINT DEFAULT 0 COMMENT '逻辑删除：1-已删除，0-未删除',
+    INDEX `idx_username` (`username`),
+    INDEX `idx_email` (`email`),
+    INDEX `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户信息表';
+```
+
+#### 表命名规范
+- **MUST**: 使用小写字母和下划线
+- **MUST**: 表名应该是复数形式或包含描述性后缀
+- **MUST**: 避免使用MySQL保留字
+
+```sql
+-- ✅ 正确示例
+user_info, order_details, product_categories
+
+-- ❌ 错误示例  
+UserInfo, orderDetail, user, order
+```
+
+### 字段设计规范
+
+#### 基础字段规范
+```sql
+-- MUST: 每个表都必须包含以下标准字段
+`id` BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+`create_time` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+`update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+`is_deleted` TINYINT DEFAULT 0 COMMENT '逻辑删除：1-已删除，0-未删除'
+```
+
+#### 字段类型选择
+```sql
+-- ✅ 数值类型选择
+TINYINT     -- 状态标志位 (0-255)
+INT         -- 一般整数 (±21亿)
+BIGINT      -- 大整数、ID主键
+DECIMAL     -- 精确小数 (金额等)
+
+-- ✅ 字符类型选择  
+CHAR(n)     -- 固定长度字符串 (如手机号)
+VARCHAR(n)  -- 可变长度字符串 (如姓名、地址)
+TEXT        -- 长文本内容
+
+-- ✅ 时间类型选择
+DATETIME    -- 完整日期时间
+DATE        -- 仅日期
+TIMESTAMP   -- 时间戳 (有时区概念)
+```
+
+### 索引设计规范
+
+#### 索引命名规范
+```sql
+-- MUST: 索引命名规则
+PRIMARY KEY: pk_表名
+UNIQUE INDEX: uk_表名_字段名
+NORMAL INDEX: idx_表名_字段名  
+FOREIGN KEY: fk_表名_引用表名
+
+-- ✅ 正确示例
+ALTER TABLE user_info ADD INDEX idx_user_info_email (email);
+ALTER TABLE user_info ADD UNIQUE INDEX uk_user_info_username (username);
+```
+
+#### 索引设计原则
+```sql
+-- MUST: 高频查询字段必须建索引
+-- 查询条件字段
+ALTER TABLE orders ADD INDEX idx_orders_user_id (user_id);
+ALTER TABLE orders ADD INDEX idx_orders_status (status);
+
+-- 排序字段
+ALTER TABLE orders ADD INDEX idx_orders_create_time (create_time);
+
+-- 联合索引遵循最左前缀原则
+ALTER TABLE orders ADD INDEX idx_orders_user_status_time (user_id, status, create_time);
+
+-- SHOULD: 覆盖索引优化查询
+ALTER TABLE orders ADD INDEX idx_orders_user_cover (user_id, status, total_amount);
+```
+
+## 📋 DML规范 (数据操作语言)
+
+### 查询规范
+
+#### SELECT语句规范
+```sql
+-- ✅ 正确示例：完整的查询规范
+SELECT 
+    u.id,
+    u.username,
+    u.email,
+    u.create_time
+FROM user_info u
+WHERE u.is_deleted = 0
+    AND u.status = 1
+    AND u.create_time >= '2024-01-01'
+ORDER BY u.create_time DESC
+LIMIT 0, 20;
+
+-- MUST: 避免使用 SELECT *
+-- ❌ 错误示例
+SELECT * FROM user_info;
+
+-- ✅ 正确示例
+SELECT id, username, email FROM user_info;
+```
+
+#### JOIN操作规范
+```sql
+-- ✅ 正确示例：明确指定JOIN类型和条件
+SELECT 
+    u.username,
+    o.order_no,
+    o.total_amount
+FROM user_info u
+INNER JOIN orders o ON u.id = o.user_id
+WHERE u.is_deleted = 0 
+    AND o.is_deleted = 0
+    AND o.status = 'completed'
+ORDER BY o.create_time DESC;
+
+-- MUST: 大表JOIN使用索引字段
+-- MUST: 避免隐式类型转换
+-- WHERE u.id = o.user_id  -- 确保字段类型一致
+```
+
+#### 分页查询规范
+```sql
+-- ✅ 正确示例：使用LIMIT分页
+SELECT id, username, email 
+FROM user_info 
+WHERE is_deleted = 0
+ORDER BY id DESC
+LIMIT 20 OFFSET 100;
+
+-- SHOULD: 大数据量分页优化
+SELECT id, username, email 
+FROM user_info 
+WHERE is_deleted = 0 
+    AND id < 10000  -- 使用游标分页
+ORDER BY id DESC
+LIMIT 20;
+```
+
+### 插入规范
+
+```sql
+-- ✅ 单条插入
+INSERT INTO user_info (username, email, phone, create_by) 
+VALUES ('john_doe', 'john@example.com', '13800138000', 'admin');
+
+-- ✅ 批量插入 (推荐)
+INSERT INTO user_info (username, email, phone, create_by) 
+VALUES 
+    ('user1', 'user1@example.com', '13800138001', 'admin'),
+    ('user2', 'user2@example.com', '13800138002', 'admin'),
+    ('user3', 'user3@example.com', '13800138003', 'admin');
+
+-- MUST: 明确指定字段列表
+-- MUST: 批量插入每批不超过1000条
+```
+
+### 更新规范
+
+```sql
+-- ✅ 正确示例：安全的更新操作
+UPDATE user_info 
+SET 
+    email = 'newemail@example.com',
+    update_time = NOW(),
+    update_by = 'admin'
+WHERE id = 123 
+    AND is_deleted = 0;
+
+-- MUST: 更新必须有WHERE条件
+-- MUST: 更新逻辑删除标志而非物理删除
+UPDATE user_info 
+SET 
+    is_deleted = 1,
+    update_time = NOW(),
+    update_by = 'admin'
+WHERE id = 123;
+```
+
+## 🚀 性能优化规范
+
+### 查询优化
+```sql
+-- ✅ 使用索引优化
+-- 确保WHERE条件使用索引字段
+EXPLAIN SELECT * FROM orders WHERE user_id = 123 AND status = 'pending';
+
+-- ✅ 避免函数导致索引失效
+-- ❌ 错误示例
+SELECT * FROM orders WHERE DATE(create_time) = '2024-01-01';
+-- ✅ 正确示例  
+SELECT * FROM orders WHERE create_time >= '2024-01-01' AND create_time < '2024-01-02';
+
+-- ✅ 使用覆盖索引
+SELECT user_id, status, total_amount 
+FROM orders 
+WHERE user_id = 123;  -- 需要建立覆盖索引: (user_id, status, total_amount)
+```
+
+### 大数据量处理规范
+```sql
+-- ✅ 分批处理大数据量操作
+-- 分批删除
+DELETE FROM log_table 
+WHERE create_time < '2023-01-01' 
+    AND is_deleted = 0
+LIMIT 1000;
+
+-- ✅ 使用临时表优化复杂查询
+CREATE TEMPORARY TABLE temp_user_stats AS
+SELECT user_id, COUNT(*) as order_count
+FROM orders 
+WHERE create_time >= '2024-01-01'
+GROUP BY user_id;
+
+-- 然后使用临时表JOIN
+SELECT u.username, t.order_count
+FROM user_info u
+INNER JOIN temp_user_stats t ON u.id = t.user_id;
+```
+
+## 🔒 安全规范
+
+### SQL注入防护
+```sql
+-- MUST: 使用参数化查询 (在MyBatis中)
+<!-- ✅ 正确示例 -->
+<select id="findByUsername" parameterType="string" resultType="User">
+    SELECT id, username, email 
+    FROM user_info 
+    WHERE username = #{username} 
+        AND is_deleted = 0
+</select>
+
+<!-- ❌ 错误示例：字符串拼接 -->
+<select id="findByUsername" parameterType="string" resultType="User">
+    SELECT id, username, email 
+    FROM user_info 
+    WHERE username = '${username}'
+</select>
+```
+
+### 权限控制
+```sql
+-- MUST: 应用层权限控制
+-- 每个查询都应该包含权限过滤条件
+SELECT o.* 
+FROM orders o
+INNER JOIN user_info u ON o.user_id = u.id
+WHERE u.tenant_id = #{currentUserTenantId}  -- 租户隔离
+    AND o.is_deleted = 0;
+```
+
+### 敏感数据处理
+```sql
+-- SHOULD: 敏感数据脱敏查询
+SELECT 
+    id,
+    username,
+    CONCAT(LEFT(phone, 3), '****', RIGHT(phone, 4)) AS phone_masked,
+    CONCAT(LEFT(email, 2), '***', SUBSTRING(email, LOCATE('@', email))) AS email_masked
+FROM user_info
+WHERE id = #{userId};
+```
+
+## 📊 事务处理规范
+
+### 事务使用原则
+```sql
+-- ✅ 正确的事务使用
+START TRANSACTION;
+
+-- 第一步：检查库存
+SELECT stock_quantity 
+FROM product_inventory 
+WHERE product_id = 123 
+    AND warehouse_id = 1
+FOR UPDATE;
+
+-- 第二步：扣减库存
+UPDATE product_inventory 
+SET stock_quantity = stock_quantity - 5,
+    update_time = NOW()
+WHERE product_id = 123 
+    AND warehouse_id = 1
+    AND stock_quantity >= 5;
+
+-- 第三步：创建订单
+INSERT INTO orders (user_id, product_id, quantity, status, create_time)
+VALUES (456, 123, 5, 'pending', NOW());
+
+COMMIT;
+```
+
+### 死锁避免
+```sql
+-- MUST: 按固定顺序访问资源避免死锁
+-- 总是按照 id 顺序锁定记录
+UPDATE accounts 
+SET balance = balance - 100 
+WHERE id = LEAST(#{fromAccountId}, #{toAccountId});
+
+UPDATE accounts 
+SET balance = balance + 100 
+WHERE id = GREATEST(#{fromAccountId}, #{toAccountId});
+```
+
+## 🔍 MyBatis集成规范
+
+### XML映射文件规范
+```xml
+<!-- ✅ 标准的MyBatis映射文件结构 -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="cn.org.bjca.footstone.mapper.UserMapper">
+    
+    <!-- 结果映射 -->
+    <resultMap id="UserResultMap" type="cn.org.bjca.footstone.entity.User">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="username" property="username" jdbcType="VARCHAR"/>
+        <result column="email" property="email" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+    
+    <!-- 基础查询 -->
+    <select id="findById" parameterType="long" resultMap="UserResultMap">
+        SELECT id, username, email, create_time
+        FROM user_info
+        WHERE id = #{id} 
+            AND is_deleted = 0
+    </select>
+    
+    <!-- 动态查询 -->
+    <select id="findByCondition" parameterType="UserQuery" resultMap="UserResultMap">
+        SELECT id, username, email, create_time
+        FROM user_info
+        WHERE is_deleted = 0
+        <if test="username != null and username != ''">
+            AND username LIKE CONCAT('%', #{username}, '%')
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+    
+</mapper>
+```
+
+## 📈 监控和调试
+
+### SQL执行监控
+```sql
+-- MUST: 生产环境启用慢查询日志
+-- 在MySQL配置中设置
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+
+-- SHOULD: 使用EXPLAIN分析查询计划
+EXPLAIN FORMAT=JSON 
+SELECT u.username, COUNT(o.id) as order_count
+FROM user_info u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.create_time >= '2024-01-01'
+GROUP BY u.id
+ORDER BY order_count DESC;
+```
+
+## 🏷️ 代码注释规范
+
+```sql
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+/**
+ * 用户订单统计查询
+ * 功能：查询指定时间段内用户的订单统计信息
+ * 性能：使用索引 idx_orders_user_create_time
+ * 注意：结果按订单数量降序排列
+ */
+SELECT 
+    u.id,
+    u.username,
+    COUNT(o.id) as order_count,
+    SUM(o.total_amount) as total_amount
+FROM user_info u
+LEFT JOIN orders o ON u.id = o.user_id 
+    AND o.create_time >= #{startTime}
+    AND o.create_time <= #{endTime}
+    AND o.is_deleted = 0
+WHERE u.is_deleted = 0
+GROUP BY u.id, u.username
+HAVING order_count > 0
+ORDER BY order_count DESC
+LIMIT #{limit};
+-- [AI-BLOCK-END]
+```
+
+## ✅ 检查清单
+
+### 开发阶段检查
+- [ ] SQL语句使用参数化查询
+- [ ] 查询条件包含必要的索引字段
+- [ ] 避免使用SELECT *
+- [ ] 更新/删除操作包含WHERE条件
+- [ ] 事务范围最小化
+
+### 上线前检查
+- [ ] 执行EXPLAIN分析查询计划
+- [ ] 检查慢查询日志
+- [ ] 验证索引使用情况
+- [ ] 测试并发场景下的性能
+- [ ] 确认数据安全和权限控制
+
+---
+*遵循以上SQL规范，确保数据库操作的安全性、性能和可维护性*
+description:
+globs:
+alwaysApply: false
+---

@@ -1,0 +1,1095 @@
+# CRUD操作流程 (流程层规则)
+> 标准化的增删改查操作流程规范和最佳实践
+
+## 基础规范
+
+### CRUD操作原则
+- **统一接口**: 所有实体的CRUD操作遵循统一的接口规范
+- **事务一致性**: 确保数据操作的事务一致性
+- **权限控制**: 每个操作都要进行权限验证
+- **审计日志**: 记录所有数据变更的审计信息
+- **错误处理**: 统一的错误处理和响应格式
+
+### 操作流程标准
+- **Create**: 创建操作的标准流程
+- **Read**: 查询操作的标准流程和优化
+- **Update**: 更新操作的标准流程
+- **Delete**: 删除操作的标准流程（软删除优先）
+- **Batch**: 批量操作的标准流程
+
+### 数据验证层次
+- **格式验证**: 数据格式和类型验证
+- **业务验证**: 业务规则和约束验证
+- **权限验证**: 操作权限验证
+- **完整性验证**: 数据完整性和一致性验证
+- **安全验证**: 防止恶意操作的安全验证
+
+### 性能优化策略
+- **查询优化**: 合理使用索引和查询条件
+- **批量操作**: 大量数据操作使用批量处理
+- **缓存策略**: 合理使用缓存提升性能
+- **分页处理**: 大数据集必须分页处理
+- **异步处理**: 耗时操作使用异步处理
+
+## 强制行为
+
+### Create操作要求
+- **参数验证**: 严格验证输入参数
+- **业务规则检查**: 执行业务规则验证
+- **权限验证**: 检查创建权限
+- **数据转换**: DTO转换为Entity
+- **持久化操作**: 保存到数据库
+- **审计记录**: 记录创建操作日志
+- **响应构建**: 构建标准响应格式
+
+### Read操作要求
+- **权限过滤**: 根据权限过滤查询结果
+- **分页支持**: 列表查询必须支持分页
+- **排序支持**: 支持多字段排序
+- **条件查询**: 支持动态查询条件
+- **投影查询**: 只查询需要的字段
+- **缓存利用**: 合理使用查询缓存
+- **性能监控**: 监控查询性能
+
+### Update操作要求
+- **存在性检查**: 验证实体是否存在
+- **权限验证**: 检查更新权限
+- **乐观锁**: 使用版本号防止并发冲突
+- **部分更新**: 支持部分字段更新
+- **业务规则**: 执行更新业务规则
+- **审计记录**: 记录更新前后的变化
+- **缓存更新**: 更新相关缓存
+
+### Delete操作要求
+- **软删除优先**: 优先使用软删除
+- **关联检查**: 检查关联数据
+- **权限验证**: 检查删除权限
+- **级联处理**: 处理级联删除逻辑
+- **审计记录**: 记录删除操作
+- **缓存清理**: 清理相关缓存
+- **数据备份**: 重要数据删除前备份
+
+## 禁止行为
+
+### 通用禁令
+- **禁止跳过验证**: 不能跳过任何验证环节
+- **禁止硬编码**: 不在代码中硬编码业务规则
+- **禁止忽略权限**: 所有操作都必须验证权限
+- **禁止忽略事务**: 数据操作必须在事务中执行
+- **禁止暴露内部**: 不向客户端暴露内部错误
+
+### 性能相关禁令
+- **禁止N+1查询**: 避免在循环中查询数据库
+- **禁止全表扫描**: 避免没有条件的查询
+- **禁止大事务**: 避免长时间持有事务
+- **禁止同步长操作**: 长时间操作使用异步处理
+- **禁止无限制查询**: 查询结果必须有合理限制
+
+### 安全相关禁令
+- **禁止SQL注入**: 使用参数化查询
+- **禁止权限绕过**: 不能绕过权限检查
+- **禁止敏感信息泄露**: 不返回敏感信息
+- **禁止批量攻击**: 防范批量恶意操作
+- **禁止数据泄露**: 确保数据访问安全
+
+### 数据一致性禁令
+- **禁止脏数据**: 确保数据完整性
+- **禁止孤儿数据**: 防止产生孤儿记录
+- **禁止状态不一致**: 保持数据状态一致
+- **禁止并发冲突**: 处理并发访问冲突
+- **禁止数据丢失**: 防止数据意外丢失
+
+## 示例代码
+
+### 标准Create操作流程
+```java
+/* [AI-BLOCK-START] - 生成工具: CRUD操作流程 v2.0 */
+/**
+ * 用户创建操作的完整流程示例
+ * 
+ * 展示标准的Create操作流程，包括验证、转换、持久化、审计等环节。
+ */
+@Service
+@Transactional
+@Validated
+@Slf4j
+public class UserCrudService {
+    
+    private final UserRepository userRepository;
+    private final UserConverter userConverter;
+    private final UserValidationService validationService;
+    private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
+    private final CacheManager cacheManager;
+    private final EventPublisher eventPublisher;
+    
+    public UserCrudService(UserRepository userRepository,
+                          UserConverter userConverter,
+                          UserValidationService validationService,
+                          PasswordEncoder passwordEncoder,
+                          AuditService auditService,
+                          CacheManager cacheManager,
+                          EventPublisher eventPublisher) {
+        this.userRepository = userRepository;
+        this.userConverter = userConverter;
+        this.validationService = validationService;
+        this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
+        this.cacheManager = cacheManager;
+        this.eventPublisher = eventPublisher;
+    }
+    
+    /**
+     * 创建用户 - 标准Create操作流程
+     * 
+     * @param request 用户创建请求
+     * @return 创建的用户响应
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UserResponse createUser(@Valid CreateUserRequest request) {
+        log.info("开始创建用户: username={}", request.getUsername());
+        
+        // 1. 参数验证（由@Valid注解触发）
+        // 2. 业务规则验证
+        ValidationResult validationResult = validationService.validateUserCreation(request);
+        if (!validationResult.isValid()) {
+            throw new ValidationException("用户创建验证失败", 
+                convertToValidationErrors(validationResult.getErrors()));
+        }
+        
+        // 3. 权限验证
+        validateCreatePermission(request);
+        
+        // 4. 数据预处理
+        preprocessUserData(request);
+        
+        try {
+            // 5. DTO转Entity
+            User user = userConverter.toEntity(request);
+            
+            // 6. 设置系统字段
+            user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+            user.setStatus(UserStatus.PENDING);
+            user.setDeleted(false);
+            
+            // 7. 持久化操作
+            User savedUser = userRepository.save(user);
+            log.info("用户创建成功: id={}, username={}", savedUser.getId(), savedUser.getUsername());
+            
+            // 8. 审计记录
+            auditService.recordUserCreation(savedUser, getCurrentUser());
+            
+            // 9. 发布事件
+            eventPublisher.publishEvent(new UserCreatedEvent(savedUser));
+            
+            // 10. 构建响应
+            UserResponse response = userConverter.toResponse(savedUser);
+            
+            // 11. 缓存更新（可选）
+            updateUserCache(savedUser);
+            
+            return response;
+            
+        } catch (DataAccessException e) {
+            log.error("用户创建数据库操作失败: username={}", request.getUsername(), e);
+            throw new SystemException("用户创建失败，请稍后重试", e);
+        } catch (Exception e) {
+            log.error("用户创建未知错误: username={}", request.getUsername(), e);
+            throw new SystemException("系统错误，请联系管理员", e);
+        }
+    }
+    
+    /**
+     * 批量创建用户
+     * 
+     * @param requests 用户创建请求列表
+     * @return 批量创建结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchCreateResult<UserResponse> createUsersBatch(
+            @Valid @NotEmpty @Size(max = 100) List<CreateUserRequest> requests) {
+        
+        log.info("开始批量创建用户: count={}", requests.size());
+        
+        // 权限验证
+        validateBatchCreatePermission(requests);
+        
+        List<UserResponse> successResults = new ArrayList<>();
+        List<BatchError> errors = new ArrayList<>();
+        
+        // 分批处理，每批50个
+        int batchSize = 50;
+        for (int i = 0; i < requests.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, requests.size());
+            List<CreateUserRequest> batch = requests.subList(i, end);
+            
+            processBatch(batch, successResults, errors, i);
+        }
+        
+        return BatchCreateResult.<UserResponse>builder()
+            .totalCount(requests.size())
+            .successCount(successResults.size())
+            .failureCount(errors.size())
+            .successResults(successResults)
+            .errors(errors)
+            .build();
+    }
+    
+    /**
+     * 处理单批用户创建
+     */
+    private void processBatch(List<CreateUserRequest> batch, 
+                            List<UserResponse> successResults,
+                            List<BatchError> errors, 
+                            int startIndex) {
+        for (int j = 0; j < batch.size(); j++) {
+            CreateUserRequest request = batch.get(j);
+            int globalIndex = startIndex + j;
+            
+            try {
+                UserResponse response = createUser(request);
+                successResults.add(response);
+                
+            } catch (Exception e) {
+                log.warn("批量创建用户失败: index={}, username={}, error={}", 
+                    globalIndex, request.getUsername(), e.getMessage());
+                
+                errors.add(BatchError.builder()
+                    .index(globalIndex)
+                    .identifier(request.getUsername())
+                    .message(e.getMessage())
+                    .build());
+            }
+        }
+    }
+    
+    /**
+     * 查询用户 - 标准Read操作流程
+     * 
+     * @param id 用户ID
+     * @return 用户响应
+     */
+    @Transactional(readOnly = true)
+    public UserResponse getUser(@NotNull @Min(1) Long id) {
+        log.debug("查询用户: id={}", id);
+        
+        // 1. 权限验证
+        validateReadPermission(id);
+        
+        // 2. 缓存查询
+        UserResponse cachedResponse = getUserFromCache(id);
+        if (cachedResponse != null) {
+            log.debug("从缓存获取用户: id={}", id);
+            return cachedResponse;
+        }
+        
+        // 3. 数据库查询
+        User user = userRepository.findByIdAndDeletedFalse(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+        
+        // 4. 权限过滤
+        filterUserDataByPermission(user);
+        
+        // 5. 构建响应
+        UserResponse response = userConverter.toResponse(user);
+        
+        // 6. 更新缓存
+        updateUserCache(user);
+        
+        return response;
+    }
+    
+    /**
+     * 分页查询用户 - 标准List操作流程
+     * 
+     * @param criteria 查询条件
+     * @param pageable 分页参数
+     * @return 分页用户列表
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<UserResponse> getUsers(UserSearchCriteria criteria, Pageable pageable) {
+        log.debug("分页查询用户: criteria={}, page={}, size={}", 
+            criteria, pageable.getPageNumber(), pageable.getPageSize());
+        
+        // 1. 权限验证和过滤
+        validateListPermission();
+        UserSearchCriteria filteredCriteria = filterCriteriaByPermission(criteria);
+        
+        // 2. 参数验证
+        validatePageableParameters(pageable);
+        
+        // 3. 数据库查询
+        PageResponse<User> userPage = userRepository.findByCriteria(filteredCriteria, pageable);
+        
+        // 4. 权限过滤
+        List<User> filteredUsers = userPage.getContent().stream()
+            .filter(this::hasReadPermission)
+            .collect(Collectors.toList());
+        
+        // 5. 转换响应
+        List<UserResponse> userResponses = filteredUsers.stream()
+            .map(userConverter::toResponse)
+            .collect(Collectors.toList());
+        
+        // 6. 构建分页响应
+        return PageResponse.<UserResponse>builder()
+            .content(userResponses)
+            .page(userPage.getPage())
+            .size(userPage.getSize())
+            .totalPages(userPage.getTotalPages())
+            .totalElements((long) filteredUsers.size())
+            .first(userPage.isFirst())
+            .last(userPage.isLast())
+            .hasNext(userPage.isHasNext())
+            .hasPrevious(userPage.isHasPrevious())
+            .build();
+    }
+    
+    /**
+     * 更新用户 - 标准Update操作流程
+     * 
+     * @param id 用户ID
+     * @param request 更新请求
+     * @return 更新后的用户响应
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public UserResponse updateUser(@NotNull @Min(1) Long id, @Valid UpdateUserRequest request) {
+        log.info("开始更新用户: id={}", id);
+        
+        // 1. 存在性检查
+        User existingUser = userRepository.findByIdAndDeletedFalse(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+        
+        // 2. 权限验证
+        validateUpdatePermission(existingUser);
+        
+        // 3. 业务规则验证
+        ValidationResult validationResult = validationService.validateUserUpdate(id, request);
+        if (!validationResult.isValid()) {
+            throw new ValidationException("用户更新验证失败", 
+                convertToValidationErrors(validationResult.getErrors()));
+        }
+        
+        // 4. 记录更新前状态（用于审计）
+        User beforeUpdate = cloneUser(existingUser);
+        
+        try {
+            // 5. 应用更新
+            userConverter.updateEntity(existingUser, request);
+            existingUser.setUpdateTime(LocalDateTime.now());
+            
+            // 6. 持久化操作
+            User updatedUser = userRepository.save(existingUser);
+            log.info("用户更新成功: id={}", updatedUser.getId());
+            
+            // 7. 审计记录
+            auditService.recordUserUpdate(beforeUpdate, updatedUser, getCurrentUser());
+            
+            // 8. 发布事件
+            eventPublisher.publishEvent(new UserUpdatedEvent(beforeUpdate, updatedUser));
+            
+            // 9. 缓存更新
+            evictUserCache(id);
+            updateUserCache(updatedUser);
+            
+            // 10. 构建响应
+            return userConverter.toResponse(updatedUser);
+            
+        } catch (OptimisticLockingFailureException e) {
+            log.warn("用户更新乐观锁冲突: id={}", id);
+            throw new BusinessException(ErrorCodes.DB_OPTIMISTIC_LOCK_CONFLICT, "数据已被其他用户修改，请刷新后重试");
+            
+        } catch (DataAccessException e) {
+            log.error("用户更新数据库操作失败: id={}", id, e);
+            throw new SystemException("用户更新失败，请稍后重试", e);
+        }
+    }
+    
+    /**
+     * 删除用户 - 标准Delete操作流程（软删除）
+     * 
+     * @param id 用户ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteUser(@NotNull @Min(1) Long id) {
+        log.info("开始删除用户: id={}", id);
+        
+        // 1. 存在性检查
+        User user = userRepository.findByIdAndDeletedFalse(id)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+        
+        // 2. 权限验证
+        validateDeletePermission(user);
+        
+        // 3. 业务规则检查
+        validateDeleteBusinessRules(user);
+        
+        // 4. 关联数据检查
+        checkRelatedDataBeforeDelete(user);
+        
+        try {
+            // 5. 软删除操作
+            user.markAsDeleted();
+            user.setDeleteTime(LocalDateTime.now());
+            
+            // 6. 持久化操作
+            userRepository.save(user);
+            log.info("用户删除成功: id={}", id);
+            
+            // 7. 审计记录
+            auditService.recordUserDeletion(user, getCurrentUser());
+            
+            // 8. 发布事件
+            eventPublisher.publishEvent(new UserDeletedEvent(user));
+            
+            // 9. 缓存清理
+            evictUserCache(id);
+            
+            // 10. 清理相关数据
+            cleanupRelatedDataAfterDelete(user);
+            
+        } catch (DataAccessException e) {
+            log.error("用户删除数据库操作失败: id={}", id, e);
+            throw new SystemException("用户删除失败，请稍后重试", e);
+        }
+    }
+    
+    /**
+     * 批量删除用户
+     * 
+     * @param ids 用户ID列表
+     * @return 批量删除结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchDeleteResult deleteUsersBatch(@NotEmpty @Size(max = 100) List<Long> ids) {
+        log.info("开始批量删除用户: count={}", ids.size());
+        
+        // 权限验证
+        validateBatchDeletePermission(ids);
+        
+        int successCount = 0;
+        List<BatchError> errors = new ArrayList<>();
+        
+        for (int i = 0; i < ids.size(); i++) {
+            Long id = ids.get(i);
+            try {
+                deleteUser(id);
+                successCount++;
+                
+            } catch (Exception e) {
+                log.warn("批量删除用户失败: index={}, id={}, error={}", i, id, e.getMessage());
+                
+                errors.add(BatchError.builder()
+                    .index(i)
+                    .identifier(id.toString())
+                    .message(e.getMessage())
+                    .build());
+            }
+        }
+        
+        return BatchDeleteResult.builder()
+            .totalCount(ids.size())
+            .successCount(successCount)
+            .failureCount(errors.size())
+            .errors(errors)
+            .build();
+    }
+    
+    // ==================== 辅助方法 ====================
+    
+    /**
+     * 权限验证方法
+     */
+    private void validateCreatePermission(CreateUserRequest request) {
+        // 实现创建权限验证逻辑
+        if (!hasPermission("user:create")) {
+            throw new AccessDeniedException("user:create");
+        }
+    }
+    
+    private void validateReadPermission(Long userId) {
+        if (!hasPermission("user:read") && !isCurrentUser(userId)) {
+            throw new AccessDeniedException("user:read");
+        }
+    }
+    
+    private void validateUpdatePermission(User user) {
+        if (!hasPermission("user:update") && !isCurrentUser(user.getId())) {
+            throw new AccessDeniedException("user:update");
+        }
+    }
+    
+    private void validateDeletePermission(User user) {
+        if (!hasPermission("user:delete")) {
+            throw new AccessDeniedException("user:delete");
+        }
+        
+        if (user.isSystemAdmin()) {
+            throw new BusinessException(ErrorCodes.BUSINESS_RULE_VIOLATION, "不能删除系统管理员");
+        }
+    }
+    
+    /**
+     * 业务规则验证
+     */
+    private void validateDeleteBusinessRules(User user) {
+        if (user.getStatus() == UserStatus.ACTIVE && hasActiveProjects(user)) {
+            throw new BusinessException(ErrorCodes.BUSINESS_RULE_VIOLATION, 
+                "用户有活跃项目，不能删除");
+        }
+    }
+    
+    /**
+     * 数据预处理
+     */
+    private void preprocessUserData(CreateUserRequest request) {
+        // 邮箱转小写
+        if (request.getEmail() != null) {
+            request.setEmail(request.getEmail().toLowerCase().trim());
+        }
+        
+        // 用户名trim
+        if (request.getUsername() != null) {
+            request.setUsername(request.getUsername().trim());
+        }
+    }
+    
+    /**
+     * 缓存操作
+     */
+    private UserResponse getUserFromCache(Long id) {
+        Cache cache = cacheManager.getCache("users");
+        if (cache != null) {
+            Cache.ValueWrapper wrapper = cache.get("user:" + id);
+            if (wrapper != null) {
+                return (UserResponse) wrapper.get();
+            }
+        }
+        return null;
+    }
+    
+    private void updateUserCache(User user) {
+        Cache cache = cacheManager.getCache("users");
+        if (cache != null) {
+            UserResponse response = userConverter.toResponse(user);
+            cache.put("user:" + user.getId(), response);
+        }
+    }
+    
+    private void evictUserCache(Long id) {
+        Cache cache = cacheManager.getCache("users");
+        if (cache != null) {
+            cache.evict("user:" + id);
+        }
+    }
+    
+    /**
+     * 获取当前用户
+     */
+    private String getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "system";
+    }
+    
+    /**
+     * 权限检查辅助方法
+     */
+    private boolean hasPermission(String permission) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return false;
+        
+        return authentication.getAuthorities().stream()
+            .anyMatch(authority -> authority.getAuthority().equals(permission));
+    }
+    
+    private boolean isCurrentUser(Long userId) {
+        String currentUsername = getCurrentUser();
+        if (currentUsername == null) return false;
+        
+        return userRepository.findByIdAndDeletedFalse(userId)
+            .map(user -> user.getUsername().equals(currentUsername))
+            .orElse(false);
+    }
+    
+    private boolean hasReadPermission(User user) {
+        return hasPermission("user:read") || isCurrentUser(user.getId());
+    }
+    
+    /**
+     * 其他辅助方法
+     */
+    private void filterUserDataByPermission(User user) {
+        if (!hasPermission("user:read:sensitive")) {
+            // 过滤敏感信息
+            user.setPhone(maskPhone(user.getPhone()));
+            user.setEmail(maskEmail(user.getEmail()));
+        }
+    }
+    
+    private UserSearchCriteria filterCriteriaByPermission(UserSearchCriteria criteria) {
+        if (!hasPermission("user:read:all")) {
+            // 限制查询范围
+            criteria = criteria.toBuilder()
+                .departmentId(getCurrentUserDepartmentId())
+                .build();
+        }
+        return criteria;
+    }
+    
+    private void validatePageableParameters(Pageable pageable) {
+        if (pageable.getPageSize() > 100) {
+            throw new ValidationException("分页大小不能超过100");
+        }
+    }
+    
+    private User cloneUser(User user) {
+        // 实现用户对象的深拷贝，用于审计
+        return User.builder()
+            .id(user.getId())
+            .username(user.getUsername())
+            .email(user.getEmail())
+            .name(user.getName())
+            .phone(user.getPhone())
+            .status(user.getStatus())
+            .version(user.getVersion())
+            .build();
+    }
+    
+    private void checkRelatedDataBeforeDelete(User user) {
+        // 检查是否有关联数据
+        if (hasActiveProjects(user)) {
+            throw new BusinessException(ErrorCodes.BUSINESS_RULE_VIOLATION, 
+                "用户有关联的活跃项目，不能删除");
+        }
+    }
+    
+    private void cleanupRelatedDataAfterDelete(User user) {
+        // 清理相关数据
+        // 例如：清理用户会话、临时文件等
+    }
+    
+    private boolean hasActiveProjects(User user) {
+        // 检查用户是否有活跃项目
+        return false; // 示例实现
+    }
+    
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() != 11) return phone;
+        return phone.substring(0, 3) + "****" + phone.substring(7);
+    }
+    
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return email;
+        String[] parts = email.split("@");
+        String local = parts[0];
+        String domain = parts[1];
+        
+        if (local.length() <= 2) return email;
+        return local.substring(0, 2) + "***@" + domain;
+    }
+    
+    private Long getCurrentUserDepartmentId() {
+        // 获取当前用户的部门ID
+        return 1L; // 示例实现
+    }
+    
+    private List<ValidationException.ValidationError> convertToValidationErrors(
+            List<ValidationError> errors) {
+        return errors.stream()
+            .map(error -> ValidationException.ValidationError.builder()
+                .field(error.getField())
+                .message(error.getMessage())
+                .rejectedValue(error.getRejectedValue())
+                .build())
+            .collect(Collectors.toList());
+    }
+}
+/* [AI-BLOCK-END] */
+```
+
+### 批量操作结果类
+```java
+/* [AI-BLOCK-START] - 生成工具: CRUD操作流程 v2.0 */
+/**
+ * 批量创建结果
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "批量创建结果")
+public class BatchCreateResult<T> {
+    
+    @Schema(description = "总数量", example = "100")
+    private int totalCount;
+    
+    @Schema(description = "成功数量", example = "95")
+    private int successCount;
+    
+    @Schema(description = "失败数量", example = "5")
+    private int failureCount;
+    
+    @Schema(description = "成功结果列表")
+    private List<T> successResults;
+    
+    @Schema(description = "错误列表")
+    private List<BatchError> errors;
+}
+
+/**
+ * 批量删除结果
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "批量删除结果")
+public class BatchDeleteResult {
+    
+    @Schema(description = "总数量", example = "50")
+    private int totalCount;
+    
+    @Schema(description = "成功数量", example = "48")
+    private int successCount;
+    
+    @Schema(description = "失败数量", example = "2")
+    private int failureCount;
+    
+    @Schema(description = "错误列表")
+    private List<BatchError> errors;
+}
+
+/**
+ * 批量操作错误
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "批量操作错误")
+public class BatchError {
+    
+    @Schema(description = "错误索引", example = "10")
+    private int index;
+    
+    @Schema(description = "数据标识", example = "user001")
+    private String identifier;
+    
+    @Schema(description = "错误消息", example = "用户名已存在")
+    private String message;
+    
+    @Schema(description = "错误码", example = "USER_USERNAME_EXISTS")
+    private String errorCode;
+}
+
+/**
+ * CRUD操作事件
+ */
+public abstract class CrudEvent<T> {
+    
+    private final T entity;
+    private final String operation;
+    private final LocalDateTime timestamp;
+    private final String operator;
+    
+    protected CrudEvent(T entity, String operation, String operator) {
+        this.entity = entity;
+        this.operation = operation;
+        this.operator = operator;
+        this.timestamp = LocalDateTime.now();
+    }
+    
+    public T getEntity() { return entity; }
+    public String getOperation() { return operation; }
+    public LocalDateTime getTimestamp() { return timestamp; }
+    public String getOperator() { return operator; }
+}
+
+/**
+ * 用户创建事件
+ */
+public class UserCreatedEvent extends CrudEvent<User> {
+    
+    public UserCreatedEvent(User user) {
+        super(user, "CREATE", getCurrentUser());
+    }
+    
+    private static String getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : "system";
+    }
+}
+
+/**
+ * 用户更新事件
+ */
+public class UserUpdatedEvent extends CrudEvent<User> {
+    
+    private final User beforeUpdate;
+    
+    public UserUpdatedEvent(User beforeUpdate, User afterUpdate) {
+        super(afterUpdate, "UPDATE", getCurrentUser());
+        this.beforeUpdate = beforeUpdate;
+    }
+    
+    public User getBeforeUpdate() { return beforeUpdate; }
+    
+    private static String getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : "system";
+    }
+}
+
+/**
+ * 用户删除事件
+ */
+public class UserDeletedEvent extends CrudEvent<User> {
+    
+    public UserDeletedEvent(User user) {
+        super(user, "DELETE", getCurrentUser());
+    }
+    
+    private static String getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : "system";
+    }
+}
+
+/**
+ * CRUD操作审计服务
+ */
+@Service
+@Slf4j
+public class CrudAuditService {
+    
+    private final AuditLogRepository auditLogRepository;
+    private final ObjectMapper objectMapper;
+    
+    public CrudAuditService(AuditLogRepository auditLogRepository, ObjectMapper objectMapper) {
+        this.auditLogRepository = auditLogRepository;
+        this.objectMapper = objectMapper;
+    }
+    
+    /**
+     * 记录创建操作审计
+     */
+    public void recordCreation(Object entity, String operator) {
+        try {
+            AuditLog auditLog = AuditLog.builder()
+                .entityType(entity.getClass().getSimpleName())
+                .entityId(getEntityId(entity))
+                .operation("CREATE")
+                .operator(operator)
+                .newValue(objectMapper.writeValueAsString(entity))
+                .operationTime(LocalDateTime.now())
+                .build();
+            
+            auditLogRepository.save(auditLog);
+            
+        } catch (Exception e) {
+            log.error("记录创建审计失败", e);
+        }
+    }
+    
+    /**
+     * 记录更新操作审计
+     */
+    public void recordUpdate(Object beforeEntity, Object afterEntity, String operator) {
+        try {
+            AuditLog auditLog = AuditLog.builder()
+                .entityType(afterEntity.getClass().getSimpleName())
+                .entityId(getEntityId(afterEntity))
+                .operation("UPDATE")
+                .operator(operator)
+                .oldValue(objectMapper.writeValueAsString(beforeEntity))
+                .newValue(objectMapper.writeValueAsString(afterEntity))
+                .operationTime(LocalDateTime.now())
+                .build();
+            
+            auditLogRepository.save(auditLog);
+            
+        } catch (Exception e) {
+            log.error("记录更新审计失败", e);
+        }
+    }
+    
+    /**
+     * 记录删除操作审计
+     */
+    public void recordDeletion(Object entity, String operator) {
+        try {
+            AuditLog auditLog = AuditLog.builder()
+                .entityType(entity.getClass().getSimpleName())
+                .entityId(getEntityId(entity))
+                .operation("DELETE")
+                .operator(operator)
+                .oldValue(objectMapper.writeValueAsString(entity))
+                .operationTime(LocalDateTime.now())
+                .build();
+            
+            auditLogRepository.save(auditLog);
+            
+        } catch (Exception e) {
+            log.error("记录删除审计失败", e);
+        }
+    }
+    
+    /**
+     * 获取实体ID
+     */
+    private String getEntityId(Object entity) {
+        try {
+            // 使用反射获取ID字段
+            Field idField = entity.getClass().getDeclaredField("id");
+            idField.setAccessible(true);
+            Object id = idField.get(entity);
+            return id != null ? id.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}
+
+/**
+ * 审计日志实体
+ */
+@Entity
+@Table(name = "audit_logs")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class AuditLog {
+    
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(name = "entity_type", length = 100, nullable = false)
+    private String entityType;
+    
+    @Column(name = "entity_id", length = 100)
+    private String entityId;
+    
+    @Column(name = "operation", length = 20, nullable = false)
+    private String operation;
+    
+    @Column(name = "operator", length = 100)
+    private String operator;
+    
+    @Column(name = "old_value", columnDefinition = "TEXT")
+    private String oldValue;
+    
+    @Column(name = "new_value", columnDefinition = "TEXT")
+    private String newValue;
+    
+    @Column(name = "operation_time", nullable = false)
+    private LocalDateTime operationTime;
+    
+    @Column(name = "ip_address", length = 50)
+    private String ipAddress;
+    
+    @Column(name = "user_agent", length = 500)
+    private String userAgent;
+}
+
+/**
+ * 通用CRUD控制器基类
+ */
+@Slf4j
+public abstract class BaseCrudController<T, ID, CreateReq, UpdateReq, Response> {
+    
+    protected abstract BaseCrudService<T, ID, CreateReq, UpdateReq, Response> getService();
+    
+    /**
+     * 创建资源
+     */
+    @PostMapping
+    public ResponseEntity<ApiResponse<Response>> create(@Valid @RequestBody CreateReq request) {
+        Response response = getService().create(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.success(response, "创建成功"));
+    }
+    
+    /**
+     * 根据ID获取资源
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<Response>> getById(@PathVariable ID id) {
+        Response response = getService().getById(id);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+    
+    /**
+     * 分页查询资源
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<PageResponse<Response>>> getPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "id") String sort,
+            @RequestParam(defaultValue = "desc") String direction) {
+        
+        Pageable pageable = PageRequest.of(page, size, 
+            Sort.by(Sort.Direction.fromString(direction), sort));
+        
+        PageResponse<Response> result = getService().getPage(pageable);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+    
+    /**
+     * 更新资源
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<Response>> update(@PathVariable ID id, 
+                                                       @Valid @RequestBody UpdateReq request) {
+        Response response = getService().update(id, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "更新成功"));
+    }
+    
+    /**
+     * 删除资源
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable ID id) {
+        getService().delete(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    /**
+     * 批量删除
+     */
+    @DeleteMapping("/batch")
+    public ResponseEntity<ApiResponse<BatchDeleteResult>> deleteBatch(@RequestBody List<ID> ids) {
+        BatchDeleteResult result = getService().deleteBatch(ids);
+        return ResponseEntity.ok(ApiResponse.success(result, "批量删除完成"));
+    }
+}
+
+/**
+ * 通用CRUD服务接口
+ */
+public interface BaseCrudService<T, ID, CreateReq, UpdateReq, Response> {
+    
+    Response create(CreateReq request);
+    
+    Response getById(ID id);
+    
+    PageResponse<Response> getPage(Pageable pageable);
+    
+    Response update(ID id, UpdateReq request);
+    
+    void delete(ID id);
+    
+    BatchDeleteResult deleteBatch(List<ID> ids);
+}
+/* [AI-BLOCK-END] */
+```
+
+---
+
+*此CRUD操作流程规范提供了完整的数据操作标准流程，确保数据的一致性、安全性和可追溯性*
+description:
+globs:
+alwaysApply: false
+---

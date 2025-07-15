@@ -1,0 +1,1056 @@
+# Lua 脚本编程规范 (中间件层规则)
+> Lua脚本在Redis和OpenResty中的标准化使用规范和最佳实践
+
+## 基础规范
+
+### 技术栈版本要求
+- **Lua**: 5.1+ (Redis内置), 5.4+ (OpenResty)
+- **Redis**: 6.0.x+
+- **OpenResty**: 1.21.x+
+- **LuaJIT**: 2.1+ (OpenResty)
+
+### 设计原则
+- **原子性保证**: 利用Lua脚本的原子性特性
+- **性能优化**: 减少网络往返，提升执行效率
+- **可读性优先**: 编写清晰、可维护的Lua代码
+- **错误处理**: 完善的错误处理和异常管理
+- **安全防护**: 防止恶意脚本和资源滥用
+
+## 强制行为
+
+### 1. Redis Lua脚本规范
+
+#### 基础脚本结构
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- Redis Lua脚本基础模板
+-- 脚本名称: 分布式锁获取脚本
+-- 参数说明: KEYS[1]=锁名称, ARGV[1]=锁值, ARGV[2]=过期时间(秒)
+-- 返回值: 1=成功获取锁, 0=锁已被占用
+
+local lock_key = KEYS[1]
+local lock_value = ARGV[1]
+local expire_time = tonumber(ARGV[2])
+
+-- 参数验证
+if not lock_key or not lock_value or not expire_time then
+    return redis.error_reply("ERR invalid parameters")
+end
+
+-- 检查锁是否存在
+local current_value = redis.call('GET', lock_key)
+
+if current_value == false then
+    -- 锁不存在，尝试获取锁
+    local result = redis.call('SET', lock_key, lock_value, 'EX', expire_time, 'NX')
+    if result then
+        return 1
+    else
+        return 0
+    end
+else
+    -- 锁已存在，检查是否是当前持有者
+    if current_value == lock_value then
+        -- 续期锁
+        redis.call('EXPIRE', lock_key, expire_time)
+        return 1
+    else
+        return 0
+    end
+end
+-- [AI-BLOCK-END]
+```
+
+#### 分布式锁脚本集合
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- 获取分布式锁脚本
+local function acquire_lock(lock_key, lock_value, expire_time)
+    local current_value = redis.call('GET', lock_key)
+    
+    if current_value == false then
+        local result = redis.call('SET', lock_key, lock_value, 'EX', expire_time, 'NX')
+        return result and 1 or 0
+    elseif current_value == lock_value then
+        redis.call('EXPIRE', lock_key, expire_time)
+        return 1
+    else
+        return 0
+    end
+end
+
+-- 释放分布式锁脚本
+local function release_lock(lock_key, lock_value)
+    local current_value = redis.call('GET', lock_key)
+    
+    if current_value == lock_value then
+        return redis.call('DEL', lock_key)
+    else
+        return 0
+    end
+end
+
+-- 批量操作脚本
+local function batch_operations(operations)
+    local results = {}
+    local pipeline = redis.pipeline()
+    
+    for i, operation in ipairs(operations) do
+        local cmd = operation.cmd
+        local args = operation.args
+        
+        if cmd == 'SET' then
+            pipeline:set(unpack(args))
+        elseif cmd == 'GET' then
+            pipeline:get(unpack(args))
+        elseif cmd == 'DEL' then
+            pipeline:del(unpack(args))
+        elseif cmd == 'INCR' then
+            pipeline:incr(unpack(args))
+        elseif cmd == 'EXPIRE' then
+            pipeline:expire(unpack(args))
+        end
+    end
+    
+    return pipeline:exec()
+end
+
+-- 限流脚本（滑动窗口）
+local function sliding_window_rate_limit(key, window_size, max_requests, current_time)
+    -- 清理过期的请求记录
+    redis.call('ZREMRANGEBYSCORE', key, 0, current_time - window_size)
+    
+    -- 获取当前窗口内的请求数量
+    local current_requests = redis.call('ZCARD', key)
+    
+    if current_requests < max_requests then
+        -- 添加当前请求
+        redis.call('ZADD', key, current_time, current_time)
+        redis.call('EXPIRE', key, window_size)
+        return {1, max_requests - current_requests - 1}
+    else
+        return {0, 0}
+    end
+end
+
+-- 计数器脚本（固定窗口）
+local function fixed_window_rate_limit(key, window_size, max_requests)
+    local current_count = redis.call('GET', key)
+    
+    if current_count == false then
+        -- 第一次请求
+        redis.call('SET', key, 1, 'EX', window_size)
+        return {1, max_requests - 1}
+    else
+        current_count = tonumber(current_count)
+        if current_count < max_requests then
+            local new_count = redis.call('INCR', key)
+            return {1, max_requests - new_count}
+        else
+            local ttl = redis.call('TTL', key)
+            return {0, ttl}
+        end
+    end
+end
+
+-- 缓存更新脚本
+local function cache_update_with_lock(cache_key, lock_key, new_value, cache_expire, lock_expire)
+    -- 尝试获取更新锁
+    local lock_acquired = redis.call('SET', lock_key, 'updating', 'EX', lock_expire, 'NX')
+    
+    if lock_acquired then
+        -- 获取锁成功，更新缓存
+        redis.call('SET', cache_key, new_value, 'EX', cache_expire)
+        redis.call('DEL', lock_key)
+        return {1, 'updated'}
+    else
+        -- 获取锁失败，返回当前缓存值
+        local current_value = redis.call('GET', cache_key)
+        return {0, current_value or ''}
+    end
+end
+
+-- 主执行逻辑
+local operation = ARGV[1]
+
+if operation == 'acquire_lock' then
+    return acquire_lock(KEYS[1], ARGV[2], tonumber(ARGV[3]))
+elseif operation == 'release_lock' then
+    return release_lock(KEYS[1], ARGV[2])
+elseif operation == 'sliding_rate_limit' then
+    return sliding_window_rate_limit(KEYS[1], tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4]))
+elseif operation == 'fixed_rate_limit' then
+    return fixed_window_rate_limit(KEYS[1], tonumber(ARGV[2]), tonumber(ARGV[3]))
+elseif operation == 'cache_update' then
+    return cache_update_with_lock(KEYS[1], KEYS[2], ARGV[2], tonumber(ARGV[3]), tonumber(ARGV[4]))
+else
+    return redis.error_reply("ERR unknown operation: " .. operation)
+end
+-- [AI-BLOCK-END]
+```
+
+#### Java中使用Redis Lua脚本
+```java
+// [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+@Component
+@Slf4j
+public class RedisLuaScriptService {
+    
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final Map<String, DefaultRedisScript<Long>> scriptCache = new ConcurrentHashMap<>();
+    
+    public RedisLuaScriptService(RedisTemplate<String, Object> redisTemplate) {
+        this.redisTemplate = redisTemplate;
+        initializeScripts();
+    }
+    
+    /**
+     * 初始化Lua脚本
+     */
+    private void initializeScripts() {
+        // 分布式锁获取脚本
+        String acquireLockScript = """
+            local lock_key = KEYS[1]
+            local lock_value = ARGV[1]
+            local expire_time = tonumber(ARGV[2])
+            
+            local current_value = redis.call('GET', lock_key)
+            
+            if current_value == false then
+                local result = redis.call('SET', lock_key, lock_value, 'EX', expire_time, 'NX')
+                return result and 1 or 0
+            elseif current_value == lock_value then
+                redis.call('EXPIRE', lock_key, expire_time)
+                return 1
+            else
+                return 0
+            end
+            """;
+        
+        DefaultRedisScript<Long> acquireLockRedisScript = new DefaultRedisScript<>();
+        acquireLockRedisScript.setScriptText(acquireLockScript);
+        acquireLockRedisScript.setResultType(Long.class);
+        scriptCache.put("acquire_lock", acquireLockRedisScript);
+        
+        // 分布式锁释放脚本
+        String releaseLockScript = """
+            local lock_key = KEYS[1]
+            local lock_value = ARGV[1]
+            
+            local current_value = redis.call('GET', lock_key)
+            
+            if current_value == lock_value then
+                return redis.call('DEL', lock_key)
+            else
+                return 0
+            end
+            """;
+        
+        DefaultRedisScript<Long> releaseLockRedisScript = new DefaultRedisScript<>();
+        releaseLockRedisScript.setScriptText(releaseLockScript);
+        releaseLockRedisScript.setResultType(Long.class);
+        scriptCache.put("release_lock", releaseLockRedisScript);
+        
+        // 滑动窗口限流脚本
+        String slidingWindowScript = """
+            local key = KEYS[1]
+            local window_size = tonumber(ARGV[1])
+            local max_requests = tonumber(ARGV[2])
+            local current_time = tonumber(ARGV[3])
+            
+            redis.call('ZREMRANGEBYSCORE', key, 0, current_time - window_size)
+            
+            local current_requests = redis.call('ZCARD', key)
+            
+            if current_requests < max_requests then
+                redis.call('ZADD', key, current_time, current_time)
+                redis.call('EXPIRE', key, window_size)
+                return {1, max_requests - current_requests - 1}
+            else
+                return {0, 0}
+            end
+            """;
+        
+        DefaultRedisScript<List> slidingWindowRedisScript = new DefaultRedisScript<>();
+        slidingWindowRedisScript.setScriptText(slidingWindowScript);
+        slidingWindowRedisScript.setResultType(List.class);
+        scriptCache.put("sliding_window", slidingWindowRedisScript);
+    }
+    
+    /**
+     * 获取分布式锁
+     */
+    public boolean acquireLock(String lockKey, String lockValue, int expireSeconds) {
+        try {
+            Long result = redisTemplate.execute(
+                    scriptCache.get("acquire_lock"),
+                    Collections.singletonList(lockKey),
+                    lockValue,
+                    String.valueOf(expireSeconds)
+            );
+            
+            return result != null && result == 1L;
+        } catch (Exception e) {
+            log.error("获取分布式锁失败: lockKey={}", lockKey, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 释放分布式锁
+     */
+    public boolean releaseLock(String lockKey, String lockValue) {
+        try {
+            Long result = redisTemplate.execute(
+                    scriptCache.get("release_lock"),
+                    Collections.singletonList(lockKey),
+                    lockValue
+            );
+            
+            return result != null && result == 1L;
+        } catch (Exception e) {
+            log.error("释放分布式锁失败: lockKey={}", lockKey, e);
+            return false;
+        }
+    }
+    
+    /**
+     * 滑动窗口限流
+     */
+    public RateLimitResult slidingWindowRateLimit(String key, int windowSizeSeconds, 
+                                                 int maxRequests, long currentTimeMillis) {
+        try {
+            List<Long> result = (List<Long>) redisTemplate.execute(
+                    scriptCache.get("sliding_window"),
+                    Collections.singletonList(key),
+                    String.valueOf(windowSizeSeconds),
+                    String.valueOf(maxRequests),
+                    String.valueOf(currentTimeMillis)
+            );
+            
+            if (result != null && result.size() >= 2) {
+                boolean allowed = result.get(0) == 1L;
+                long remaining = result.get(1);
+                return new RateLimitResult(allowed, remaining);
+            }
+            
+            return new RateLimitResult(false, 0);
+        } catch (Exception e) {
+            log.error("滑动窗口限流执行失败: key={}", key, e);
+            return new RateLimitResult(false, 0);
+        }
+    }
+    
+    /**
+     * 执行自定义Lua脚本
+     */
+    public <T> T executeScript(String scriptText, Class<T> resultType, List<String> keys, Object... args) {
+        try {
+            DefaultRedisScript<T> script = new DefaultRedisScript<>();
+            script.setScriptText(scriptText);
+            script.setResultType(resultType);
+            
+            return redisTemplate.execute(script, keys, args);
+        } catch (Exception e) {
+            log.error("执行Lua脚本失败", e);
+            return null;
+        }
+    }
+    
+    /**
+     * 限流结果
+     */
+    @Data
+    @AllArgsConstructor
+    public static class RateLimitResult {
+        private boolean allowed;
+        private long remaining;
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 2. OpenResty Lua脚本规范
+
+#### 基础脚本结构
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- OpenResty Lua脚本基础模板
+-- 文件: /usr/local/openresty/lualib/common/base.lua
+
+local _M = {}
+local cjson = require "cjson"
+local redis = require "resty.redis"
+local mysql = require "resty.mysql"
+
+-- 常量定义
+_M.VERSION = "1.0.0"
+_M.DEFAULT_TIMEOUT = 5000
+_M.DEFAULT_POOL_SIZE = 100
+
+-- 错误码定义
+_M.ERROR_CODES = {
+    SUCCESS = 0,
+    INVALID_PARAM = 1001,
+    REDIS_ERROR = 2001,
+    MYSQL_ERROR = 3001,
+    RATE_LIMIT_EXCEEDED = 4001,
+    UNAUTHORIZED = 5001
+}
+
+-- 工具函数
+function _M.get_client_ip()
+    local client_ip = ngx.var.http_x_forwarded_for
+    if client_ip then
+        client_ip = string.match(client_ip, "^[^,]+")
+    else
+        client_ip = ngx.var.remote_addr
+    end
+    return client_ip
+end
+
+function _M.get_request_id()
+    return ngx.var.request_id or ngx.var.connection .. "-" .. ngx.var.connection_requests
+end
+
+function _M.log_info(message, data)
+    local log_data = {
+        level = "INFO",
+        message = message,
+        request_id = _M.get_request_id(),
+        client_ip = _M.get_client_ip(),
+        timestamp = ngx.now(),
+        data = data
+    }
+    ngx.log(ngx.INFO, cjson.encode(log_data))
+end
+
+function _M.log_error(message, error_info)
+    local log_data = {
+        level = "ERROR",
+        message = message,
+        request_id = _M.get_request_id(),
+        client_ip = _M.get_client_ip(),
+        timestamp = ngx.now(),
+        error = error_info
+    }
+    ngx.log(ngx.ERR, cjson.encode(log_data))
+end
+
+function _M.response_json(code, message, data)
+    ngx.header.content_type = "application/json; charset=utf-8"
+    ngx.status = code >= 1000 and 400 or 200
+    
+    local response = {
+        code = code,
+        message = message,
+        data = data or {},
+        timestamp = ngx.now(),
+        request_id = _M.get_request_id()
+    }
+    
+    ngx.say(cjson.encode(response))
+    ngx.exit(ngx.status)
+end
+
+function _M.validate_params(params, required_fields)
+    for _, field in ipairs(required_fields) do
+        if not params[field] or params[field] == "" then
+            return false, "Missing required field: " .. field
+        end
+    end
+    return true, nil
+end
+
+return _M
+-- [AI-BLOCK-END]
+```
+
+#### Redis连接池管理
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- 文件: /usr/local/openresty/lualib/common/redis_pool.lua
+
+local redis = require "resty.redis"
+local cjson = require "cjson"
+
+local _M = {}
+
+-- Redis配置
+local redis_config = {
+    host = os.getenv("REDIS_HOST") or "127.0.0.1",
+    port = tonumber(os.getenv("REDIS_PORT")) or 6379,
+    password = os.getenv("REDIS_PASSWORD"),
+    database = tonumber(os.getenv("REDIS_DATABASE")) or 0,
+    timeout = 5000,
+    pool_size = 100,
+    backlog = 200
+}
+
+-- 获取Redis连接
+function _M.get_connection()
+    local red = redis:new()
+    red:set_timeout(redis_config.timeout)
+    
+    local ok, err = red:connect(redis_config.host, redis_config.port)
+    if not ok then
+        ngx.log(ngx.ERR, "Failed to connect to Redis: ", err)
+        return nil, err
+    end
+    
+    -- 认证
+    if redis_config.password then
+        local res, err = red:auth(redis_config.password)
+        if not res then
+            ngx.log(ngx.ERR, "Failed to authenticate Redis: ", err)
+            return nil, err
+        end
+    end
+    
+    -- 选择数据库
+    if redis_config.database > 0 then
+        local res, err = red:select(redis_config.database)
+        if not res then
+            ngx.log(ngx.ERR, "Failed to select Redis database: ", err)
+            return nil, err
+        end
+    end
+    
+    return red, nil
+end
+
+-- 释放Redis连接
+function _M.close_connection(red)
+    if not red then
+        return
+    end
+    
+    local ok, err = red:set_keepalive(60000, redis_config.pool_size)
+    if not ok then
+        ngx.log(ngx.ERR, "Failed to set Redis keepalive: ", err)
+        red:close()
+    end
+end
+
+-- 执行Redis命令
+function _M.execute_command(command, ...)
+    local red, err = _M.get_connection()
+    if not red then
+        return nil, err
+    end
+    
+    local result, err = red[command](red, ...)
+    _M.close_connection(red)
+    
+    if not result then
+        ngx.log(ngx.ERR, "Redis command failed: ", command, " - ", err)
+        return nil, err
+    end
+    
+    return result, nil
+end
+
+-- 获取缓存
+function _M.get_cache(key)
+    local result, err = _M.execute_command("get", key)
+    if err then
+        return nil, err
+    end
+    
+    if result == ngx.null then
+        return nil, nil
+    end
+    
+    -- 尝试解析JSON
+    local ok, data = pcall(cjson.decode, result)
+    if ok then
+        return data, nil
+    else
+        return result, nil
+    end
+end
+
+-- 设置缓存
+function _M.set_cache(key, value, expire_time)
+    local cache_value
+    if type(value) == "table" then
+        cache_value = cjson.encode(value)
+    else
+        cache_value = tostring(value)
+    end
+    
+    if expire_time then
+        return _M.execute_command("setex", key, expire_time, cache_value)
+    else
+        return _M.execute_command("set", key, cache_value)
+    end
+end
+
+-- 删除缓存
+function _M.delete_cache(key)
+    return _M.execute_command("del", key)
+end
+
+-- 执行Lua脚本
+function _M.eval_script(script, keys, args)
+    local red, err = _M.get_connection()
+    if not red then
+        return nil, err
+    end
+    
+    local result, err = red:eval(script, #keys, unpack(keys), unpack(args or {}))
+    _M.close_connection(red)
+    
+    return result, err
+end
+
+-- 分布式锁
+function _M.acquire_lock(lock_key, lock_value, expire_time)
+    local script = [[
+        local current_value = redis.call('GET', KEYS[1])
+        if current_value == false then
+            return redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2], 'NX') and 1 or 0
+        elseif current_value == ARGV[1] then
+            redis.call('EXPIRE', KEYS[1], ARGV[2])
+            return 1
+        else
+            return 0
+        end
+    ]]
+    
+    local result, err = _M.eval_script(script, {lock_key}, {lock_value, expire_time})
+    if err then
+        return false, err
+    end
+    
+    return result == 1, nil
+end
+
+function _M.release_lock(lock_key, lock_value)
+    local script = [[
+        local current_value = redis.call('GET', KEYS[1])
+        if current_value == ARGV[1] then
+            return redis.call('DEL', KEYS[1])
+        else
+            return 0
+        end
+    ]]
+    
+    local result, err = _M.eval_script(script, {lock_key}, {lock_value})
+    if err then
+        return false, err
+    end
+    
+    return result == 1, nil
+end
+
+-- 限流
+function _M.rate_limit(key, window_size, max_requests)
+    local script = [[
+        local current_count = redis.call('GET', KEYS[1])
+        if current_count == false then
+            redis.call('SET', KEYS[1], 1, 'EX', ARGV[1])
+            return {1, ARGV[2] - 1}
+        else
+            current_count = tonumber(current_count)
+            if current_count < tonumber(ARGV[2]) then
+                local new_count = redis.call('INCR', KEYS[1])
+                return {1, ARGV[2] - new_count}
+            else
+                local ttl = redis.call('TTL', KEYS[1])
+                return {0, ttl}
+            end
+        end
+    ]]
+    
+    local result, err = _M.eval_script(script, {key}, {window_size, max_requests})
+    if err then
+        return false, 0, err
+    end
+    
+    local allowed = result[1] == 1
+    local remaining = result[2]
+    
+    return allowed, remaining, nil
+end
+
+return _M
+-- [AI-BLOCK-END]
+```
+
+#### API网关脚本示例
+```lua
+-- [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+-- 文件: /usr/local/openresty/lualib/gateway/api_gateway.lua
+
+local base = require "common.base"
+local redis_pool = require "common.redis_pool"
+local cjson = require "cjson"
+
+local _M = {}
+
+-- 认证中间件
+function _M.authenticate()
+    local auth_header = ngx.var.http_authorization
+    if not auth_header then
+        base.response_json(base.ERROR_CODES.UNAUTHORIZED, "Missing authorization header")
+        return
+    end
+    
+    -- 提取Token
+    local token = string.match(auth_header, "Bearer%s+(.+)")
+    if not token then
+        base.response_json(base.ERROR_CODES.UNAUTHORIZED, "Invalid authorization format")
+        return
+    end
+    
+    -- 验证Token
+    local user_info, err = redis_pool.get_cache("token:" .. token)
+    if err then
+        base.log_error("Token validation failed", err)
+        base.response_json(base.ERROR_CODES.UNAUTHORIZED, "Token validation failed")
+        return
+    end
+    
+    if not user_info then
+        base.response_json(base.ERROR_CODES.UNAUTHORIZED, "Invalid or expired token")
+        return
+    end
+    
+    -- 设置用户信息到请求头
+    ngx.req.set_header("X-User-Id", user_info.user_id)
+    ngx.req.set_header("X-User-Role", user_info.role)
+    
+    base.log_info("User authenticated", {user_id = user_info.user_id, role = user_info.role})
+end
+
+-- 限流中间件
+function _M.rate_limit()
+    local client_ip = base.get_client_ip()
+    local api_path = ngx.var.uri
+    local rate_limit_key = "rate_limit:" .. client_ip .. ":" .. api_path
+    
+    -- 不同API的限流配置
+    local rate_config = {
+        ["/api/v1/login"] = {window = 60, max_requests = 5},
+        ["/api/v1/register"] = {window = 60, max_requests = 3},
+        ["/api/v1/users"] = {window = 60, max_requests = 100},
+        default = {window = 60, max_requests = 1000}
+    }
+    
+    local config = rate_config[api_path] or rate_config.default
+    
+    local allowed, remaining, err = redis_pool.rate_limit(
+        rate_limit_key, 
+        config.window, 
+        config.max_requests
+    )
+    
+    if err then
+        base.log_error("Rate limit check failed", err)
+        -- 限流检查失败时允许通过，避免影响正常请求
+        return
+    end
+    
+    -- 设置响应头
+    ngx.header["X-RateLimit-Limit"] = config.max_requests
+    ngx.header["X-RateLimit-Remaining"] = remaining
+    
+    if not allowed then
+        base.log_info("Rate limit exceeded", {
+            client_ip = client_ip,
+            api_path = api_path,
+            remaining = remaining
+        })
+        base.response_json(base.ERROR_CODES.RATE_LIMIT_EXCEEDED, "Rate limit exceeded")
+        return
+    end
+end
+
+-- 请求日志中间件
+function _M.request_logging()
+    local start_time = ngx.now()
+    
+    -- 记录请求开始
+    local request_data = {
+        method = ngx.var.request_method,
+        uri = ngx.var.request_uri,
+        client_ip = base.get_client_ip(),
+        user_agent = ngx.var.http_user_agent,
+        start_time = start_time
+    }
+    
+    base.log_info("Request started", request_data)
+    
+    -- 在请求结束时记录日志
+    ngx.ctx.start_time = start_time
+    ngx.ctx.request_data = request_data
+end
+
+-- 响应日志中间件（在log阶段调用）
+function _M.response_logging()
+    if not ngx.ctx.start_time then
+        return
+    end
+    
+    local end_time = ngx.now()
+    local duration = (end_time - ngx.ctx.start_time) * 1000 -- 转换为毫秒
+    
+    local response_data = {
+        status = ngx.status,
+        duration = duration,
+        bytes_sent = ngx.var.bytes_sent
+    }
+    
+    -- 合并请求和响应数据
+    for k, v in pairs(ngx.ctx.request_data or {}) do
+        response_data[k] = v
+    end
+    
+    if ngx.status >= 400 then
+        base.log_error("Request completed with error", response_data)
+    else
+        base.log_info("Request completed", response_data)
+    end
+end
+
+-- 健康检查
+function _M.health_check()
+    if ngx.var.request_uri == "/health" then
+        local health_status = {
+            status = "healthy",
+            timestamp = ngx.now(),
+            version = base.VERSION
+        }
+        
+        -- 检查Redis连接
+        local redis_ok, redis_err = redis_pool.execute_command("ping")
+        if redis_ok then
+            health_status.redis = "ok"
+        else
+            health_status.redis = "error: " .. (redis_err or "unknown")
+            health_status.status = "unhealthy"
+        end
+        
+        local status_code = health_status.status == "healthy" and 200 or 503
+        ngx.status = status_code
+        base.response_json(0, "Health check", health_status)
+        return
+    end
+end
+
+-- 跨域处理
+function _M.handle_cors()
+    local origin = ngx.var.http_origin
+    local allowed_origins = {
+        "https://example.com",
+        "https://app.example.com",
+        "http://localhost:3000"
+    }
+    
+    -- 检查Origin是否在允许列表中
+    local origin_allowed = false
+    for _, allowed_origin in ipairs(allowed_origins) do
+        if origin == allowed_origin then
+            origin_allowed = true
+            break
+        end
+    end
+    
+    if origin_allowed then
+        ngx.header["Access-Control-Allow-Origin"] = origin
+    end
+    
+    ngx.header["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    ngx.header["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    ngx.header["Access-Control-Max-Age"] = "86400"
+    
+    -- 处理预检请求
+    if ngx.var.request_method == "OPTIONS" then
+        ngx.status = 204
+        ngx.exit(204)
+    end
+end
+
+-- 请求转发
+function _M.proxy_request()
+    local upstream_url = os.getenv("UPSTREAM_URL") or "http://backend:8080"
+    
+    -- 设置代理头
+    ngx.req.set_header("X-Real-IP", ngx.var.remote_addr)
+    ngx.req.set_header("X-Forwarded-For", ngx.var.proxy_add_x_forwarded_for)
+    ngx.req.set_header("X-Forwarded-Proto", ngx.var.scheme)
+    ngx.req.set_header("Host", ngx.var.host)
+    
+    -- 移除内部头
+    ngx.req.clear_header("Authorization")
+    
+    -- 执行代理
+    ngx.var.target = upstream_url
+end
+
+return _M
+-- [AI-BLOCK-END]
+```
+
+#### OpenResty配置文件
+```nginx
+# [AI-BLOCK-START] - 生成工具: Claude 3.5 Sonnet
+# nginx.conf
+worker_processes auto;
+worker_rlimit_nofile 65535;
+
+events {
+    worker_connections 65535;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    
+    # Lua包路径
+    lua_package_path "/usr/local/openresty/lualib/?.lua;;";
+    lua_package_cpath "/usr/local/openresty/lualib/?.so;;";
+    
+    # 共享内存
+    lua_shared_dict cache 100m;
+    lua_shared_dict locks 10m;
+    lua_shared_dict rate_limit 10m;
+    
+    # 初始化脚本
+    init_by_lua_block {
+        -- 全局初始化
+        require "resty.core"
+        collectgarbage("collect")
+    }
+    
+    # 日志格式
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    '$request_time $upstream_response_time';
+    
+    access_log /var/log/nginx/access.log main;
+    error_log /var/log/nginx/error.log;
+    
+    # 基础配置
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    
+    # Gzip配置
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+    
+    # 上游服务器
+    upstream backend {
+        server backend1:8080 weight=1 max_fails=2 fail_timeout=30s;
+        server backend2:8080 weight=1 max_fails=2 fail_timeout=30s;
+        keepalive 32;
+    }
+    
+    server {
+        listen 80;
+        server_name api.example.com;
+        
+        # 请求ID生成
+        set $request_id $request_id;
+        
+        # 健康检查
+        location = /health {
+            access_by_lua_block {
+                local gateway = require "gateway.api_gateway"
+                gateway.health_check()
+            }
+        }
+        
+        # API网关
+        location /api/ {
+            # 跨域处理
+            access_by_lua_block {
+                local gateway = require "gateway.api_gateway"
+                gateway.handle_cors()
+                gateway.request_logging()
+                gateway.rate_limit()
+                gateway.authenticate()
+                gateway.proxy_request()
+            }
+            
+            # 代理到后端
+            proxy_pass http://backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Request-ID $request_id;
+            
+            # 超时设置
+            proxy_connect_timeout 5s;
+            proxy_send_timeout 10s;
+            proxy_read_timeout 10s;
+            
+            # 缓冲设置
+            proxy_buffering on;
+            proxy_buffer_size 4k;
+            proxy_buffers 8 4k;
+        }
+        
+        # 静态文件
+        location /static/ {
+            alias /var/www/static/;
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+        
+        # 日志记录
+        log_by_lua_block {
+            local gateway = require "gateway.api_gateway"
+            gateway.response_logging()
+        }
+    }
+}
+-- [AI-BLOCK-END]
+```
+
+## 禁止行为
+
+### 1. Redis Lua脚本禁令
+- **禁止长时间运行脚本**: Lua脚本执行时间不应超过5秒
+- **禁止在脚本中使用随机函数**: 避免使用math.random等非确定性函数
+- **禁止访问外部资源**: 脚本中不能访问网络或文件系统
+- **禁止使用全局变量**: 避免污染全局命名空间
+- **禁止忽略错误处理**: 必须处理所有可能的错误情况
+
+### 2. OpenResty Lua脚本禁令
+- **禁止阻塞操作**: 避免使用同步IO操作
+- **禁止在错误的阶段执行代码**: 了解Nginx各个阶段的限制
+- **禁止内存泄漏**: 正确管理Lua对象的生命周期
+- **禁止不安全的操作**: 避免执行系统命令或访问敏感文件
+- **禁止忽略性能优化**: 合理使用缓存和连接池
+
+### 3. 安全相关禁令
+- **禁止执行用户输入的代码**: 永远不要执行来自用户的Lua代码
+- **禁止暴露敏感信息**: 日志和错误信息不能包含密码等敏感数据
+- **禁止不验证输入**: 所有外部输入必须进行验证和清理
+- **禁止使用弱加密**: 使用强加密算法保护敏感数据
+- **禁止忽略访问控制**: 实现适当的认证和授权机制
+
+### 4. 性能相关禁令
+- **禁止无限循环**: 避免可能导致无限循环的代码
+- **禁止过度使用内存**: 控制数据结构的大小
+- **禁止频繁的垃圾回收**: 减少临时对象的创建
+- **禁止不必要的网络调用**: 合理使用缓存减少网络开销
+- **禁止忽略连接池**: 正确使用连接池管理资源
+
+这个Lua脚本规范提供了在Redis和OpenResty中使用Lua的完整指南，包括脚本编写、性能优化、安全防护等各个方面的详细规范，确保开发团队能够正确、高效地使用Lua脚本。
+description:
+globs:
+alwaysApply: false
+---

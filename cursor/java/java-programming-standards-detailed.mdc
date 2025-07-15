@@ -1,0 +1,481 @@
+# Java编程规范详细实施指南
+> 基于概览架构的具体规则定义和执行标准
+
+## 🎯 规范执行框架
+
+### 优先级定义
+- **🔴 MUST (L1)**：必须严格遵守，违反将阻止代码合并
+- **🟡 SHOULD (L2)**：强烈建议遵守，违反需要说明理由
+- **🟢 MAY (L3)**：推荐遵守，作为代码质量提升建议
+
+### 验证层级
+- **静态检查**：编译时和IDE实时检查
+- **动态检查**：运行时和测试阶段检查
+- **人工审查**：代码评审和架构审查
+
+## 📋 核心规范层详细定义
+
+### 1. Java编码规范 (java-coding-standards.mdc)
+
+#### 代码格式化 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 规范示例 v1.0
+// ✅ 正确的缩进和换行
+public class UserService {
+    private static final int MAX_RETRY_COUNT = 3;
+    
+    public User createUser(String name, String email) {
+        if (StringUtils.isEmpty(name) || StringUtils.isEmpty(email)) {
+            throw new IllegalArgumentException("Name and email cannot be empty");
+        }
+        
+        User user = User.builder()
+            .name(name)
+            .email(email)
+            .createTime(LocalDateTime.now())
+            .build();
+            
+        return userRepository.save(user);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+**格式化规则**：
+- 缩进：4个空格，禁用Tab字符
+- 行长度：不超过120字符
+- 大括号：K&R风格，左大括号不换行
+- 空行：方法间1个空行，逻辑块间1个空行
+
+#### 变量声明规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 规范示例 v1.0
+// ✅ 正确的变量声明
+public class OrderProcessor {
+    // 常量：全大写，下划线分隔
+    private static final String ORDER_STATUS_PENDING = "PENDING";
+    private static final int DEFAULT_TIMEOUT = 30;
+    
+    // 实例变量：使用final修饰不可变字段
+    private final UserService userService;
+    private final OrderRepository orderRepository;
+    
+    // 局部变量：尽可能使用final
+    public void processOrder(final Long orderId) {
+        final Order order = orderRepository.findById(orderId);
+        final User user = userService.findById(order.getUserId());
+        
+        // 非final变量需要有明确的修改理由
+        OrderStatus status = OrderStatus.PENDING;
+        if (user.isVip()) {
+            status = OrderStatus.PRIORITY;
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+#### 方法设计原则 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 规范示例 v1.0
+// ✅ 良好的方法设计
+public class PaymentService {
+    
+    // 方法参数不超过5个，使用对象封装复杂参数
+    public PaymentResult processPayment(PaymentRequest request) {
+        validatePaymentRequest(request);
+        
+        try {
+            return doProcessPayment(request);
+        } catch (PaymentException e) {
+            log.error("Payment processing failed for order: {}", request.getOrderId(), e);
+            return PaymentResult.failure(e.getMessage());
+        }
+    }
+    
+    // 私有方法职责单一，名称清晰
+    private void validatePaymentRequest(PaymentRequest request) {
+        Objects.requireNonNull(request, "Payment request cannot be null");
+        Objects.requireNonNull(request.getOrderId(), "Order ID cannot be null");
+        
+        if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Payment amount must be positive");
+        }
+    }
+    
+    // 返回值类型明确，避免返回null
+    private Optional<User> findUserByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
+}
+// [AI-BLOCK-END]
+```
+
+#### 异常处理规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 规范示例 v1.0
+// ✅ 正确的异常处理
+@Service
+public class FileProcessorService {
+    
+    // 业务异常：继承RuntimeException，包含错误码
+    public void processFile(String filePath) {
+        try {
+            validateFilePath(filePath);
+            doProcessFile(filePath);
+        } catch (IOException e) {
+            // 转换为业务异常，保留原始异常信息
+            throw new FileProcessingException("Failed to process file: " + filePath, e);
+        } catch (SecurityException e) {
+            // 记录安全异常，不暴露敏感信息
+            log.error("Security violation during file processing", e);
+            throw new FileProcessingException("Access denied for file processing");
+        }
+    }
+    
+    // 自定义异常类
+    public static class FileProcessingException extends RuntimeException {
+        private final String errorCode;
+        
+        public FileProcessingException(String message) {
+            this(message, "FILE_PROCESSING_ERROR");
+        }
+        
+        public FileProcessingException(String message, Throwable cause) {
+            this(message, cause, "FILE_PROCESSING_ERROR");
+        }
+        
+        public FileProcessingException(String message, String errorCode) {
+            super(message);
+            this.errorCode = errorCode;
+        }
+        
+        public FileProcessingException(String message, Throwable cause, String errorCode) {
+            super(message, cause);
+            this.errorCode = errorCode;
+        }
+        
+        public String getErrorCode() {
+            return errorCode;
+        }
+    }
+}
+// [AI-BLOCK-END]
+```
+
+### 2. 命名规范 (naming-conventions.mdc)
+
+#### 类命名规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 规范示例 v1.0
+// ✅ 正确的类命名
+public class UserAccountService { }          // 服务类：名词 + Service
+public class OrderStatusConverter { }        // 转换类：名词 + Converter
+public class PaymentValidator { }            // 验证类：名词 + Validator
+public class EmailNotificationHandler { }    // 处理类：名词 + Handler
+public abstract class AbstractUserRepository { } // 抽象类：Abstract + 名词
+public interface UserRepository { }          // 接口：名词，不使用I前缀
+
+// 枚举类命名
+public enum OrderStatus {
+    PENDING, CONFIRMED, SHIPPED, DELIVERED, CANCELLED
+}
+
+// 异常类命名
+public class InvalidUserStateException extends RuntimeException { }
+public class OrderNotFoundException extends RuntimeException { }
+// [AI-BLOCK-END]
+```
+
+#### 方法命名规范 [MUST - L1]
+```java
+// [AI-BLOCK-START] - 生成工具: 规范示例 v1.0
+// ✅ 正确的方法命名
+public class UserService {
+    
+    // 查询方法：find/get/query + 名词
+    public User findUserById(Long id) { }
+    public List<User> findUsersByStatus(UserStatus status) { }
+    public Optional<User> getUserByEmail(String email) { }
+    public Page<User> queryActiveUsers(Pageable pageable) { }
+    
+    // 判断方法：is/has/can + 形容词/名词
+    public boolean isUserActive(Long userId) { }
+    public boolean hasValidEmail(String email) { }
+    public boolean canUserAccess(Long userId, String resource) { }
+    
+    // 创建方法：create/build/generate + 名词
+    public User createUser(CreateUserRequest request) { }
+    public UserProfile buildUserProfile(User user) { }
+    public String generateUserToken(Long userId) { }
+    
+    // 更新方法：update/modify/change + 名词
+    public User updateUserProfile(Long userId, UserProfile profile) { }
+    public void modifyUserStatus(Long userId, UserStatus status) { }
+    public void changeUserPassword(Long userId, String newPassword) { }
+    
+    // 删除方法：delete/remove + 名词
+    public void deleteUser(Long userId) { }
+    public void removeUserFromGroup(Long userId, Long groupId) { }
+}
+// [AI-BLOCK-END]
+```
+
+### 3. 项目结构规范 (project-structure.mdc)
+
+#### Maven项目结构 [MUST - L1]
+```
+project-name/
+├── pom.xml                                 # Maven配置文件
+├── README.md                              # 项目说明文档
+├── .gitignore                             # Git忽略配置
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/company/project/       # 包结构：com.公司.项目
+│   │   │       ├── Application.java       # Spring Boot启动类
+│   │   │       ├── config/                # 配置类
+│   │   │       │   ├── DatabaseConfig.java
+│   │   │       │   ├── RedisConfig.java
+│   │   │       │   └── SecurityConfig.java
+│   │   │       ├── controller/            # 控制器层
+│   │   │       │   ├── UserController.java
+│   │   │       │   └── OrderController.java
+│   │   │       ├── service/               # 服务层
+│   │   │       │   ├── UserService.java
+│   │   │       │   ├── impl/              # 服务实现
+│   │   │       │   │   └── UserServiceImpl.java
+│   │   │       │   └── OrderService.java
+│   │   │       ├── repository/            # 数据访问层
+│   │   │       │   ├── UserRepository.java
+│   │   │       │   └── OrderRepository.java
+│   │   │       ├── entity/                # 实体类
+│   │   │       │   ├── User.java
+│   │   │       │   └── Order.java
+│   │   │       ├── dto/                   # 数据传输对象
+│   │   │       │   ├── request/
+│   │   │       │   │   └── CreateUserRequest.java
+│   │   │       │   └── response/
+│   │   │       │       └── UserResponse.java
+│   │   │       ├── enums/                 # 枚举类
+│   │   │       │   ├── UserStatus.java
+│   │   │       │   └── OrderStatus.java
+│   │   │       ├── exception/             # 异常类
+│   │   │       │   ├── BusinessException.java
+│   │   │       │   └── GlobalExceptionHandler.java
+│   │   │       └── util/                  # 工具类
+│   │   │           ├── DateUtil.java
+│   │   │           └── StringUtil.java
+│   │   └── resources/
+│   │       ├── application.yml            # 主配置文件
+│   │       ├── application-dev.yml        # 开发环境配置
+│   │       ├── application-prod.yml       # 生产环境配置
+│   │       ├── logback-spring.xml         # 日志配置
+│   │       ├── mapper/                    # MyBatis映射文件
+│   │       │   └── UserMapper.xml
+│   │       └── static/                    # 静态资源
+│   └── test/
+│       ├── java/
+│       │   └── com/company/project/
+│       │       ├── controller/            # 控制器测试
+│       │       ├── service/               # 服务层测试
+│       │       └── repository/            # 数据访问层测试
+│       └── resources/
+│           ├── application-test.yml       # 测试环境配置
+│           └── test-data/                 # 测试数据
+└── docs/                                  # 项目文档
+    ├── api/                               # API文档
+    ├── database/                          # 数据库文档
+    └── deployment/                        # 部署文档
+```
+
+## 🔧 验证工具配置
+
+### CheckStyle配置 [MUST - L1]
+```xml
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<module name="Checker">
+    <property name="charset" value="UTF-8"/>
+    <property name="severity" value="error"/>
+    
+    <!-- 文件长度检查 -->
+    <module name="FileLength">
+        <property name="max" value="500"/>
+    </module>
+    
+    <!-- 行长度检查 -->
+    <module name="LineLength">
+        <property name="max" value="120"/>
+        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
+    </module>
+    
+    <module name="TreeWalker">
+        <!-- 命名规范检查 -->
+        <module name="ConstantName"/>
+        <module name="LocalFinalVariableName"/>
+        <module name="LocalVariableName"/>
+        <module name="MemberName"/>
+        <module name="MethodName"/>
+        <module name="PackageName"/>
+        <module name="ParameterName"/>
+        <module name="StaticVariableName"/>
+        <module name="TypeName"/>
+        
+        <!-- 代码格式检查 -->
+        <module name="Indentation">
+            <property name="basicOffset" value="4"/>
+        </module>
+        <module name="LeftCurly"/>
+        <module name="RightCurly"/>
+        <module name="WhitespaceAfter"/>
+        <module name="WhitespaceAround"/>
+        
+        <!-- 方法设计检查 -->
+        <module name="ParameterNumber">
+            <property name="max" value="5"/>
+        </module>
+        <module name="MethodLength">
+            <property name="max" value="50"/>
+        </module>
+    </module>
+</module>
+```
+
+### PMD规则配置 [SHOULD - L2]
+```xml
+<?xml version="1.0"?>
+<ruleset name="Custom Rules">
+    <description>Custom PMD rules for Java development</description>
+    
+    <!-- 最佳实践 -->
+    <rule ref="category/java/bestpractices.xml">
+        <exclude name="GuardLogStatement"/>
+    </rule>
+    
+    <!-- 代码风格 -->
+    <rule ref="category/java/codestyle.xml">
+        <exclude name="AtLeastOneConstructor"/>
+        <exclude name="OnlyOneReturn"/>
+    </rule>
+    
+    <!-- 设计规则 -->
+    <rule ref="category/java/design.xml">
+        <exclude name="LawOfDemeter"/>
+    </rule>
+    
+    <!-- 错误倾向 -->
+    <rule ref="category/java/errorprone.xml"/>
+    
+    <!-- 性能规则 -->
+    <rule ref="category/java/performance.xml"/>
+</ruleset>
+```
+
+### SonarQube质量门禁 [MUST - L1]
+```yaml
+# sonar-quality-gate.yml
+quality_gate:
+  name: "Java项目质量门禁"
+  conditions:
+    - metric: "new_coverage"
+      operator: "LT"
+      threshold: "80"
+      error: true
+    - metric: "new_duplicated_lines_density"
+      operator: "GT"
+      threshold: "3"
+      error: true
+    - metric: "new_maintainability_rating"
+      operator: "GT"
+      threshold: "1"
+      error: true
+    - metric: "new_reliability_rating"
+      operator: "GT"
+      threshold: "1"
+      error: true
+    - metric: "new_security_rating"
+      operator: "GT"
+      threshold: "1"
+      error: true
+```
+
+## 📊 规范执行监控
+
+### 代码质量指标 [MUST - L1]
+```yaml
+# code-quality-metrics.yml
+metrics:
+  coverage:
+    line_coverage: ">= 80%"
+    branch_coverage: ">= 70%"
+    
+  complexity:
+    cyclomatic_complexity: "<= 10"
+    cognitive_complexity: "<= 15"
+    
+  maintainability:
+    technical_debt_ratio: "<= 5%"
+    code_smells: "0 blocker, <= 5 critical"
+    
+  reliability:
+    bugs: "0 blocker, 0 critical"
+    
+  security:
+    vulnerabilities: "0 blocker, 0 critical"
+    security_hotspots: "reviewed and resolved"
+    
+  duplication:
+    duplicated_lines_density: "<= 3%"
+```
+
+### CI/CD集成检查点 [MUST - L1]
+```yaml
+# .github/workflows/code-quality.yml
+name: Code Quality Check
+on: [push, pull_request]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          
+      - name: Run CheckStyle
+        run: mvn checkstyle:check
+        
+      - name: Run PMD
+        run: mvn pmd:check
+        
+      - name: Run SpotBugs
+        run: mvn spotbugs:check
+        
+      - name: Run Tests with Coverage
+        run: mvn clean test jacoco:report
+        
+      - name: SonarQube Analysis
+        run: mvn sonar:sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          
+      - name: Quality Gate Check
+        run: |
+          # 检查SonarQube质量门禁状态
+          # 如果不通过，构建失败
+```
+
+---
+
+*此详细规范基于Java编程规范体系概览，提供具体的实施细节和验证机制*
+description:
+globs:
+alwaysApply: false
+---
